@@ -1,0 +1,8 @@
+[package]
+name = "rs-tex"
+version = "0.1.0"
+authors = ["Emily Eisenberg <xymostech@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rand = "0.3.14"
