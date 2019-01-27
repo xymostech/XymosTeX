@@ -1,5 +1,6 @@
 use crate::category::Category;
 use crate::token::Token;
+use crate::state::TeXState;
 
 #[derive(Debug, PartialEq, Eq)]
 enum LexState {
@@ -13,40 +14,6 @@ enum PlainLexResult {
     Eof,
     Eol,
     Char(char),
-}
-
-pub struct Lexer {
-    source: Vec<Vec<char>>,
-
-    row: usize,
-    col: usize,
-
-    state: LexState,
-}
-
-// TODO(emily): pull this out of TeXState instead of doing this hackily here
-fn get_category(ch: char) -> Category {
-    if ch == '^' {
-        Category::Superscript
-    } else if ch == '%' {
-        Category::Comment
-    } else if ch == '\\' {
-        Category::Escape
-    } else if ch == '\n' {
-        Category::EndOfLine
-    } else if ch == '{' {
-        Category::BeginGroup
-    } else if ch == '}' {
-        Category::EndGroup
-    } else if ch == ' ' {
-        Category::Space
-    } else if ch == '\u{0000}' {
-        Category::Ignored
-    } else if ch == '\u{00ff}' {
-        Category::Invalid
-    } else {
-        Category::Letter
-    }
 }
 
 fn is_hex_char(ch: char) -> bool {
@@ -63,8 +30,17 @@ fn hex_value(ch: char) -> u8 {
     }
 }
 
-impl Lexer {
-    pub fn new(lines: &[&str]) -> Lexer {
+pub struct Lexer<'a> {
+    source: Vec<Vec<char>>,
+    row: usize,
+    col: usize,
+    lex_state: LexState,
+
+    state: &'a TeXState,
+}
+
+impl<'a> Lexer<'a> {
+    pub fn new(lines: &[&str], state: &'a TeXState) -> Lexer<'a> {
         let source = lines.iter().map(|&s| {
             let mut line = String::from(s);
             line.push('\n');
@@ -75,7 +51,8 @@ impl Lexer {
             source: source,
             row: 0,
             col: 0,
-            state: LexState::BeginningLine,
+            lex_state: LexState::BeginningLine,
+            state: state,
         };
     }
 
@@ -118,7 +95,7 @@ impl Lexer {
     fn handle_trigraphs(&mut self, first_char: char) -> PlainLexResult {
         let first_result = PlainLexResult::Char(first_char);
 
-        if get_category(first_char) != Category::Superscript{
+        if self.state.get_category(first_char) != Category::Superscript{
             return first_result;
         }
 
@@ -130,7 +107,7 @@ impl Lexer {
             },
         };
 
-        if get_category(second_char) != Category::Superscript {
+        if self.state.get_category(second_char) != Category::Superscript {
             self.unget_plain_char(&PlainLexResult::Char(second_char));
             return first_result;
         }
@@ -175,28 +152,28 @@ impl Lexer {
         match self.get_char() {
             PlainLexResult::Eof => None,
             PlainLexResult::Eol => {
-                self.state = LexState::BeginningLine;
+                self.lex_state = LexState::BeginningLine;
                 self.lex_token()
             },
             PlainLexResult::Char(c) => {
-                match get_category(c) {
+                match self.state.get_category(c) {
                     Category::Invalid => panic!("Invalid character: '{}'", c),
                     Category::Escape => {
-                        self.state = LexState::SkippingBlanks;
+                        self.lex_state = LexState::SkippingBlanks;
 
                         let first_char = match self.get_char() {
                             PlainLexResult::Char(c) => c,
                             _ => panic!("Invalid EOF or EOL lexing control sequence"),
                         };
 
-                        match get_category(first_char) {
+                        match self.state.get_category(first_char) {
                             Category::Letter => {
                                 let mut sequence = first_char.to_string();
 
                                 loop {
                                     match self.get_char() {
                                         PlainLexResult::Char(c)
-                                            if get_category(c) == Category::Letter =>
+                                            if self.state.get_category(c) == Category::Letter =>
                                             sequence.push(c),
 
                                         rest => {
@@ -214,7 +191,7 @@ impl Lexer {
                         }
                     },
                     Category::EndOfLine => {
-                        match self.state {
+                        match self.lex_state {
                             LexState::BeginningLine => {
                                 Some(Token::ControlSequence("par".to_string()))
                             },
@@ -227,8 +204,8 @@ impl Lexer {
                         }
                     },
                     Category::Space => {
-                        if self.state == LexState::MiddleLine {
-                            self.state = LexState::SkippingBlanks;
+                        if self.lex_state == LexState::MiddleLine {
+                            self.lex_state = LexState::SkippingBlanks;
                             Some(Token::Char(' ', Category::Space))
                         } else {
                             self.lex_token()
@@ -242,7 +219,7 @@ impl Lexer {
                         self.lex_token()
                     },
                     cat => {
-                        self.state = LexState::MiddleLine;
+                        self.lex_state = LexState::MiddleLine;
                         Some(Token::Char(c, cat))
                     },
                 }
@@ -255,8 +232,12 @@ impl Lexer {
 mod tests {
     use super::*;
 
-    fn assert_lexes_to(lines: &[&str], expected_toks: &[Token]) {
-        let mut lexer = Lexer::new(lines);
+    fn assert_lexes_to_with_state(
+        lines: &[&str],
+        expected_toks: &[Token],
+        state: &TeXState)
+    {
+        let mut lexer = Lexer::new(lines, &state);
 
         let mut real_toks = Vec::new();
 
@@ -265,6 +246,10 @@ mod tests {
         }
 
         assert_eq!(expected_toks, &real_toks[..]);
+    }
+
+    fn assert_lexes_to(lines: &[&str], expected_toks: &[Token]) {
+        assert_lexes_to_with_state(lines, expected_toks, &TeXState::new());
     }
 
     #[test]
@@ -384,5 +369,16 @@ mod tests {
         assert_lexes_to(
             &["a%b"],
             &[Token::Char('a', Category::Letter)]);
+    }
+
+    #[test]
+    fn it_uses_real_state() {
+        let state = TeXState::new();
+        state.set_category('@', Category::Letter);
+        assert_lexes_to_with_state(
+            &["@\\zer@%"],
+            &[Token::Char('@', Category::Letter),
+              Token::ControlSequence("zer@".to_string())],
+            &state);
     }
 }

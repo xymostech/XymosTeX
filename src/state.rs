@@ -71,7 +71,7 @@ macro_rules! generate_inner {
     (fn $func_name:ident(
         $($var_name:ident : $var_type:ty),*) $( -> $return_type:ty)?) =>
     {
-        fn $func_name(&self, $($var_name: $var_type),*)$( -> $return_type)* {
+        pub fn $func_name(&self, $($var_name: $var_type),*)$( -> $return_type)* {
             self.with_inner(|inner| {
                 inner.$func_name($($var_name),*)
             })
@@ -80,7 +80,7 @@ macro_rules! generate_inner {
 }
 
 impl TeXState {
-    fn new() -> TeXState {
+    pub fn new() -> TeXState {
         TeXState {
             state_inner: Mutex::new(TeXStateInner::new()),
         }
