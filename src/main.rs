@@ -1,8 +1,8 @@
-mod lexer;
 mod category;
-mod token;
-mod state;
+mod lexer;
 mod parser;
+mod state;
+mod token;
 
 fn main() {
     // Nothing yet

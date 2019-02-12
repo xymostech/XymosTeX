@@ -89,7 +89,8 @@ impl TeXState {
     // Helper function for making pulling the TeXStateInner out of the mutex
     // easier.
     fn with_inner<T, F>(&self, func: F) -> T
-        where F: FnOnce(&mut TeXStateInner) -> T
+    where
+        F: FnOnce(&mut TeXStateInner) -> T,
     {
         let mut inner = self.state_inner.lock().unwrap();
         func(&mut inner)
