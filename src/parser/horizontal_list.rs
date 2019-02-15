@@ -1,6 +1,5 @@
 use crate::category::Category;
 use crate::parser::Parser;
-use crate::state::TeXState;
 use crate::token::Token;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -13,7 +12,7 @@ impl<'a> Parser<'a> {
         &mut self,
         group_level: &mut usize,
     ) -> Option<HorizontalListElem> {
-        match self.lexer.lex_token() {
+        match self.lex_expanded_token() {
             None => None,
             Some(Token::Char(ch, cat)) => {
                 match cat {
@@ -62,6 +61,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::TeXState;
 
     fn assert_parses_to(lines: &[&str], expected_toks: &[HorizontalListElem]) {
         let state = TeXState::new();

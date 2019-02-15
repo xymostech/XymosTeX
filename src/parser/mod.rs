@@ -1,9 +1,13 @@
 use crate::lexer::Lexer;
 use crate::state::TeXState;
+use crate::token::Token;
 
+#[allow(dead_code)] // TODO(xymostech): remove this once state is used
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
     state: &'a TeXState,
+
+    upcoming_tokens: Vec<Token>,
 }
 
 impl<'a> Parser<'a> {
@@ -12,8 +16,10 @@ impl<'a> Parser<'a> {
         Parser {
             lexer: lexer,
             state: state,
+            upcoming_tokens: Vec::new(),
         }
     }
 }
 
+mod expand;
 mod horizontal_list;
