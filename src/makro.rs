@@ -28,6 +28,8 @@ impl Macro {
     }
 
     fn validate(&self) {
+        // The parameters in the parameter list need to be in order, so we make
+        // sure that's the case.
         let mut num_parameters: usize = 0;
         for elem in self.parameter_list.iter() {
             if let MacroListElem::Parameter(param_num) = elem {
@@ -41,6 +43,8 @@ impl Macro {
             }
         }
 
+        // Also, all of the parameters in the replacement text must be in the
+        // parameters, so we make sure that's true as well.
         for elem in self.replacement_list.iter() {
             if let MacroListElem::Parameter(param_num) = elem {
                 if *param_num > num_parameters {

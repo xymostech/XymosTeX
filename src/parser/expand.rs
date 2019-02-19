@@ -26,6 +26,12 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Sometimes, we need to undo the lexing of a token. This function accepts
+    // a token that we want to lex next. This undoing happens in a few places:
+    //  * When we're peeking at tokens (e.g. when we're handling <optional
+    //    spaces> and we want to check if the next token is a space)
+    //  * When we expand something, so we want the next lexed tokens to be the
+    //    expanded result
     fn add_upcoming_token(&mut self, token: Token) {
         self.upcoming_tokens.push(token)
     }
