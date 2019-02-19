@@ -21,5 +21,7 @@ impl<'a> Parser<'a> {
     }
 }
 
+mod assignment;
 mod expand;
 mod horizontal_list;
+mod makro;

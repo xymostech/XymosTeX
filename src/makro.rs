@@ -5,18 +5,20 @@ use std::collections::HashMap;
 
 use crate::token::Token;
 
+#[derive(PartialEq, Eq, Debug)]
 pub enum MacroListElem {
     Token(Token),
     Parameter(usize),
 }
 
+#[derive(PartialEq, Eq, Debug)]
 pub struct Macro {
     parameter_list: Vec<MacroListElem>,
     replacement_list: Vec<MacroListElem>,
 }
 
 impl Macro {
-    fn new(parameter_list: Vec<MacroListElem>, replacement_list: Vec<MacroListElem>) -> Macro {
+    pub fn new(parameter_list: Vec<MacroListElem>, replacement_list: Vec<MacroListElem>) -> Macro {
         let makro: Macro = Macro {
             parameter_list: parameter_list,
             replacement_list: replacement_list,
@@ -57,7 +59,7 @@ impl Macro {
         }
     }
 
-    fn get_replacement(&self, parameter_values: &HashMap<usize, Vec<Token>>) -> Vec<Token> {
+    pub fn get_replacement(&self, parameter_values: &HashMap<usize, Vec<Token>>) -> Vec<Token> {
         self.replacement_list
             .iter()
             .flat_map(|elem| match elem {

@@ -1,5 +1,5 @@
 #[allow(dead_code)] // TODO: remove this once all of these are used
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum Category {
     Escape,       // 0
     BeginGroup,   // 1

@@ -1,13 +1,25 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Mutex;
 
 use crate::category::Category;
+use crate::makro::Macro;
+use crate::token::Token;
+
+enum TokenDefinition {
+    Macro(Rc<Macro>),
+}
 
 // This contains all of the mutable state about our TeX environment
 pub struct TeXStateInner {
     // A map individual characters to the category that that it is associated
     // with. Set and retrieved with \catcode, used in the lexer.
     category_map: HashMap<char, Category>,
+
+    // There are several ways to redefine what a given token means, with \def,
+    // \let, \chardef, etc. This map contains the definition of each redefined
+    // token.
+    token_definition_map: HashMap<Token, TokenDefinition>,
 }
 
 impl TeXStateInner {
@@ -39,6 +51,7 @@ impl TeXStateInner {
 
         TeXStateInner {
             category_map: initial_categories,
+            token_definition_map: HashMap::new(),
         }
     }
 
@@ -51,6 +64,19 @@ impl TeXStateInner {
 
     fn set_category(&mut self, ch: char, cat: Category) {
         self.category_map.insert(ch, cat);
+    }
+
+    fn get_macro(&self, token: &Token) -> Option<Rc<Macro>> {
+        if let Some(TokenDefinition::Macro(makro)) = self.token_definition_map.get(token) {
+            Some(Rc::clone(makro))
+        } else {
+            None
+        }
+    }
+
+    fn set_macro(&mut self, token: Token, makro: Rc<Macro>) {
+        self.token_definition_map
+            .insert(token, TokenDefinition::Macro(makro));
     }
 }
 
@@ -98,6 +124,8 @@ impl TeXState {
 
     generate_inner!(fn get_category(ch: char) -> Category);
     generate_inner!(fn set_category(ch: char, cat: Category));
+    generate_inner!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
+    generate_inner!(fn set_macro(token: Token, makro: Rc<Macro>));
 }
 
 #[cfg(test)]
