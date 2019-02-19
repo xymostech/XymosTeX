@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::token::Token;
 
 pub enum MacroListElem {
-    Tok(Token),
+    Token(Token),
     Parameter(usize),
 }
 
@@ -65,7 +65,7 @@ impl Macro {
                     Some(tok_list) => tok_list.clone(),
                     None => panic!("Missing parameter in replacement: {}", param_num),
                 },
-                MacroListElem::Tok(tok) => vec![tok.clone()],
+                MacroListElem::Token(tok) => vec![tok.clone()],
             })
             .collect()
     }
@@ -99,7 +99,7 @@ mod tests {
             vec![MacroListElem::Parameter(1), MacroListElem::Parameter(2)],
             vec![
                 MacroListElem::Parameter(2),
-                MacroListElem::Tok(Token::ControlSequence("boo".to_string())),
+                MacroListElem::Token(Token::ControlSequence("boo".to_string())),
                 MacroListElem::Parameter(1),
             ],
         );
