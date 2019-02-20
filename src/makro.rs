@@ -13,7 +13,7 @@ pub enum MacroListElem {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct Macro {
-    parameter_list: Vec<MacroListElem>,
+    pub parameter_list: Vec<MacroListElem>,
     replacement_list: Vec<MacroListElem>,
 }
 

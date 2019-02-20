@@ -26,6 +26,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn peek_unexpanded_token(&mut self) -> Option<Token> {
+        match self.lex_unexpanded_token() {
+            Some(token) => {
+                self.add_upcoming_token(token.clone());
+                Some(token)
+            }
+            None => None,
+        }
+    }
+
     // Sometimes, we need to undo the lexing of a token. This function accepts
     // a token that we want to lex next. This undoing happens in a few places:
     //  * When we're peeking at tokens (e.g. when we're handling <optional
