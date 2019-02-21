@@ -281,6 +281,8 @@ impl<'a> Parser<'a> {
         result_tokens
     }
 
+    // Parse the arguments to a given macro into a map of parameter number ->
+    // replacement value
     pub fn parse_replacement_map(&mut self, makro: &Macro) -> HashMap<usize, Vec<Token>> {
         let mut replacement_map: HashMap<usize, Vec<Token>> = HashMap::new();
 
