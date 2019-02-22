@@ -7,7 +7,12 @@ pub struct Parser<'a> {
     lexer: Lexer<'a>,
     state: &'a TeXState,
 
+    // Used in expand module to keep track of the next tokens to parse
     upcoming_tokens: Vec<Token>,
+
+    // Used in conditional module to keep track of the level of nesting of
+    // conditionals
+    conditional_depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -17,11 +22,13 @@ impl<'a> Parser<'a> {
             lexer: lexer,
             state: state,
             upcoming_tokens: Vec::new(),
+            conditional_depth: 0,
         }
     }
 }
 
 mod assignment;
+mod conditional;
 mod expand;
 mod horizontal_list;
 mod makro;
