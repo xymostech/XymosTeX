@@ -2,7 +2,7 @@ use crate::parser::Parser;
 use crate::token::Token;
 
 impl<'a> Parser<'a> {
-    fn is_conditional_head(&mut self) -> bool {
+    pub fn is_conditional_head(&mut self) -> bool {
         match self.peek_unexpanded_token() {
             Some(Token::ControlSequence(cs)) => {
                 cs == "else" || cs == "fi" || cs == "iftrue" || cs == "iffalse"
@@ -54,7 +54,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expand_conditional(&mut self) {
+    pub fn expand_conditional(&mut self) {
         match self.lex_unexpanded_token() {
             Some(Token::ControlSequence(ref cs)) if cs == "fi" => {
                 if self.conditional_depth == 0 {

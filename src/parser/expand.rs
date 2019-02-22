@@ -3,6 +3,11 @@ use crate::token::Token;
 
 impl<'a> Parser<'a> {
     pub fn lex_expanded_token(&mut self) -> Option<Token> {
+        if self.is_conditional_head() {
+            self.expand_conditional();
+            return self.lex_expanded_token();
+        }
+
         match self.lex_unexpanded_token() {
             None => None,
             Some(token) => match self.state.get_macro(&token) {
@@ -136,6 +141,18 @@ mod tests {
         assert_eq!(
             parser.lex_expanded_token(),
             Some(Token::Char('b', Category::Letter))
+        );
+        assert_eq!(parser.lex_expanded_token(), None);
+    }
+
+    #[test]
+    fn it_expands_conditionals() {
+        let state = TeXState::new();
+        let mut parser = Parser::new(&["\\iftrue x\\else y\\fi%"], &state);
+
+        assert_eq!(
+            parser.lex_expanded_token(),
+            Some(Token::Char('x', Category::Letter))
         );
         assert_eq!(parser.lex_expanded_token(), None);
     }
