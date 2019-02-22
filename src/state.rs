@@ -6,8 +6,10 @@ use crate::category::Category;
 use crate::makro::Macro;
 use crate::token::Token;
 
+#[derive(Clone)]
 enum TokenDefinition {
     Macro(Rc<Macro>),
+    Let(Token),
 }
 
 // This contains all of the mutable state about our TeX environment
@@ -78,6 +80,24 @@ impl TeXStateInner {
         self.token_definition_map
             .insert(token, TokenDefinition::Macro(makro));
     }
+
+    fn get_let(&self, token: &Token) -> Option<Token> {
+        if let Some(TokenDefinition::Let(let_token)) = self.token_definition_map.get(token) {
+            Some(let_token.clone())
+        } else {
+            None
+        }
+    }
+
+    fn set_let(&mut self, set_token: Token, to_token: Token) {
+        if let Some(token_definition) = self.token_definition_map.get(&to_token) {
+            self.token_definition_map
+                .insert(set_token, token_definition.clone());
+        } else if let Token::Char(_, _) = to_token {
+            self.token_definition_map
+                .insert(set_token, TokenDefinition::Let(to_token));
+        }
+    }
 }
 
 // A lot of the state in TeX is treated as global state, where we need to be
@@ -126,6 +146,8 @@ impl TeXState {
     generate_inner!(fn set_category(ch: char, cat: Category));
     generate_inner!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
     generate_inner!(fn set_macro(token: Token, makro: Rc<Macro>));
+    generate_inner!(fn get_let(token: &Token) -> Option<Token>);
+    generate_inner!(fn set_let(set_token: Token, to_token: Token));
 }
 
 #[cfg(test)]

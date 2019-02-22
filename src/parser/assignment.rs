@@ -7,13 +7,20 @@ use crate::token::Token;
 impl<'a> Parser<'a> {
     fn is_macro_assignment_head(&mut self) -> bool {
         match self.peek_expanded_token() {
-            Some(token) => token == Token::ControlSequence("def".to_string()),
-            None => false,
+            Some(Token::ControlSequence(cs)) => cs == "def",
+            _ => false,
+        }
+    }
+
+    fn is_let_assignment_head(&mut self) -> bool {
+        match self.peek_expanded_token() {
+            Some(Token::ControlSequence(cs)) => cs == "let",
+            _ => false,
         }
     }
 
     pub fn is_assignment_head(&mut self) -> bool {
-        self.is_macro_assignment_head()
+        self.is_macro_assignment_head() || self.is_let_assignment_head()
     }
 
     // Parses a control sequence or special char token to use for \def or \let
@@ -32,6 +39,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_let_assignment(&mut self) {
+        let tok = self.lex_expanded_token().unwrap();
+
+        if tok == Token::ControlSequence("let".to_string()) {
+            let let_name = self.parse_unexpanded_control_sequence();
+            self.parse_equals_unexpanded();
+            self.parse_optional_space_unexpanded();
+            let let_value = self.lex_unexpanded_token().unwrap();
+
+            self.state.set_let(let_name, let_value);
+        } else {
+            panic!("unimplemented");
+        }
+    }
+
     fn parse_macro_assignment(&mut self) {
         let tok = self.lex_expanded_token().unwrap();
 
@@ -46,8 +68,10 @@ impl<'a> Parser<'a> {
     pub fn parse_assignment(&mut self) {
         if self.is_macro_assignment_head() {
             self.parse_macro_assignment()
+        } else if self.is_let_assignment_head() {
+            self.parse_let_assignment()
         } else {
-            panic!("Non-macro head found in parse_assignment");
+            panic!("Invalid start found in parse_assignment");
         }
     }
 }
@@ -82,6 +106,40 @@ mod tests {
                     MacroListElem::Token(Token::Char('y', Category::Letter)),
                     MacroListElem::Parameter(1),
                 ]
+            )
+        );
+    }
+
+    #[test]
+    fn it_assigns_lets_for_characters() {
+        let state = TeXState::new();
+        let mut parser = Parser::new(&["\\let\\a=b%"], &state);
+
+        parser.parse_assignment();
+        assert_eq!(parser.lex_unexpanded_token(), None);
+
+        assert_eq!(
+            state.get_let(&Token::ControlSequence("a".to_string())),
+            Some(Token::Char('b', Category::Letter))
+        );
+    }
+
+    #[test]
+    fn it_assigns_lets_for_previously_defined_macros() {
+        let state = TeXState::new();
+        let mut parser = Parser::new(&["\\def\\a{x}%", "\\let\\b=\\a%"], &state);
+
+        parser.parse_assignment();
+        parser.parse_assignment();
+        assert_eq!(parser.lex_unexpanded_token(), None);
+
+        assert_eq!(
+            *state
+                .get_macro(&Token::ControlSequence("b".to_string()))
+                .unwrap(),
+            Macro::new(
+                vec![],
+                vec![MacroListElem::Token(Token::Char('x', Category::Letter)),]
             )
         );
     }

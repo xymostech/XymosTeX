@@ -197,13 +197,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Parse 0 or more space tokens and ignore them
-    fn parse_optional_spaces(&mut self) {
-        while let Some(Token::Char(_, Category::Space)) = self.peek_unexpanded_token() {
-            self.lex_unexpanded_token();
-        }
-    }
-
     // This handles parsing the tokens for a delimited parameter. The goal is
     // to continue parsing tokens/balanced groups until a sequence of tokens
     // that match the list of delimiters is found, and then returning the
@@ -320,7 +313,7 @@ impl<'a> Parser<'a> {
                         // undelimited!) we skip spaces before parsing the
                         // actual token/balanced group that match the
                         // parameter.
-                        self.parse_optional_spaces();
+                        self.parse_optional_spaces_unexpanded();
                         self.parse_single_token_or_balanced_text_unwrapped()
                     };
                     replacement_map.insert(*parameter_index, toks);
