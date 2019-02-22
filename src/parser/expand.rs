@@ -3,9 +3,18 @@ use crate::token::Token;
 
 impl<'a> Parser<'a> {
     pub fn lex_expanded_token(&mut self) -> Option<Token> {
-        let tok = self.lex_unexpanded_token();
-
-        tok
+        match self.lex_unexpanded_token() {
+            None => None,
+            Some(token) => match self.state.get_macro(&token) {
+                None => Some(token),
+                Some(makro) => {
+                    let replacement_map = self.parse_replacement_map(&makro);
+                    let replacement = makro.get_replacement(&replacement_map);
+                    self.add_upcoming_tokens(replacement);
+                    self.lex_expanded_token()
+                }
+            },
+        }
     }
 
     pub fn peek_expanded_token(&mut self) -> Option<Token> {
@@ -43,14 +52,24 @@ impl<'a> Parser<'a> {
     //  * When we expand something, so we want the next lexed tokens to be the
     //    expanded result
     fn add_upcoming_token(&mut self, token: Token) {
-        self.upcoming_tokens.push(token)
+        self.upcoming_tokens.push(token);
+    }
+
+    fn add_upcoming_tokens(&mut self, tokens: Vec<Token>) {
+        for token in tokens.into_iter().rev() {
+            self.add_upcoming_token(token);
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use std::rc::Rc;
+
     use crate::category::Category;
+    use crate::makro::{Macro, MacroListElem};
     use crate::state::TeXState;
 
     #[test]
@@ -71,7 +90,7 @@ mod tests {
         let mut parser = Parser::new(&["a%"], &state);
 
         assert_eq!(
-            parser.peek_expanded_token(),
+            parser.peek_unexpanded_token(),
             Some(Token::Char('a', Category::Letter))
         );
         assert_eq!(
@@ -79,5 +98,77 @@ mod tests {
             Some(Token::Char('a', Category::Letter))
         );
         assert_eq!(parser.lex_unexpanded_token(), None);
+    }
+
+    #[test]
+    fn it_expands_macros() {
+        let state = TeXState::new();
+        state.set_macro(
+            Token::ControlSequence("a".to_string()),
+            Rc::new(Macro::new(
+                vec![MacroListElem::Parameter(1)],
+                vec![
+                    MacroListElem::Token(Token::Char('x', Category::Letter)),
+                    MacroListElem::Parameter(1),
+                    MacroListElem::Parameter(1),
+                ],
+            )),
+        );
+
+        let mut parser = Parser::new(&["\\a{ab}%"], &state);
+
+        assert_eq!(
+            parser.lex_expanded_token(),
+            Some(Token::Char('x', Category::Letter))
+        );
+        assert_eq!(
+            parser.lex_expanded_token(),
+            Some(Token::Char('a', Category::Letter))
+        );
+        assert_eq!(
+            parser.lex_expanded_token(),
+            Some(Token::Char('b', Category::Letter))
+        );
+        assert_eq!(
+            parser.lex_expanded_token(),
+            Some(Token::Char('a', Category::Letter))
+        );
+        assert_eq!(
+            parser.lex_expanded_token(),
+            Some(Token::Char('b', Category::Letter))
+        );
+        assert_eq!(parser.lex_expanded_token(), None);
+    }
+
+    #[test]
+    fn it_peeks_expanded_tokens() {
+        let state = TeXState::new();
+        state.set_macro(
+            Token::ControlSequence("a".to_string()),
+            Rc::new(Macro::new(
+                vec![],
+                vec![MacroListElem::Token(Token::Char('x', Category::Letter))],
+            )),
+        );
+
+        let mut parser = Parser::new(&["\\a b%"], &state);
+
+        assert_eq!(
+            parser.peek_expanded_token(),
+            Some(Token::Char('x', Category::Letter))
+        );
+        assert_eq!(
+            parser.lex_expanded_token(),
+            Some(Token::Char('x', Category::Letter))
+        );
+        assert_eq!(
+            parser.peek_expanded_token(),
+            Some(Token::Char('b', Category::Letter))
+        );
+        assert_eq!(
+            parser.lex_expanded_token(),
+            Some(Token::Char('b', Category::Letter))
+        );
+        assert_eq!(parser.lex_expanded_token(), None);
     }
 }
