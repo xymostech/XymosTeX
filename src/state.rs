@@ -13,6 +13,7 @@ enum TokenDefinition {
 }
 
 // This contains all of the mutable state about our TeX environment
+#[derive(Clone)]
 pub struct TeXStateInner {
     // A map individual characters to the category that that it is associated
     // with. Set and retrieved with \catcode, used in the lexer.
@@ -76,9 +77,9 @@ impl TeXStateInner {
         }
     }
 
-    fn set_macro(&mut self, token: Token, makro: Rc<Macro>) {
+    fn set_macro(&mut self, token: &Token, makro: &Rc<Macro>) {
         self.token_definition_map
-            .insert(token, TokenDefinition::Macro(makro));
+            .insert(token.clone(), TokenDefinition::Macro(makro.clone()));
     }
 
     fn get_let(&self, token: &Token) -> Option<Token> {
@@ -100,6 +101,72 @@ impl TeXStateInner {
     }
 }
 
+// TeX keeps a stack of different states around, and pushes a copy of the
+// current stack when entering a group (with {) and pops the top of the stack
+// when leaving a group (with }). The "current" value of variables is taken
+// from the top of the stack, and assignments can be made to apply to every
+// level of the stack using \global.
+struct TeXStateStack {
+    state_stack: Vec<TeXStateInner>,
+}
+
+// Since we're mostly want to just be calling the same-named functions from
+// TeXStateStack onto the top level of TeXStateInner, we make a macro to easily
+// do that for us.
+macro_rules! generate_inner_func {
+    (fn $func_name:ident(
+        $($var_name:ident : $var_type:ty),*) $( -> $return_type:ty)?) =>
+    {
+        pub fn $func_name(&self, $($var_name: $var_type),*)$( -> $return_type)* {
+            self.state_stack[self.state_stack.len() - 1].$func_name($($var_name),*)
+        }
+    }
+}
+
+// When we have setter functions that are optionally global (i.e. optionally
+// operate on all of the levels of TeXStateInner), we can use this macro to
+// automatically define them.
+macro_rules! generate_inner_global_func {
+    (fn $func_name:ident(
+        global: bool, $($var_name:ident : $var_type:ty),*)) =>
+    {
+        fn $func_name(&mut self, global: bool, $($var_name: $var_type),*) {
+            if global {
+                for state in &mut self.state_stack {
+                    state.$func_name($($var_name),*);
+                }
+            } else {
+                let len = self.state_stack.len();
+                self.state_stack[len - 1].$func_name($($var_name),*);
+            }
+        }
+    }
+}
+
+impl TeXStateStack {
+    fn new() -> TeXStateStack {
+        TeXStateStack {
+            state_stack: vec![TeXStateInner::new()],
+        }
+    }
+
+    fn push_state(&mut self) {
+        let top_state = self.state_stack[self.state_stack.len() - 1].clone();
+        self.state_stack.push(top_state);
+    }
+
+    fn pop_state(&mut self) {
+        self.state_stack.pop().unwrap();
+    }
+
+    generate_inner_func!(fn get_category(ch: char) -> Category);
+    generate_inner_global_func!(fn set_category(global: bool, ch: char, cat: Category));
+    generate_inner_func!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
+    generate_inner_global_func!(fn set_macro(global: bool, token: &Token, makro: &Rc<Macro>));
+    generate_inner_func!(fn get_let(token: &Token) -> Option<Token>);
+    generate_inner_global_func!(fn set_let(global: bool, set_token: &Token, to_token: &Token));
+}
+
 // A lot of the state in TeX is treated as global state, where we need to be
 // able to read and write to it from wherever we are in the parsing process. In
 // order to accomplish this in a type-safe way, we keep a mutex pointing to the
@@ -108,18 +175,18 @@ impl TeXStateInner {
 // ability to get a mutable reference to the inner state even when other
 // references exist.
 pub struct TeXState {
-    state_inner: Mutex<TeXStateInner>,
+    state_stack: Mutex<TeXStateStack>,
 }
 
 // Since we're mostly want to just be calling the same-named functions from
-// TeXState onto TeXStateInner, we make a macro to easily do that for us.
-macro_rules! generate_inner {
+// TeXState onto TeXStateStack, we make a macro to easily do that for us.
+macro_rules! generate_stack_func {
     (fn $func_name:ident(
         $($var_name:ident : $var_type:ty),*) $( -> $return_type:ty)?) =>
     {
         pub fn $func_name(&self, $($var_name: $var_type),*)$( -> $return_type)* {
-            self.with_inner(|inner| {
-                inner.$func_name($($var_name),*)
+            self.with_stack(|stack| {
+                stack.$func_name($($var_name),*)
             })
         }
     }
@@ -128,26 +195,29 @@ macro_rules! generate_inner {
 impl TeXState {
     pub fn new() -> TeXState {
         TeXState {
-            state_inner: Mutex::new(TeXStateInner::new()),
+            state_stack: Mutex::new(TeXStateStack::new()),
         }
     }
 
-    // Helper function for making pulling the TeXStateInner out of the mutex
+    // Helper function for making pulling the TeXStateStack out of the mutex
     // easier.
-    fn with_inner<T, F>(&self, func: F) -> T
+    fn with_stack<T, F>(&self, func: F) -> T
     where
-        F: FnOnce(&mut TeXStateInner) -> T,
+        F: FnOnce(&mut TeXStateStack) -> T,
     {
-        let mut inner = self.state_inner.lock().unwrap();
-        func(&mut inner)
+        let mut stack = self.state_stack.lock().unwrap();
+        func(&mut stack)
     }
 
-    generate_inner!(fn get_category(ch: char) -> Category);
-    generate_inner!(fn set_category(ch: char, cat: Category));
-    generate_inner!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
-    generate_inner!(fn set_macro(token: Token, makro: Rc<Macro>));
-    generate_inner!(fn get_let(token: &Token) -> Option<Token>);
-    generate_inner!(fn set_let(set_token: Token, to_token: Token));
+    generate_stack_func!(fn push_state());
+    generate_stack_func!(fn pop_state());
+
+    generate_stack_func!(fn get_category(ch: char) -> Category);
+    generate_stack_func!(fn set_category(global: bool, ch: char, cat: Category));
+    generate_stack_func!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
+    generate_stack_func!(fn set_macro(global: bool, token: &Token, makro: &Rc<Macro>));
+    generate_stack_func!(fn get_let(token: &Token) -> Option<Token>);
+    generate_stack_func!(fn set_let(global: bool, set_token: &Token, to_token: &Token));
 }
 
 #[cfg(test)]
@@ -155,19 +225,59 @@ mod tests {
     use super::*;
 
     #[test]
-    fn correctly_sets_categories() {
+    fn it_correctly_sets_categories() {
         let state = TeXState::new();
         assert_eq!(state.get_category('@'), Category::Other);
-        state.set_category('@', Category::Letter);
+        state.set_category(false, '@', Category::Letter);
         assert_eq!(state.get_category('@'), Category::Letter);
     }
 
     #[test]
-    fn allows_mutation_with_existing_refs() {
+    fn it_allows_mutation_with_existing_refs() {
         let state = TeXState::new();
 
         let _state_ref: &TeXState = &state;
-        state.set_category('@', Category::Letter);
+        state.set_category(false, '@', Category::Letter);
         assert_eq!(state.get_category('@'), Category::Letter);
+    }
+
+    #[test]
+    fn it_restores_old_values_after_group_ends() {
+        let state = TeXState::new();
+
+        state.set_category(false, '@', Category::Letter);
+        assert_eq!(state.get_category('@'), Category::Letter);
+
+        state.push_state();
+
+        assert_eq!(state.get_category('@'), Category::Letter);
+        state.set_category(false, '@', Category::Other);
+        assert_eq!(state.get_category('@'), Category::Other);
+
+        state.pop_state();
+
+        assert_eq!(state.get_category('@'), Category::Letter);
+    }
+
+    #[test]
+    fn it_keeps_globally_set_values_after_group_ends() {
+        let state = TeXState::new();
+
+        state.set_category(false, '@', Category::Letter);
+
+        state.push_state();
+
+        state.set_category(false, '@', Category::Ignored);
+
+        state.push_state();
+
+        state.set_category(true, '@', Category::Other);
+        assert_eq!(state.get_category('@'), Category::Other);
+
+        state.pop_state();
+        assert_eq!(state.get_category('@'), Category::Other);
+
+        state.pop_state();
+        assert_eq!(state.get_category('@'), Category::Other);
     }
 }

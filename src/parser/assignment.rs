@@ -48,7 +48,7 @@ impl<'a> Parser<'a> {
             self.parse_optional_space_unexpanded();
             let let_value = self.lex_unexpanded_token().unwrap();
 
-            self.state.set_let(let_name, let_value);
+            self.state.set_let(false, &let_name, &let_value);
         } else {
             panic!("unimplemented");
         }
@@ -61,7 +61,8 @@ impl<'a> Parser<'a> {
             let control_sequence = self.parse_unexpanded_control_sequence();
             let makro = self.parse_macro_definition();
 
-            self.state.set_macro(control_sequence, Rc::new(makro));
+            self.state
+                .set_macro(false, &control_sequence, &Rc::new(makro));
         }
     }
 

@@ -148,8 +148,9 @@ mod tests {
     fn it_expand_macros_in_true_bodies_but_not_false_bodies() {
         let state = TeXState::new();
         state.set_macro(
-            Token::ControlSequence("a".to_string()),
-            Rc::new(Macro::new(
+            false,
+            &Token::ControlSequence("a".to_string()),
+            &Rc::new(Macro::new(
                 vec![],
                 vec![
                     MacroListElem::Token(Token::Char('x', Category::Letter)),
@@ -159,8 +160,9 @@ mod tests {
             )),
         );
         state.set_macro(
-            Token::ControlSequence("b".to_string()),
-            Rc::new(Macro::new(
+            false,
+            &Token::ControlSequence("b".to_string()),
+            &Rc::new(Macro::new(
                 vec![],
                 vec![
                     MacroListElem::Token(Token::Char('z', Category::Letter)),

@@ -113,8 +113,9 @@ mod tests {
     fn it_expands_macros() {
         let state = TeXState::new();
         state.set_macro(
-            Token::ControlSequence("a".to_string()),
-            Rc::new(Macro::new(
+            false,
+            &Token::ControlSequence("a".to_string()),
+            &Rc::new(Macro::new(
                 vec![MacroListElem::Parameter(1)],
                 vec![
                     MacroListElem::Token(Token::Char('x', Category::Letter)),
@@ -165,8 +166,9 @@ mod tests {
     fn it_expands_lets() {
         let state = TeXState::new();
         state.set_let(
-            Token::ControlSequence("a".to_string()),
-            Token::Char('b', Category::Letter),
+            false,
+            &Token::ControlSequence("a".to_string()),
+            &Token::Char('b', Category::Letter),
         );
         let mut parser = Parser::new(&["\\a%"], &state);
 
@@ -181,8 +183,9 @@ mod tests {
     fn it_peeks_expanded_tokens() {
         let state = TeXState::new();
         state.set_macro(
-            Token::ControlSequence("a".to_string()),
-            Rc::new(Macro::new(
+            false,
+            &Token::ControlSequence("a".to_string()),
+            &Rc::new(Macro::new(
                 vec![],
                 vec![MacroListElem::Token(Token::Char('x', Category::Letter))],
             )),

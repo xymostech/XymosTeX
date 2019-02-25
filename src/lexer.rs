@@ -363,7 +363,7 @@ mod tests {
     #[test]
     fn it_uses_real_state() {
         let state = TeXState::new();
-        state.set_category('@', Category::Letter);
+        state.set_category(false, '@', Category::Letter);
         assert_lexes_to_with_state(
             &["@\\zer@%"],
             &[
