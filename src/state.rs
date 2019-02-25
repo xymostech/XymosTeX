@@ -90,13 +90,24 @@ impl TeXStateInner {
         }
     }
 
-    fn set_let(&mut self, set_token: Token, to_token: Token) {
-        if let Some(token_definition) = self.token_definition_map.get(&to_token) {
+    fn set_let(&mut self, set_token: &Token, to_token: &Token) {
+        if let Some(token_definition) = self.token_definition_map.get(to_token) {
+            // If to_token already has a definition, we use that for the value
+            // we're setting.
             self.token_definition_map
-                .insert(set_token, token_definition.clone());
-        } else if let Token::Char(_, _) = to_token {
-            self.token_definition_map
-                .insert(set_token, TokenDefinition::Let(to_token));
+                .insert(set_token.clone(), token_definition.clone());
+        } else if let Token::Char(_, cat) = to_token {
+            if cat != &Category::Active {
+                // Otherwise, if to_token is a char token with a non-active
+                // category, we create a new definition for that character.
+                // TODO(xymostech): Figure out if this is the correct behavior
+                // for when to_token is a spacial token. This current guess of
+                // behavior is based on trying
+                // \catcode`@=13 \let\a=@ \def@{x} \show\a
+                // and seeing that it gives \a=undefined
+                self.token_definition_map
+                    .insert(set_token.clone(), TokenDefinition::Let(to_token.clone()));
+            }
         }
     }
 }

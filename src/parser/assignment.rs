@@ -144,4 +144,19 @@ mod tests {
             )
         );
     }
+
+    #[test]
+    fn it_doesnt_assign_lets_for_active_tokens() {
+        let state = TeXState::new();
+        state.set_category(false, '@', Category::Active);
+        let mut parser = Parser::new(&["\\let\\b=@%"], &state);
+
+        parser.parse_assignment();
+        assert_eq!(parser.lex_unexpanded_token(), None);
+
+        assert_eq!(
+            state.get_let(&Token::ControlSequence("a".to_string())),
+            None
+        );
+    }
 }
