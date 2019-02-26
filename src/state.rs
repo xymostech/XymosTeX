@@ -6,10 +6,15 @@ use crate::category::Category;
 use crate::makro::Macro;
 use crate::token::Token;
 
+// A list of all primitive control sequences, used so that we can \let other
+// control sequences equal to them.
+const ALL_PRIMITIVES: &[&str] = &["iftrue", "iffalse", "fi", "else", "def", "let"];
+
 #[derive(Clone)]
 enum TokenDefinition {
     Macro(Rc<Macro>),
-    Let(Token),
+    Token(Token),
+    Primitive(&'static str),
 }
 
 // This contains all of the mutable state about our TeX environment
@@ -52,9 +57,18 @@ impl TeXStateInner {
         initial_categories.insert('#', Category::Parameter);
         initial_categories.insert('$', Category::MathShift);
 
+        let mut token_definitions = HashMap::new();
+
+        for primitive in ALL_PRIMITIVES {
+            token_definitions.insert(
+                Token::ControlSequence(primitive.to_string()),
+                TokenDefinition::Primitive(primitive),
+            );
+        }
+
         TeXStateInner {
             category_map: initial_categories,
-            token_definition_map: HashMap::new(),
+            token_definition_map: token_definitions,
         }
     }
 
@@ -82,9 +96,9 @@ impl TeXStateInner {
             .insert(token.clone(), TokenDefinition::Macro(makro.clone()));
     }
 
-    fn get_let(&self, token: &Token) -> Option<Token> {
-        if let Some(TokenDefinition::Let(let_token)) = self.token_definition_map.get(token) {
-            Some(let_token.clone())
+    fn get_renamed_token(&self, token: &Token) -> Option<Token> {
+        if let Some(TokenDefinition::Token(renamed)) = self.token_definition_map.get(token) {
+            Some(renamed.clone())
         } else {
             None
         }
@@ -101,14 +115,30 @@ impl TeXStateInner {
                 // Otherwise, if to_token is a char token with a non-active
                 // category, we create a new definition for that character.
                 // TODO(xymostech): Figure out if this is the correct behavior
-                // for when to_token is a spacial token. This current guess of
+                // for when to_token is a special token. This current guess of
                 // behavior is based on trying
                 // \catcode`@=13 \let\a=@ \def@{x} \show\a
                 // and seeing that it gives \a=undefined
                 self.token_definition_map
-                    .insert(set_token.clone(), TokenDefinition::Let(to_token.clone()));
+                    .insert(set_token.clone(), TokenDefinition::Token(to_token.clone()));
             }
         }
+    }
+
+    fn is_token_equal_to_cs(&self, token: &Token, cs: &str) -> bool {
+        if let Token::ControlSequence(real_cs) = token {
+            if real_cs == cs {
+                return true;
+            }
+        }
+
+        if let Some(TokenDefinition::Primitive(prim_cs)) = self.token_definition_map.get(token) {
+            if prim_cs == &cs {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -174,8 +204,9 @@ impl TeXStateStack {
     generate_inner_global_func!(fn set_category(global: bool, ch: char, cat: Category));
     generate_inner_func!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
     generate_inner_global_func!(fn set_macro(global: bool, token: &Token, makro: &Rc<Macro>));
-    generate_inner_func!(fn get_let(token: &Token) -> Option<Token>);
+    generate_inner_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
     generate_inner_global_func!(fn set_let(global: bool, set_token: &Token, to_token: &Token));
+    generate_inner_func!(fn is_token_equal_to_cs(token: &Token, cs: &str) -> bool);
 }
 
 // A lot of the state in TeX is treated as global state, where we need to be
@@ -227,8 +258,9 @@ impl TeXState {
     generate_stack_func!(fn set_category(global: bool, ch: char, cat: Category));
     generate_stack_func!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
     generate_stack_func!(fn set_macro(global: bool, token: &Token, makro: &Rc<Macro>));
-    generate_stack_func!(fn get_let(token: &Token) -> Option<Token>);
+    generate_stack_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
     generate_stack_func!(fn set_let(global: bool, set_token: &Token, to_token: &Token));
+    generate_stack_func!(fn is_token_equal_to_cs(token: &Token, cs: &str) -> bool);
 }
 
 #[cfg(test)]
@@ -290,5 +322,20 @@ mod tests {
 
         state.pop_state();
         assert_eq!(state.get_category('@'), Category::Other);
+    }
+
+    #[test]
+    fn it_compares_control_sequences() {
+        let state = TeXState::new();
+
+        assert!(state.is_token_equal_to_cs(&Token::ControlSequence("foo".to_string()), "foo"));
+
+        state.set_let(
+            false,
+            &Token::ControlSequence("boo".to_string()),
+            &Token::ControlSequence("let".to_string()),
+        );
+
+        assert!(state.is_token_equal_to_cs(&Token::ControlSequence("boo".to_string()), "let"));
     }
 }

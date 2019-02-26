@@ -120,7 +120,7 @@ mod tests {
         assert_eq!(parser.lex_unexpanded_token(), None);
 
         assert_eq!(
-            state.get_let(&Token::ControlSequence("a".to_string())),
+            state.get_renamed_token(&Token::ControlSequence("a".to_string())),
             Some(Token::Char('b', Category::Letter))
         );
     }
@@ -149,14 +149,25 @@ mod tests {
     fn it_doesnt_assign_lets_for_active_tokens() {
         let state = TeXState::new();
         state.set_category(false, '@', Category::Active);
-        let mut parser = Parser::new(&["\\let\\b=@%"], &state);
+        let mut parser = Parser::new(&["\\let\\a=@%"], &state);
 
         parser.parse_assignment();
         assert_eq!(parser.lex_unexpanded_token(), None);
 
         assert_eq!(
-            state.get_let(&Token::ControlSequence("a".to_string())),
+            state.get_renamed_token(&Token::ControlSequence("a".to_string())),
             None
         );
+    }
+
+    #[test]
+    fn it_assigns_lets_for_primitives() {
+        let state = TeXState::new();
+        let mut parser = Parser::new(&["\\let\\a=\\def%"], &state);
+
+        parser.parse_assignment();
+        assert_eq!(parser.lex_unexpanded_token(), None);
+
+        assert!(state.is_token_equal_to_cs(&Token::ControlSequence("a".to_string()), "def"));
     }
 }

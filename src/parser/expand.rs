@@ -16,9 +16,6 @@ impl<'a> Parser<'a> {
                     let replacement = makro.get_replacement(&replacement_map);
                     self.add_upcoming_tokens(replacement);
                     self.lex_expanded_token()
-                } else if let Some(let_replacement) = self.state.get_let(&token) {
-                    self.add_upcoming_token(let_replacement);
-                    self.lex_expanded_token()
                 } else {
                     Some(token)
                 }
@@ -158,23 +155,6 @@ mod tests {
         assert_eq!(
             parser.lex_expanded_token(),
             Some(Token::Char('x', Category::Letter))
-        );
-        assert_eq!(parser.lex_expanded_token(), None);
-    }
-
-    #[test]
-    fn it_expands_lets() {
-        let state = TeXState::new();
-        state.set_let(
-            false,
-            &Token::ControlSequence("a".to_string()),
-            &Token::Char('b', Category::Letter),
-        );
-        let mut parser = Parser::new(&["\\a%"], &state);
-
-        assert_eq!(
-            parser.lex_expanded_token(),
-            Some(Token::Char('b', Category::Letter))
         );
         assert_eq!(parser.lex_expanded_token(), None);
     }
