@@ -4,8 +4,11 @@ use crate::token::Token;
 impl<'a> Parser<'a> {
     pub fn is_conditional_head(&mut self) -> bool {
         match self.peek_unexpanded_token() {
-            Some(Token::ControlSequence(cs)) => {
-                cs == "else" || cs == "fi" || cs == "iftrue" || cs == "iffalse"
+            Some(token) => {
+                self.state.is_token_equal_to_cs(&token, "else")
+                    || self.state.is_token_equal_to_cs(&token, "fi")
+                    || self.state.is_token_equal_to_cs(&token, "iftrue")
+                    || self.state.is_token_equal_to_cs(&token, "iffalse")
             }
             _ => false,
         }
@@ -16,13 +19,12 @@ impl<'a> Parser<'a> {
     fn skip_to_fi_or_else(&mut self) -> bool {
         let mut ends_with_else = false;
         loop {
-            match self.lex_unexpanded_token().unwrap() {
-                Token::ControlSequence(ref cs) if cs == "fi" => break,
-                Token::ControlSequence(ref cs) if cs == "else" => {
-                    ends_with_else = true;
-                    break;
-                }
-                _ => (),
+            let token = self.lex_unexpanded_token().unwrap();
+            if self.state.is_token_equal_to_cs(&token, "fi") {
+                break;
+            } else if self.state.is_token_equal_to_cs(&token, "else") {
+                ends_with_else = true;
+                break;
             }
         }
         ends_with_else
@@ -35,7 +37,7 @@ impl<'a> Parser<'a> {
         // skip tokens until we see a \fi.
         loop {
             let token = self.lex_unexpanded_token().unwrap();
-            if token == Token::ControlSequence("fi".to_string()) {
+            if self.state.is_token_equal_to_cs(&token, "fi") {
                 break;
             }
         }
@@ -55,23 +57,25 @@ impl<'a> Parser<'a> {
     }
 
     pub fn expand_conditional(&mut self) {
-        match self.lex_unexpanded_token() {
-            Some(Token::ControlSequence(ref cs)) if cs == "fi" => {
-                if self.conditional_depth == 0 {
-                    panic!("Extra \\fi");
-                }
-                self.conditional_depth -= 1;
+        let token = self.lex_unexpanded_token().unwrap();
+
+        if self.state.is_token_equal_to_cs(&token, "fi") {
+            if self.conditional_depth == 0 {
+                panic!("Extra \\fi");
             }
-            Some(Token::ControlSequence(ref cs)) if cs == "else" => {
-                if self.conditional_depth == 0 {
-                    panic!("Extra \\else");
-                }
-                self.conditional_depth -= 1;
-                self.skip_from_else();
+            self.conditional_depth -= 1;
+        } else if self.state.is_token_equal_to_cs(&token, "else") {
+            if self.conditional_depth == 0 {
+                panic!("Extra \\else");
             }
-            Some(Token::ControlSequence(ref cs)) if cs == "iftrue" => self.handle_true(),
-            Some(Token::ControlSequence(ref cs)) if cs == "iffalse" => self.handle_false(),
-            _ => panic!("unimplemented"),
+            self.conditional_depth -= 1;
+            self.skip_from_else();
+        } else if self.state.is_token_equal_to_cs(&token, "iftrue") {
+            self.handle_true();
+        } else if self.state.is_token_equal_to_cs(&token, "iffalse") {
+            self.handle_false();
+        } else {
+            panic!("unimplemented");
         }
     }
 }
@@ -184,6 +188,55 @@ mod tests {
         );
         assert_eq!(parser.is_conditional_head(), true);
         parser.expand_conditional();
+        assert_eq!(parser.lex_unexpanded_token(), None);
+    }
+
+    #[test]
+    fn it_allows_conditional_primitives_to_be_let() {
+        let state = TeXState::new();
+        state.set_let(
+            false,
+            &Token::ControlSequence("iftruex".to_string()),
+            &Token::ControlSequence("iftrue".to_string()),
+        );
+        state.set_let(
+            false,
+            &Token::ControlSequence("iffalsex".to_string()),
+            &Token::ControlSequence("iffalse".to_string()),
+        );
+        state.set_let(
+            false,
+            &Token::ControlSequence("fix".to_string()),
+            &Token::ControlSequence("fi".to_string()),
+        );
+        state.set_let(
+            false,
+            &Token::ControlSequence("elsex".to_string()),
+            &Token::ControlSequence("else".to_string()),
+        );
+        let mut parser = Parser::new(
+            &["\\iftruex a\\elsex b\\fix%", "\\iffalsex a\\elsex b\\fix%"],
+            &state,
+        );
+
+        assert_eq!(parser.is_conditional_head(), true);
+        parser.expand_conditional();
+        assert_eq!(
+            parser.lex_expanded_token(),
+            Some(Token::Char('a', Category::Letter))
+        );
+        assert_eq!(parser.is_conditional_head(), true);
+        parser.expand_conditional();
+
+        assert_eq!(parser.is_conditional_head(), true);
+        parser.expand_conditional();
+        assert_eq!(
+            parser.lex_expanded_token(),
+            Some(Token::Char('b', Category::Letter))
+        );
+        assert_eq!(parser.is_conditional_head(), true);
+        parser.expand_conditional();
+
         assert_eq!(parser.lex_unexpanded_token(), None);
     }
 }
