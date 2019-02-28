@@ -8,7 +8,7 @@ use crate::token::Token;
 
 // A list of all primitive control sequences, used so that we can \let other
 // control sequences equal to them.
-const ALL_PRIMITIVES: &[&str] = &["iftrue", "iffalse", "fi", "else", "def", "let"];
+const ALL_PRIMITIVES: &[&str] = &["iftrue", "iffalse", "fi", "else", "def", "let", "global"];
 
 #[derive(Clone)]
 enum TokenDefinition {

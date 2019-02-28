@@ -39,7 +39,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_let_assignment(&mut self) {
+    fn parse_let_assignment(&mut self, global: bool) {
         let tok = self.lex_expanded_token().unwrap();
 
         if self.state.is_token_equal_to_cs(&tok, "let") {
@@ -48,13 +48,13 @@ impl<'a> Parser<'a> {
             self.parse_optional_space_unexpanded();
             let let_value = self.lex_unexpanded_token().unwrap();
 
-            self.state.set_let(false, &let_name, &let_value);
+            self.state.set_let(global, &let_name, &let_value);
         } else {
             panic!("unimplemented");
         }
     }
 
-    fn parse_macro_assignment(&mut self) {
+    fn parse_macro_assignment(&mut self, global: bool) {
         let tok = self.lex_expanded_token().unwrap();
 
         if self.state.is_token_equal_to_cs(&tok, "def") {
@@ -62,18 +62,31 @@ impl<'a> Parser<'a> {
             let makro = self.parse_macro_definition();
 
             self.state
-                .set_macro(false, &control_sequence, &Rc::new(makro));
+                .set_macro(global, &control_sequence, &Rc::new(makro));
+        }
+    }
+
+    fn parse_assignment_global(&mut self, global: bool) {
+        if self.is_macro_assignment_head() {
+            self.parse_macro_assignment(global)
+        } else if self.is_let_assignment_head() {
+            self.parse_let_assignment(global)
+        } else {
+            let tok = self.lex_expanded_token().unwrap();
+            if self.state.is_token_equal_to_cs(&tok, "global") {
+                if self.is_assignment_head() {
+                    self.parse_assignment_global(true);
+                } else {
+                    panic!("Non-assignment head found after \\global");
+                }
+            } else {
+                panic!("Invalid start found in parse_assignment");
+            }
         }
     }
 
     pub fn parse_assignment(&mut self) {
-        if self.is_macro_assignment_head() {
-            self.parse_macro_assignment()
-        } else if self.is_let_assignment_head() {
-            self.parse_let_assignment()
-        } else {
-            panic!("Invalid start found in parse_assignment");
-        }
+        self.parse_assignment_global(false);
     }
 }
 
@@ -107,6 +120,27 @@ mod tests {
                     MacroListElem::Token(Token::Char('y', Category::Letter)),
                     MacroListElem::Parameter(1),
                 ]
+            )
+        );
+    }
+
+    #[test]
+    fn it_sets_global_defs() {
+        let state = TeXState::new();
+        let mut parser = Parser::new(&["\\global\\def\\a{x}%"], &state);
+
+        state.push_state();
+        parser.parse_assignment();
+        assert_eq!(parser.lex_unexpanded_token(), None);
+        state.pop_state();
+
+        assert_eq!(
+            *state
+                .get_macro(&Token::ControlSequence("a".to_string()))
+                .unwrap(),
+            Macro::new(
+                vec![],
+                vec![MacroListElem::Token(Token::Char('x', Category::Letter)),]
             )
         );
     }
@@ -203,6 +237,22 @@ mod tests {
                 vec![MacroListElem::Parameter(1),],
                 vec![MacroListElem::Parameter(1),]
             )
+        );
+    }
+
+    #[test]
+    fn it_sets_global_lets() {
+        let state = TeXState::new();
+        let mut parser = Parser::new(&["\\global\\let\\a=b%"], &state);
+
+        state.push_state();
+        parser.parse_assignment();
+        assert_eq!(parser.lex_unexpanded_token(), None);
+        state.pop_state();
+
+        assert_eq!(
+            state.get_renamed_token(&Token::ControlSequence("a".to_string())),
+            Some(Token::Char('b', Category::Letter))
         );
     }
 }
