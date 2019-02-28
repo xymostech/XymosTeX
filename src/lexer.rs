@@ -126,8 +126,11 @@ impl<'a> Lexer<'a> {
 
         match self.get_plain_char() {
             PlainLexResult::Char(fourth_char) => {
-                let final_char = if is_hex_char(third_char) && is_hex_char(fourth_char) {
-                    (hex_value(third_char) * 16 + hex_value(fourth_char)) as char
+                let final_char = if is_hex_char(third_char)
+                    && is_hex_char(fourth_char)
+                {
+                    (hex_value(third_char) * 16 + hex_value(fourth_char))
+                        as char
                 } else {
                     self.unget_plain_char(&PlainLexResult::Char(fourth_char));
                     if third_char <= '?' {
@@ -164,7 +167,9 @@ impl<'a> Lexer<'a> {
 
                     let first_char = match self.get_char() {
                         PlainLexResult::Char(c) => c,
-                        _ => panic!("Invalid EOF or EOL lexing control sequence"),
+                        _ => {
+                            panic!("Invalid EOF or EOL lexing control sequence")
+                        }
                     };
 
                     match self.state.get_category(first_char) {
@@ -174,7 +179,8 @@ impl<'a> Lexer<'a> {
                             loop {
                                 match self.get_char() {
                                     PlainLexResult::Char(c)
-                                        if self.state.get_category(c) == Category::Letter =>
+                                        if self.state.get_category(c)
+                                            == Category::Letter =>
                                     {
                                         sequence.push(c)
                                     }
@@ -188,12 +194,18 @@ impl<'a> Lexer<'a> {
 
                             Some(Token::ControlSequence(sequence))
                         }
-                        _ => Some(Token::ControlSequence(first_char.to_string())),
+                        _ => {
+                            Some(Token::ControlSequence(first_char.to_string()))
+                        }
                     }
                 }
                 Category::EndOfLine => match self.lex_state {
-                    LexState::BeginningLine => Some(Token::ControlSequence("par".to_string())),
-                    LexState::MiddleLine => Some(Token::Char(' ', Category::Space)),
+                    LexState::BeginningLine => {
+                        Some(Token::ControlSequence("par".to_string()))
+                    }
+                    LexState::MiddleLine => {
+                        Some(Token::Char(' ', Category::Space))
+                    }
                     LexState::SkippingBlanks => self.lex_token(),
                 },
                 Category::Space => {
@@ -222,7 +234,11 @@ impl<'a> Lexer<'a> {
 mod tests {
     use super::*;
 
-    fn assert_lexes_to_with_state(lines: &[&str], expected_toks: &[Token], state: &TeXState) {
+    fn assert_lexes_to_with_state(
+        lines: &[&str],
+        expected_toks: &[Token],
+        state: &TeXState,
+    ) {
         let mut lexer = Lexer::new(lines, &state);
 
         let mut real_toks = Vec::new();
@@ -256,7 +272,10 @@ mod tests {
 
     #[test]
     fn it_lexes_control_sequences() {
-        assert_lexes_to(&["\\ab%"], &[Token::ControlSequence("ab".to_string())]);
+        assert_lexes_to(
+            &["\\ab%"],
+            &[Token::ControlSequence("ab".to_string())],
+        );
         assert_lexes_to(&["\\@%"], &[Token::ControlSequence("@".to_string())]);
     }
 
@@ -284,7 +303,10 @@ mod tests {
 
     #[test]
     fn it_lexes_trigraphs_recursively() {
-        assert_lexes_to(&["^^\u{001e}^:%"], &[Token::Char('z', Category::Letter)]);
+        assert_lexes_to(
+            &["^^\u{001e}^:%"],
+            &[Token::Char('z', Category::Letter)],
+        );
     }
 
     #[test]

@@ -158,7 +158,9 @@ mod tests {
                 vec![],
                 vec![
                     MacroListElem::Token(Token::Char('x', Category::Letter)),
-                    MacroListElem::Token(Token::ControlSequence("else".to_string())),
+                    MacroListElem::Token(Token::ControlSequence(
+                        "else".to_string(),
+                    )),
                     MacroListElem::Token(Token::Char('y', Category::Letter)),
                 ],
             )),
@@ -170,7 +172,9 @@ mod tests {
                 vec![],
                 vec![
                     MacroListElem::Token(Token::Char('z', Category::Letter)),
-                    MacroListElem::Token(Token::ControlSequence("fi".to_string())),
+                    MacroListElem::Token(Token::ControlSequence(
+                        "fi".to_string(),
+                    )),
                 ],
             )),
         );

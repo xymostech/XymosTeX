@@ -18,7 +18,10 @@ pub struct Macro {
 }
 
 impl Macro {
-    pub fn new(parameter_list: Vec<MacroListElem>, replacement_list: Vec<MacroListElem>) -> Macro {
+    pub fn new(
+        parameter_list: Vec<MacroListElem>,
+        replacement_list: Vec<MacroListElem>,
+    ) -> Macro {
         let makro: Macro = Macro {
             parameter_list: parameter_list,
             replacement_list: replacement_list,
@@ -59,14 +62,22 @@ impl Macro {
         }
     }
 
-    pub fn get_replacement(&self, parameter_values: &HashMap<usize, Vec<Token>>) -> Vec<Token> {
+    pub fn get_replacement(
+        &self,
+        parameter_values: &HashMap<usize, Vec<Token>>,
+    ) -> Vec<Token> {
         self.replacement_list
             .iter()
             .flat_map(|elem| match elem {
-                MacroListElem::Parameter(param_num) => match parameter_values.get(param_num) {
-                    Some(tok_list) => tok_list.clone(),
-                    None => panic!("Missing parameter in replacement: {}", param_num),
-                },
+                MacroListElem::Parameter(param_num) => {
+                    match parameter_values.get(param_num) {
+                        Some(tok_list) => tok_list.clone(),
+                        None => panic!(
+                            "Missing parameter in replacement: {}",
+                            param_num
+                        ),
+                    }
+                }
                 MacroListElem::Token(tok) => vec![tok.clone()],
             })
             .collect()

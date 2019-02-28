@@ -8,7 +8,10 @@ enum HorizontalListElem {
 }
 
 impl<'a> Parser<'a> {
-    fn replace_renamed_token(&mut self, maybe_token: Option<Token>) -> Option<Token> {
+    fn replace_renamed_token(
+        &mut self,
+        maybe_token: Option<Token>,
+    ) -> Option<Token> {
         match maybe_token {
             None => None,
             Some(ref token) => {
@@ -70,7 +73,8 @@ impl<'a> Parser<'a> {
         let mut result = Vec::new();
 
         let mut group_level = 0;
-        while let Some(elem) = self.parse_horizontal_list_elem(&mut group_level) {
+        while let Some(elem) = self.parse_horizontal_list_elem(&mut group_level)
+        {
             result.push(elem);
         }
 
@@ -124,7 +128,10 @@ mod tests {
 
     #[test]
     fn it_handles_let_assigned_tokens() {
-        assert_parses_to(&["\\let\\a=a%", "\\a%"], &[HorizontalListElem::Char('a')]);
+        assert_parses_to(
+            &["\\let\\a=a%", "\\a%"],
+            &[HorizontalListElem::Char('a')],
+        );
     }
 
     #[test]

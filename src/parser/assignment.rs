@@ -162,7 +162,8 @@ mod tests {
     #[test]
     fn it_assigns_lets_for_previously_defined_macros() {
         let state = TeXState::new();
-        let mut parser = Parser::new(&["\\def\\a{x}%", "\\let\\b=\\a%"], &state);
+        let mut parser =
+            Parser::new(&["\\def\\a{x}%", "\\let\\b=\\a%"], &state);
 
         parser.parse_assignment();
         parser.parse_assignment();
@@ -202,7 +203,10 @@ mod tests {
         parser.parse_assignment();
         assert_eq!(parser.lex_unexpanded_token(), None);
 
-        assert!(state.is_token_equal_to_cs(&Token::ControlSequence("a".to_string()), "def"));
+        assert!(state.is_token_equal_to_cs(
+            &Token::ControlSequence("a".to_string()),
+            "def"
+        ));
     }
 
     #[test]
@@ -223,7 +227,8 @@ mod tests {
     #[test]
     fn it_lets_def_be_let() {
         let state = TeXState::new();
-        let mut parser = Parser::new(&["\\let\\a=\\def%", "\\a\\x #1{#1}%"], &state);
+        let mut parser =
+            Parser::new(&["\\let\\a=\\def%", "\\a\\x #1{#1}%"], &state);
 
         parser.parse_assignment();
         parser.parse_assignment();

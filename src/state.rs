@@ -8,7 +8,8 @@ use crate::token::Token;
 
 // A list of all primitive control sequences, used so that we can \let other
 // control sequences equal to them.
-const ALL_PRIMITIVES: &[&str] = &["iftrue", "iffalse", "fi", "else", "def", "let", "global"];
+const ALL_PRIMITIVES: &[&str] =
+    &["iftrue", "iffalse", "fi", "else", "def", "let", "global"];
 
 #[derive(Clone)]
 enum TokenDefinition {
@@ -84,7 +85,9 @@ impl TeXStateInner {
     }
 
     fn get_macro(&self, token: &Token) -> Option<Rc<Macro>> {
-        if let Some(TokenDefinition::Macro(makro)) = self.token_definition_map.get(token) {
+        if let Some(TokenDefinition::Macro(makro)) =
+            self.token_definition_map.get(token)
+        {
             Some(Rc::clone(makro))
         } else {
             None
@@ -97,7 +100,9 @@ impl TeXStateInner {
     }
 
     fn get_renamed_token(&self, token: &Token) -> Option<Token> {
-        if let Some(TokenDefinition::Token(renamed)) = self.token_definition_map.get(token) {
+        if let Some(TokenDefinition::Token(renamed)) =
+            self.token_definition_map.get(token)
+        {
             Some(renamed.clone())
         } else {
             None
@@ -105,7 +110,8 @@ impl TeXStateInner {
     }
 
     fn set_let(&mut self, set_token: &Token, to_token: &Token) {
-        if let Some(token_definition) = self.token_definition_map.get(to_token) {
+        if let Some(token_definition) = self.token_definition_map.get(to_token)
+        {
             // If to_token already has a definition, we use that for the value
             // we're setting.
             self.token_definition_map
@@ -119,8 +125,10 @@ impl TeXStateInner {
                 // behavior is based on trying
                 // \catcode`@=13 \let\a=@ \def@{x} \show\a
                 // and seeing that it gives \a=undefined
-                self.token_definition_map
-                    .insert(set_token.clone(), TokenDefinition::Token(to_token.clone()));
+                self.token_definition_map.insert(
+                    set_token.clone(),
+                    TokenDefinition::Token(to_token.clone()),
+                );
             }
         }
     }
@@ -132,7 +140,9 @@ impl TeXStateInner {
             }
         }
 
-        if let Some(TokenDefinition::Primitive(prim_cs)) = self.token_definition_map.get(token) {
+        if let Some(TokenDefinition::Primitive(prim_cs)) =
+            self.token_definition_map.get(token)
+        {
             if prim_cs == &cs {
                 return true;
             }
@@ -328,7 +338,10 @@ mod tests {
     fn it_compares_control_sequences() {
         let state = TeXState::new();
 
-        assert!(state.is_token_equal_to_cs(&Token::ControlSequence("foo".to_string()), "foo"));
+        assert!(state.is_token_equal_to_cs(
+            &Token::ControlSequence("foo".to_string()),
+            "foo"
+        ));
 
         state.set_let(
             false,
@@ -336,6 +349,9 @@ mod tests {
             &Token::ControlSequence("let".to_string()),
         );
 
-        assert!(state.is_token_equal_to_cs(&Token::ControlSequence("boo".to_string()), "let"));
+        assert!(state.is_token_equal_to_cs(
+            &Token::ControlSequence("boo".to_string()),
+            "let"
+        ));
     }
 }

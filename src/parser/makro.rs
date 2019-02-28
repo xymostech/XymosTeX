@@ -19,7 +19,9 @@ fn parse_parameter_number(ch: char) -> usize {
 // the remaining elements are tokens)
 fn get_next_non_token_index(makro: &Macro, parameter_index: usize) -> usize {
     let mut end_index = parameter_index + 1;
-    while let Some(MacroListElem::Token(_)) = makro.parameter_list.get(end_index) {
+    while let Some(MacroListElem::Token(_)) =
+        makro.parameter_list.get(end_index)
+    {
         end_index += 1;
     }
     end_index
@@ -56,17 +58,18 @@ impl<'a> Parser<'a> {
                             // mentioned above. Store the token in
                             // `maybe_final_tok` and break out.
                             Some(Token::Char(ch, Category::BeginGroup)) => {
-                                parameter_list.push(MacroListElem::Token(Token::Char(
-                                    ch,
-                                    Category::BeginGroup,
-                                )));
-                                maybe_final_tok = Some(Token::Char(ch, Category::BeginGroup));
+                                parameter_list.push(MacroListElem::Token(
+                                    Token::Char(ch, Category::BeginGroup),
+                                ));
+                                maybe_final_tok =
+                                    Some(Token::Char(ch, Category::BeginGroup));
                                 break;
                             }
                             // If it's an Other, it's probably a number
                             Some(Token::Char(ch, Category::Other)) => {
                                 let index = parse_parameter_number(ch);
-                                parameter_list.push(MacroListElem::Parameter(index));
+                                parameter_list
+                                    .push(MacroListElem::Parameter(index));
                             }
                             // Anything else is an error
                             _ => panic!("Invalid token found after parameter"),
@@ -111,14 +114,14 @@ impl<'a> Parser<'a> {
                             // parameter token, we insert the second token into
                             // our list.
                             Some(Token::Char(ch, Category::Parameter)) => {
-                                replacement_list.push(MacroListElem::Token(Token::Char(
-                                    ch,
-                                    Category::Parameter,
-                                )));
+                                replacement_list.push(MacroListElem::Token(
+                                    Token::Char(ch, Category::Parameter),
+                                ));
                             }
                             Some(Token::Char(ch, Category::Other)) => {
                                 let index = parse_parameter_number(ch);
-                                replacement_list.push(MacroListElem::Parameter(index));
+                                replacement_list
+                                    .push(MacroListElem::Parameter(index));
                             }
                             _ => panic!("Invalid token found after parameter"),
                         }
@@ -201,7 +204,10 @@ impl<'a> Parser<'a> {
     // to continue parsing tokens/balanced groups until a sequence of tokens
     // that match the list of delimiters is found, and then returning the
     // tokens that were parsed before then.
-    fn parse_delimited_tokens(&mut self, delimiters: &[MacroListElem]) -> Vec<Token> {
+    fn parse_delimited_tokens(
+        &mut self,
+        delimiters: &[MacroListElem],
+    ) -> Vec<Token> {
         let mut result_tokens: Vec<Token> = Vec::new();
 
         // When we encounter tokens that match some of the delimiters, we need
@@ -276,7 +282,10 @@ impl<'a> Parser<'a> {
 
     // Parse the arguments to a given macro into a map of parameter number ->
     // replacement value
-    pub fn parse_replacement_map(&mut self, makro: &Macro) -> HashMap<usize, Vec<Token>> {
+    pub fn parse_replacement_map(
+        &mut self,
+        makro: &Macro,
+    ) -> HashMap<usize, Vec<Token>> {
         let mut replacement_map: HashMap<usize, Vec<Token>> = HashMap::new();
 
         // We manually iterate through the replacement_list because when we
@@ -291,15 +300,18 @@ impl<'a> Parser<'a> {
                     // A parameter is delimited if it's followed immediately by
                     // a token. If the parameter is the last element in the
                     // list, it is not delimited.
-                    let is_delimited = match makro.parameter_list.get(index + 1) {
+                    let is_delimited = match makro.parameter_list.get(index + 1)
+                    {
                         Some(MacroListElem::Token(_)) => true,
                         _ => false,
                     };
 
                     let toks = if is_delimited {
-                        let delimiter_last_index = get_next_non_token_index(makro, index);
+                        let delimiter_last_index =
+                            get_next_non_token_index(makro, index);
                         let delimited_toks = self.parse_delimited_tokens(
-                            &makro.parameter_list[index + 1..delimiter_last_index],
+                            &makro.parameter_list
+                                [index + 1..delimiter_last_index],
                         );
 
                         // The delimiters following the parameter are parsed in
@@ -375,7 +387,10 @@ mod tests {
 
         #[test]
         fn it_parses_empty_macros() {
-            assert_parses_to_macro(&["\\def\\a{}%"], Macro::new(Vec::new(), Vec::new()));
+            assert_parses_to_macro(
+                &["\\def\\a{}%"],
+                Macro::new(Vec::new(), Vec::new()),
+            );
         }
 
         #[test]
@@ -383,8 +398,14 @@ mod tests {
             assert_parses_to_macro(
                 &["\\def\\a#1#2{#1#2}%"],
                 Macro::new(
-                    vec![MacroListElem::Parameter(1), MacroListElem::Parameter(2)],
-                    vec![MacroListElem::Parameter(1), MacroListElem::Parameter(2)],
+                    vec![
+                        MacroListElem::Parameter(1),
+                        MacroListElem::Parameter(2),
+                    ],
+                    vec![
+                        MacroListElem::Parameter(1),
+                        MacroListElem::Parameter(2),
+                    ],
                 ),
             );
         }
@@ -395,12 +416,24 @@ mod tests {
                 &["\\def\\a ab{ab}%"],
                 Macro::new(
                     vec![
-                        MacroListElem::Token(Token::Char('a', Category::Letter)),
-                        MacroListElem::Token(Token::Char('b', Category::Letter)),
+                        MacroListElem::Token(Token::Char(
+                            'a',
+                            Category::Letter,
+                        )),
+                        MacroListElem::Token(Token::Char(
+                            'b',
+                            Category::Letter,
+                        )),
                     ],
                     vec![
-                        MacroListElem::Token(Token::Char('a', Category::Letter)),
-                        MacroListElem::Token(Token::Char('b', Category::Letter)),
+                        MacroListElem::Token(Token::Char(
+                            'a',
+                            Category::Letter,
+                        )),
+                        MacroListElem::Token(Token::Char(
+                            'b',
+                            Category::Letter,
+                        )),
                     ],
                 ),
             );
@@ -412,7 +445,10 @@ mod tests {
                 &["\\def\\a{##}%"],
                 Macro::new(
                     vec![],
-                    vec![MacroListElem::Token(Token::Char('#', Category::Parameter))],
+                    vec![MacroListElem::Token(Token::Char(
+                        '#',
+                        Category::Parameter,
+                    ))],
                 ),
             );
         }
@@ -423,10 +459,19 @@ mod tests {
                 &["\\def\\a a#{}%"],
                 Macro::new(
                     vec![
-                        MacroListElem::Token(Token::Char('a', Category::Letter)),
-                        MacroListElem::Token(Token::Char('{', Category::BeginGroup)),
+                        MacroListElem::Token(Token::Char(
+                            'a',
+                            Category::Letter,
+                        )),
+                        MacroListElem::Token(Token::Char(
+                            '{',
+                            Category::BeginGroup,
+                        )),
                     ],
-                    vec![MacroListElem::Token(Token::Char('{', Category::BeginGroup))],
+                    vec![MacroListElem::Token(Token::Char(
+                        '{',
+                        Category::BeginGroup,
+                    ))],
                 ),
             );
         }
@@ -477,7 +522,10 @@ mod tests {
             assert_eq!(parser.lex_unexpanded_token(), None);
         }
 
-        fn try_parsing_replacements(lines: &[&str], macro_parameter_list: Vec<MacroListElem>) {
+        fn try_parsing_replacements(
+            lines: &[&str],
+            macro_parameter_list: Vec<MacroListElem>,
+        ) {
             let state = TeXState::new();
             let mut parser = Parser::new(lines, &state);
 
@@ -540,7 +588,9 @@ mod tests {
                 &["\\a x\\y%"],
                 vec![
                     MacroListElem::Token(Token::Char('x', Category::Letter)),
-                    MacroListElem::Token(Token::ControlSequence("y".to_string())),
+                    MacroListElem::Token(Token::ControlSequence(
+                        "y".to_string(),
+                    )),
                 ],
             );
         }
@@ -552,7 +602,9 @@ mod tests {
                 &["\\a xy%"],
                 vec![
                     MacroListElem::Token(Token::Char('x', Category::Letter)),
-                    MacroListElem::Token(Token::ControlSequence("y".to_string())),
+                    MacroListElem::Token(Token::ControlSequence(
+                        "y".to_string(),
+                    )),
                 ],
             );
         }
@@ -698,7 +750,10 @@ mod tests {
                 vec![
                     MacroListElem::Token(Token::Char('x', Category::Letter)),
                     MacroListElem::Parameter(1),
-                    MacroListElem::Token(Token::Char('{', Category::BeginGroup)),
+                    MacroListElem::Token(Token::Char(
+                        '{',
+                        Category::BeginGroup,
+                    )),
                 ],
                 vec![(
                     1,
@@ -714,7 +769,10 @@ mod tests {
                 &["\\a x{%"],
                 vec![
                     MacroListElem::Token(Token::Char('x', Category::Letter)),
-                    MacroListElem::Token(Token::Char('{', Category::BeginGroup)),
+                    MacroListElem::Token(Token::Char(
+                        '{',
+                        Category::BeginGroup,
+                    )),
                 ],
             );
         }
