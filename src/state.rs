@@ -29,6 +29,12 @@ pub struct TeXStateInner {
     // \let, \chardef, etc. This map contains the definition of each redefined
     // token.
     token_definition_map: HashMap<Token, TokenDefinition>,
+
+    // TeX's 256 count registers. The values here should be between 2147483647
+    // and -2147483647 (which is very close to the possible values of i32,
+    // except that i32 can also hold the value -2147483648. We should keep
+    // close track of that).
+    count_registers: [i32; 256],
 }
 
 impl TeXStateInner {
@@ -70,6 +76,7 @@ impl TeXStateInner {
         TeXStateInner {
             category_map: initial_categories,
             token_definition_map: token_definitions,
+            count_registers: [0; 256],
         }
     }
 
@@ -150,6 +157,18 @@ impl TeXStateInner {
 
         return false;
     }
+
+    fn get_count(&self, register_index: usize) -> i32 {
+        self.count_registers[register_index]
+    }
+
+    fn set_count(&mut self, register_index: usize, value: i32) {
+        if value == -2147483648 {
+            panic!("Invalid value for count: {}", value);
+        }
+
+        self.count_registers[register_index] = value;
+    }
 }
 
 // TeX keeps a stack of different states around, and pushes a copy of the
@@ -217,6 +236,8 @@ impl TeXStateStack {
     generate_inner_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
     generate_inner_global_func!(fn set_let(global: bool, set_token: &Token, to_token: &Token));
     generate_inner_func!(fn is_token_equal_to_cs(token: &Token, cs: &str) -> bool);
+    generate_inner_func!(fn get_count(register_index: usize) -> i32);
+    generate_inner_global_func!(fn set_count(global: bool, register_index: usize, value: i32));
 }
 
 // A lot of the state in TeX is treated as global state, where we need to be
@@ -271,6 +292,8 @@ impl TeXState {
     generate_stack_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
     generate_stack_func!(fn set_let(global: bool, set_token: &Token, to_token: &Token));
     generate_stack_func!(fn is_token_equal_to_cs(token: &Token, cs: &str) -> bool);
+    generate_stack_func!(fn get_count(register_index: usize) -> i32);
+    generate_stack_func!(fn set_count(global: bool, register_index: usize, value: i32));
 }
 
 #[cfg(test)]
