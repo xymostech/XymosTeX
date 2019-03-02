@@ -296,4 +296,12 @@ mod tests {
             assert_eq!(parser.parse_8bit_number(), 123);
         });
     }
+
+    #[test]
+    #[should_panic(expected = "Invalid 8-bit number: -1234")]
+    fn it_fails_parsing_8bit_numbers() {
+        with_parser(&["-1234%"], |parser| {
+            parser.parse_8bit_number();
+        });
+    }
 }
