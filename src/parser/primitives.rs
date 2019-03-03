@@ -156,18 +156,7 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
-    use crate::state::TeXState;
-
-    fn with_parser<T>(lines: &[&str], cb: T)
-    where
-        T: FnOnce(&mut Parser),
-    {
-        let state = TeXState::new();
-        let mut parser = Parser::new(lines, &state);
-
-        cb(&mut parser);
-        assert_eq!(parser.lex_unexpanded_token(), None);
-    }
+    use crate::testing::with_parser;
 
     #[test]
     fn it_parses_an_optional_space() {
