@@ -62,13 +62,23 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Parses an <equals>
+    // Parses an <equals> without expanding tokens
     pub fn parse_equals_unexpanded(&mut self) {
         self.parse_optional_spaces_unexpanded();
         if let Some(Token::Char('=', Category::Other)) =
             self.peek_unexpanded_token()
         {
             self.lex_unexpanded_token();
+        }
+    }
+
+    // Parses an <equals> while expanding tokens
+    pub fn parse_equals_expanded(&mut self) {
+        self.parse_optional_spaces_expanded();
+        if let Some(Token::Char('=', Category::Other)) =
+            self.peek_expanded_token()
+        {
+            self.lex_expanded_token();
         }
     }
 
@@ -79,11 +89,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_integer_constant(&mut self) -> u64 {
-        let mut value: u64 = match self.peek_expanded_token() {
+    fn parse_integer_constant(&mut self) -> u32 {
+        let mut value: u32 = match self.peek_expanded_token() {
             Some(ref token) if is_token_digit(token) => {
                 self.lex_expanded_token();
-                token_digit_value(token) as u64
+                token_digit_value(token) as u32
             }
             _ => panic!("Invalid number start"),
         };
@@ -92,7 +102,7 @@ impl<'a> Parser<'a> {
             match self.peek_expanded_token() {
                 Some(ref token) if is_token_digit(token) => {
                     self.lex_expanded_token();
-                    value = 10 * value + token_digit_value(token) as u64;
+                    value = 10 * value + token_digit_value(token) as u32;
                 }
                 _ => break,
             }
@@ -103,7 +113,7 @@ impl<'a> Parser<'a> {
         value
     }
 
-    fn parse_unsigned_number(&mut self) -> u64 {
+    fn parse_unsigned_number(&mut self) -> u32 {
         // TODO(xymostech): this removes the distinction between "normal" and
         // "coerced" integers. Fix that
         if self.is_integer_constant_head() {
@@ -115,8 +125,8 @@ impl<'a> Parser<'a> {
 
     // Parses some number of +s and -s into an overall numeric sign, which is
     // -1 if there are an odd number of -s and 1 otherwise.
-    fn parse_optional_signs(&mut self) -> i64 {
-        let mut sign: i64 = 1;
+    fn parse_optional_signs(&mut self) -> i32 {
+        let mut sign: i32 = 1;
 
         loop {
             match self.peek_expanded_token() {
@@ -137,10 +147,10 @@ impl<'a> Parser<'a> {
         sign
     }
 
-    fn parse_number(&mut self) -> i64 {
+    fn parse_number(&mut self) -> i32 {
         let sign = self.parse_optional_signs();
         let number = self.parse_unsigned_number();
-        sign * (number as i64)
+        sign * (number as i32)
     }
 
     pub fn parse_8bit_number(&mut self) -> u8 {
@@ -149,6 +159,15 @@ impl<'a> Parser<'a> {
             panic!("Invalid 8-bit number: {}", number);
         }
         number as u8
+    }
+
+    pub fn parse_number_value(&mut self) -> i32 {
+        if self.is_variable_head() {
+            let variable = self.parse_variable();
+            variable.get(self.state)
+        } else {
+            self.parse_number()
+        }
     }
 }
 
@@ -291,6 +310,14 @@ mod tests {
     fn it_fails_parsing_8bit_numbers() {
         with_parser(&["-1234%"], |parser| {
             parser.parse_8bit_number();
+        });
+    }
+
+    #[test]
+    fn it_parses_number_values_from_variables() {
+        with_parser(&["\\count10%"], |parser| {
+            parser.state.set_count(false, 10, 1234);
+            assert_eq!(parser.parse_number_value(), 1234);
         });
     }
 }

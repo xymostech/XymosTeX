@@ -1,7 +1,5 @@
-use crate::category::Category;
 use crate::parser::Parser;
 use crate::state::TeXState;
-use crate::token::Token;
 
 #[cfg(test)]
 pub fn with_parser<T>(lines: &[&str], cb: T)

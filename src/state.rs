@@ -159,16 +159,16 @@ impl TeXStateInner {
         return false;
     }
 
-    fn get_count(&self, register_index: usize) -> i32 {
-        self.count_registers[register_index]
+    fn get_count(&self, register_index: u8) -> i32 {
+        self.count_registers[register_index as usize]
     }
 
-    fn set_count(&mut self, register_index: usize, value: i32) {
+    fn set_count(&mut self, register_index: u8, value: i32) {
         if value == -2147483648 {
             panic!("Invalid value for count: {}", value);
         }
 
-        self.count_registers[register_index] = value;
+        self.count_registers[register_index as usize] = value;
     }
 }
 
@@ -237,8 +237,8 @@ impl TeXStateStack {
     generate_inner_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
     generate_inner_global_func!(fn set_let(global: bool, set_token: &Token, to_token: &Token));
     generate_inner_func!(fn is_token_equal_to_cs(token: &Token, cs: &str) -> bool);
-    generate_inner_func!(fn get_count(register_index: usize) -> i32);
-    generate_inner_global_func!(fn set_count(global: bool, register_index: usize, value: i32));
+    generate_inner_func!(fn get_count(register_index: u8) -> i32);
+    generate_inner_global_func!(fn set_count(global: bool, register_index: u8, value: i32));
 }
 
 // A lot of the state in TeX is treated as global state, where we need to be
@@ -293,8 +293,8 @@ impl TeXState {
     generate_stack_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
     generate_stack_func!(fn set_let(global: bool, set_token: &Token, to_token: &Token));
     generate_stack_func!(fn is_token_equal_to_cs(token: &Token, cs: &str) -> bool);
-    generate_stack_func!(fn get_count(register_index: usize) -> i32);
-    generate_stack_func!(fn set_count(global: bool, register_index: usize, value: i32));
+    generate_stack_func!(fn get_count(register_index: u8) -> i32);
+    generate_stack_func!(fn set_count(global: bool, register_index: u8, value: i32));
 }
 
 #[cfg(test)]

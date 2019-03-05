@@ -5,6 +5,10 @@ use crate::parser::Parser;
 use crate::token::Token;
 
 impl<'a> Parser<'a> {
+    fn is_variable_assignment_head(&mut self) -> bool {
+        self.is_variable_head()
+    }
+
     fn is_macro_assignment_head(&mut self) -> bool {
         match self.peek_expanded_token() {
             Some(token) => self.state.is_token_equal_to_cs(&token, "def"),
@@ -19,8 +23,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn is_non_macro_assignment_head(&mut self) -> bool {
+        self.is_let_assignment_head() || self.is_variable_assignment_head()
+    }
+
     pub fn is_assignment_head(&mut self) -> bool {
-        self.is_macro_assignment_head() || self.is_let_assignment_head()
+        self.is_macro_assignment_head() || self.is_non_macro_assignment_head()
+    }
+
+    fn parse_variable_assignment(&mut self, global: bool) {
+        let variable = self.parse_variable();
+        self.parse_equals_expanded();
+        let value = self.parse_number_value();
+        variable.set(self.state, global, value);
     }
 
     // Parses a control sequence or special char token to use for \def or \let
@@ -66,11 +81,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_non_macro_assignment(&mut self, global: bool) {
+        if self.is_variable_assignment_head() {
+            self.parse_variable_assignment(global)
+        } else if self.is_let_assignment_head() {
+            self.parse_let_assignment(global)
+        } else {
+            panic!("unimplemented");
+        }
+    }
+
     fn parse_assignment_global(&mut self, global: bool) {
         if self.is_macro_assignment_head() {
             self.parse_macro_assignment(global)
-        } else if self.is_let_assignment_head() {
-            self.parse_let_assignment(global)
+        } else if self.is_non_macro_assignment_head() {
+            self.parse_non_macro_assignment(global)
         } else {
             let tok = self.lex_expanded_token().unwrap();
             if self.state.is_token_equal_to_cs(&tok, "global") {
@@ -97,6 +122,7 @@ mod tests {
     use crate::category::Category;
     use crate::makro::{Macro, MacroListElem};
     use crate::state::TeXState;
+    use crate::testing::with_parser;
 
     #[test]
     fn it_assigns_macros() {
@@ -259,5 +285,32 @@ mod tests {
             state.get_renamed_token(&Token::ControlSequence("a".to_string())),
             Some(Token::Char('b', Category::Letter))
         );
+    }
+
+    #[test]
+    fn it_sets_count_variables() {
+        with_parser(
+            &["\\count0=2%", "\\count100 -12345%", "\\count10=\\count100%"],
+            |parser| {
+                parser.parse_assignment();
+                parser.parse_assignment();
+                parser.parse_assignment();
+
+                assert_eq!(parser.state.get_count(0), 2);
+                assert_eq!(parser.state.get_count(100), -12345);
+                assert_eq!(parser.state.get_count(10), -12345);
+            },
+        );
+    }
+
+    #[test]
+    fn it_sets_count_variables_globally() {
+        with_parser(&["\\global\\count0=2%"], |parser| {
+            parser.state.push_state();
+            parser.parse_assignment();
+            parser.state.pop_state();
+
+            assert_eq!(parser.state.get_count(0), 2);
+        });
     }
 }
