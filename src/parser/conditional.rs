@@ -1,5 +1,20 @@
+use crate::category::Category;
 use crate::parser::Parser;
 use crate::token::Token;
+
+enum Relation {
+    GreaterThan,
+    EqualTo,
+    LessThan,
+}
+
+fn check_relation(rel: Relation, left: i32, right: i32) -> bool {
+    match rel {
+        Relation::GreaterThan => left > right,
+        Relation::EqualTo => left == right,
+        Relation::LessThan => left < right,
+    }
+}
 
 impl<'a> Parser<'a> {
     pub fn is_conditional_head(&mut self) -> bool {
@@ -9,6 +24,7 @@ impl<'a> Parser<'a> {
                     || self.state.is_token_equal_to_prim(&token, "fi")
                     || self.state.is_token_equal_to_prim(&token, "iftrue")
                     || self.state.is_token_equal_to_prim(&token, "iffalse")
+                    || self.state.is_token_equal_to_prim(&token, "ifnum")
             }
             _ => false,
         }
@@ -56,6 +72,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_relation(&mut self) -> Relation {
+        let relation = match self.lex_expanded_token() {
+            Some(Token::Char('<', Category::Other)) => Relation::LessThan,
+            Some(Token::Char('=', Category::Other)) => Relation::EqualTo,
+            Some(Token::Char('>', Category::Other)) => Relation::GreaterThan,
+            rest => panic!("Invalid relation: {:?}", rest),
+        };
+        self.parse_optional_spaces_expanded();
+        relation
+    }
+
     pub fn expand_conditional(&mut self) {
         let token = self.lex_unexpanded_token().unwrap();
 
@@ -74,6 +101,16 @@ impl<'a> Parser<'a> {
             self.handle_true();
         } else if self.state.is_token_equal_to_prim(&token, "iffalse") {
             self.handle_false();
+        } else if self.state.is_token_equal_to_prim(&token, "ifnum") {
+            let num1 = self.parse_number_value();
+            let relation = self.parse_relation();
+            let num2 = self.parse_number_value();
+
+            if check_relation(relation, num1, num2) {
+                self.handle_true();
+            } else {
+                self.handle_false();
+            }
         } else {
             panic!("unimplemented");
         }
@@ -89,6 +126,7 @@ mod tests {
     use crate::category::Category;
     use crate::makro::{Macro, MacroListElem};
     use crate::state::TeXState;
+    use crate::testing::with_parser;
 
     #[test]
     fn it_parses_single_body_iftrue() {
@@ -242,5 +280,80 @@ mod tests {
         parser.expand_conditional();
 
         assert_eq!(parser.lex_unexpanded_token(), None);
+    }
+
+    #[test]
+    fn it_parses_ifnum() {
+        with_parser(
+            &[
+                "\\ifnum1<2 t\\else f\\fi%",
+                "\\ifnum1>2 t\\else f\\fi%",
+                "\\ifnum1=2 t\\else f\\fi%",
+            ],
+            |parser| {
+                // 1<2 -> t
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+                assert_eq!(
+                    parser.lex_expanded_token(),
+                    Some(Token::Char('t', Category::Letter))
+                );
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+
+                // 1>2 -> f
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+                assert_eq!(
+                    parser.lex_expanded_token(),
+                    Some(Token::Char('f', Category::Letter))
+                );
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+
+                // 1=2 -> f
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+                assert_eq!(
+                    parser.lex_expanded_token(),
+                    Some(Token::Char('f', Category::Letter))
+                );
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+            },
+        );
+    }
+
+    #[test]
+    fn it_allows_spaces_in_ifnum() {
+        with_parser(&["\\ifnum 1       <      2      t\\fi%"], |parser| {
+            parser.expand_conditional();
+            assert_eq!(
+                parser.lex_expanded_token(),
+                Some(Token::Char('t', Category::Letter))
+            );
+            parser.expand_conditional();
+        });
+    }
+
+    #[test]
+    fn it_parses_count_variables_in_ifnum() {
+        with_parser(
+            &["\\ifnum \\count0 < \\count1 t\\else f\\fi%"],
+            |parser| {
+                parser.state.set_count(false, 0, 10);
+                parser.state.set_count(false, 1, 20);
+
+                // 10<20 -> t
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+                assert_eq!(
+                    parser.lex_expanded_token(),
+                    Some(Token::Char('t', Category::Letter))
+                );
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+            },
+        );
     }
 }
