@@ -5,10 +5,10 @@ impl<'a> Parser<'a> {
     pub fn is_conditional_head(&mut self) -> bool {
         match self.peek_unexpanded_token() {
             Some(token) => {
-                self.state.is_token_equal_to_cs(&token, "else")
-                    || self.state.is_token_equal_to_cs(&token, "fi")
-                    || self.state.is_token_equal_to_cs(&token, "iftrue")
-                    || self.state.is_token_equal_to_cs(&token, "iffalse")
+                self.state.is_token_equal_to_prim(&token, "else")
+                    || self.state.is_token_equal_to_prim(&token, "fi")
+                    || self.state.is_token_equal_to_prim(&token, "iftrue")
+                    || self.state.is_token_equal_to_prim(&token, "iffalse")
             }
             _ => false,
         }
@@ -20,9 +20,9 @@ impl<'a> Parser<'a> {
         let mut ends_with_else = false;
         loop {
             let token = self.lex_unexpanded_token().unwrap();
-            if self.state.is_token_equal_to_cs(&token, "fi") {
+            if self.state.is_token_equal_to_prim(&token, "fi") {
                 break;
-            } else if self.state.is_token_equal_to_cs(&token, "else") {
+            } else if self.state.is_token_equal_to_prim(&token, "else") {
                 ends_with_else = true;
                 break;
             }
@@ -37,7 +37,7 @@ impl<'a> Parser<'a> {
         // skip tokens until we see a \fi.
         loop {
             let token = self.lex_unexpanded_token().unwrap();
-            if self.state.is_token_equal_to_cs(&token, "fi") {
+            if self.state.is_token_equal_to_prim(&token, "fi") {
                 break;
             }
         }
@@ -59,20 +59,20 @@ impl<'a> Parser<'a> {
     pub fn expand_conditional(&mut self) {
         let token = self.lex_unexpanded_token().unwrap();
 
-        if self.state.is_token_equal_to_cs(&token, "fi") {
+        if self.state.is_token_equal_to_prim(&token, "fi") {
             if self.conditional_depth == 0 {
                 panic!("Extra \\fi");
             }
             self.conditional_depth -= 1;
-        } else if self.state.is_token_equal_to_cs(&token, "else") {
+        } else if self.state.is_token_equal_to_prim(&token, "else") {
             if self.conditional_depth == 0 {
                 panic!("Extra \\else");
             }
             self.conditional_depth -= 1;
             self.skip_from_else();
-        } else if self.state.is_token_equal_to_cs(&token, "iftrue") {
+        } else if self.state.is_token_equal_to_prim(&token, "iftrue") {
             self.handle_true();
-        } else if self.state.is_token_equal_to_cs(&token, "iffalse") {
+        } else if self.state.is_token_equal_to_prim(&token, "iffalse") {
             self.handle_false();
         } else {
             panic!("unimplemented");

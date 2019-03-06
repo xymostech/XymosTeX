@@ -12,6 +12,15 @@ const ALL_PRIMITIVES: &[&str] = &[
     "iftrue", "iffalse", "fi", "else", "def", "let", "global", "count",
 ];
 
+fn is_primitive(maybe_prim: &str) -> bool {
+    for prim in ALL_PRIMITIVES {
+        if *prim == maybe_prim {
+            return true;
+        }
+    }
+    return false;
+}
+
 #[derive(Clone)]
 enum TokenDefinition {
     Macro(Rc<Macro>),
@@ -141,9 +150,13 @@ impl TeXStateInner {
         }
     }
 
-    fn is_token_equal_to_cs(&self, token: &Token, cs: &str) -> bool {
+    fn is_token_equal_to_prim(&self, token: &Token, prim: &str) -> bool {
+        if cfg!(debug_assertions) && !is_primitive(prim) {
+            panic!("Testing invalid primitive: {}", prim);
+        }
+
         if let Token::ControlSequence(real_cs) = token {
-            if real_cs == cs {
+            if real_cs == prim {
                 return true;
             }
         }
@@ -151,7 +164,7 @@ impl TeXStateInner {
         if let Some(TokenDefinition::Primitive(prim_cs)) =
             self.token_definition_map.get(token)
         {
-            if prim_cs == &cs {
+            if prim_cs == &prim {
                 return true;
             }
         }
@@ -236,7 +249,7 @@ impl TeXStateStack {
     generate_inner_global_func!(fn set_macro(global: bool, token: &Token, makro: &Rc<Macro>));
     generate_inner_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
     generate_inner_global_func!(fn set_let(global: bool, set_token: &Token, to_token: &Token));
-    generate_inner_func!(fn is_token_equal_to_cs(token: &Token, cs: &str) -> bool);
+    generate_inner_func!(fn is_token_equal_to_prim(token: &Token, cs: &str) -> bool);
     generate_inner_func!(fn get_count(register_index: u8) -> i32);
     generate_inner_global_func!(fn set_count(global: bool, register_index: u8, value: i32));
 }
@@ -292,7 +305,7 @@ impl TeXState {
     generate_stack_func!(fn set_macro(global: bool, token: &Token, makro: &Rc<Macro>));
     generate_stack_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
     generate_stack_func!(fn set_let(global: bool, set_token: &Token, to_token: &Token));
-    generate_stack_func!(fn is_token_equal_to_cs(token: &Token, cs: &str) -> bool);
+    generate_stack_func!(fn is_token_equal_to_prim(token: &Token, cs: &str) -> bool);
     generate_stack_func!(fn get_count(register_index: u8) -> i32);
     generate_stack_func!(fn set_count(global: bool, register_index: u8, value: i32));
 }
@@ -362,9 +375,9 @@ mod tests {
     fn it_compares_control_sequences() {
         let state = TeXState::new();
 
-        assert!(state.is_token_equal_to_cs(
-            &Token::ControlSequence("foo".to_string()),
-            "foo"
+        assert!(state.is_token_equal_to_prim(
+            &Token::ControlSequence("let".to_string()),
+            "let"
         ));
 
         state.set_let(
@@ -373,7 +386,7 @@ mod tests {
             &Token::ControlSequence("let".to_string()),
         );
 
-        assert!(state.is_token_equal_to_cs(
+        assert!(state.is_token_equal_to_prim(
             &Token::ControlSequence("boo".to_string()),
             "let"
         ));

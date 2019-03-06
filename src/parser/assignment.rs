@@ -11,14 +11,14 @@ impl<'a> Parser<'a> {
 
     fn is_macro_assignment_head(&mut self) -> bool {
         match self.peek_expanded_token() {
-            Some(token) => self.state.is_token_equal_to_cs(&token, "def"),
+            Some(token) => self.state.is_token_equal_to_prim(&token, "def"),
             _ => false,
         }
     }
 
     fn is_let_assignment_head(&mut self) -> bool {
         match self.peek_expanded_token() {
-            Some(token) => self.state.is_token_equal_to_cs(&token, "let"),
+            Some(token) => self.state.is_token_equal_to_prim(&token, "let"),
             _ => false,
         }
     }
@@ -57,7 +57,7 @@ impl<'a> Parser<'a> {
     fn parse_let_assignment(&mut self, global: bool) {
         let tok = self.lex_expanded_token().unwrap();
 
-        if self.state.is_token_equal_to_cs(&tok, "let") {
+        if self.state.is_token_equal_to_prim(&tok, "let") {
             let let_name = self.parse_unexpanded_control_sequence();
             self.parse_equals_unexpanded();
             self.parse_optional_space_unexpanded();
@@ -72,7 +72,7 @@ impl<'a> Parser<'a> {
     fn parse_macro_assignment(&mut self, global: bool) {
         let tok = self.lex_expanded_token().unwrap();
 
-        if self.state.is_token_equal_to_cs(&tok, "def") {
+        if self.state.is_token_equal_to_prim(&tok, "def") {
             let control_sequence = self.parse_unexpanded_control_sequence();
             let makro = self.parse_macro_definition();
 
@@ -98,7 +98,7 @@ impl<'a> Parser<'a> {
             self.parse_non_macro_assignment(global)
         } else {
             let tok = self.lex_expanded_token().unwrap();
-            if self.state.is_token_equal_to_cs(&tok, "global") {
+            if self.state.is_token_equal_to_prim(&tok, "global") {
                 if self.is_assignment_head() {
                     self.parse_assignment_global(true);
                 } else {
@@ -229,7 +229,7 @@ mod tests {
         parser.parse_assignment();
         assert_eq!(parser.lex_unexpanded_token(), None);
 
-        assert!(state.is_token_equal_to_cs(
+        assert!(state.is_token_equal_to_prim(
             &Token::ControlSequence("a".to_string()),
             "def"
         ));

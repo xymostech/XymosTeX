@@ -4,7 +4,7 @@ use crate::variable::Variable;
 impl<'a> Parser<'a> {
     pub fn is_variable_head(&mut self) -> bool {
         match self.peek_expanded_token() {
-            Some(token) => self.state.is_token_equal_to_cs(&token, "count"),
+            Some(token) => self.state.is_token_equal_to_prim(&token, "count"),
             _ => false,
         }
     }
@@ -12,7 +12,7 @@ impl<'a> Parser<'a> {
     pub fn parse_variable(&mut self) -> Variable {
         let token = self.lex_expanded_token().unwrap();
 
-        if self.state.is_token_equal_to_cs(&token, "count") {
+        if self.state.is_token_equal_to_prim(&token, "count") {
             let index = self.parse_8bit_number();
             Variable::Count(index)
         } else {
