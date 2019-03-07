@@ -23,12 +23,25 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn is_non_macro_assignment_head(&mut self) -> bool {
-        self.is_let_assignment_head() || self.is_variable_assignment_head()
+    fn is_arithmetic_head(&mut self) -> bool {
+        match self.peek_expanded_token() {
+            Some(token) => {
+                self.state.is_token_equal_to_prim(&token, "advance")
+                    || self.state.is_token_equal_to_prim(&token, "multiply")
+                    || self.state.is_token_equal_to_prim(&token, "divide")
+            }
+            _ => false,
+        }
+    }
+
+    fn is_simple_assignment_head(&mut self) -> bool {
+        self.is_let_assignment_head()
+            || self.is_variable_assignment_head()
+            || self.is_arithmetic_head()
     }
 
     pub fn is_assignment_head(&mut self) -> bool {
-        self.is_macro_assignment_head() || self.is_non_macro_assignment_head()
+        self.is_macro_assignment_head() || self.is_simple_assignment_head()
     }
 
     fn parse_variable_assignment(&mut self, global: bool) {
@@ -69,6 +82,28 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_arithmetic(&mut self, global: bool) {
+        let tok = self.lex_expanded_token().unwrap();
+        let variable = self.parse_variable();
+        self.parse_optional_keyword_expanded("by");
+        self.parse_optional_spaces_expanded();
+
+        if self.state.is_token_equal_to_prim(&tok, "advance") {
+            let number = self.parse_number_value();
+            // TODO(xymostech): ensure this doesn't overflow
+            variable.set(self.state, global, variable.get(self.state) + number);
+        } else if self.state.is_token_equal_to_prim(&tok, "multiply") {
+            let number = self.parse_number_value();
+            // TODO(xymostech): ensure this doesn't overflow
+            variable.set(self.state, global, variable.get(self.state) * number);
+        } else if self.state.is_token_equal_to_prim(&tok, "divide") {
+            let number = self.parse_number_value();
+            variable.set(self.state, global, variable.get(self.state) / number);
+        } else {
+            panic!("Invalid arithmetic head: {:?}", tok);
+        }
+    }
+
     fn parse_macro_assignment(&mut self, global: bool) {
         let tok = self.lex_expanded_token().unwrap();
 
@@ -81,11 +116,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_non_macro_assignment(&mut self, global: bool) {
+    fn parse_simple_assignment(&mut self, global: bool) {
         if self.is_variable_assignment_head() {
             self.parse_variable_assignment(global)
         } else if self.is_let_assignment_head() {
             self.parse_let_assignment(global)
+        } else if self.is_arithmetic_head() {
+            self.parse_arithmetic(global)
         } else {
             panic!("unimplemented");
         }
@@ -94,8 +131,8 @@ impl<'a> Parser<'a> {
     fn parse_assignment_global(&mut self, global: bool) {
         if self.is_macro_assignment_head() {
             self.parse_macro_assignment(global)
-        } else if self.is_non_macro_assignment_head() {
-            self.parse_non_macro_assignment(global)
+        } else if self.is_simple_assignment_head() {
+            self.parse_simple_assignment(global)
         } else {
             let tok = self.lex_expanded_token().unwrap();
             if self.state.is_token_equal_to_prim(&tok, "global") {
@@ -312,5 +349,37 @@ mod tests {
 
             assert_eq!(parser.state.get_count(0), 2);
         });
+    }
+
+    #[test]
+    fn it_parses_arithmetic() {
+        with_parser(
+            &[
+                "\\count0=150%",
+                "\\count1=5%",
+                "\\advance\\count0 by7%",
+                "\\multiply\\count1 by2%",
+                "\\divide\\count0 by\\count1%",
+            ],
+            |parser| {
+                parser.parse_assignment();
+                parser.parse_assignment();
+
+                assert_eq!(parser.state.get_count(0), 150);
+                assert_eq!(parser.state.get_count(1), 5);
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+                assert_eq!(parser.state.get_count(0), 157);
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+                assert_eq!(parser.state.get_count(1), 10);
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+                assert_eq!(parser.state.get_count(0), 15);
+            },
+        );
     }
 }

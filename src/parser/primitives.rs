@@ -169,6 +169,46 @@ impl<'a> Parser<'a> {
             self.parse_number()
         }
     }
+
+    pub fn parse_optional_keyword_expanded(&mut self, keyword: &str) {
+        self.parse_optional_spaces_expanded();
+
+        let first_char = keyword.chars().next().unwrap();
+
+        // If the first token doesn't match the keyword we're looking for, just
+        // bail out now.
+        match self.peek_expanded_token() {
+            Some(Token::Char(_, Category::Active)) => return,
+            Some(Token::Char(ch, _))
+                if ch == first_char.to_ascii_lowercase()
+                    || ch == first_char.to_ascii_uppercase() =>
+            {
+                ()
+            }
+            _ => return,
+        }
+
+        for keyword_char in keyword.chars() {
+            let token = self.lex_expanded_token();
+            match token {
+                Some(Token::Char(_, Category::Active)) => panic!(
+                    "Found invalid token {:?} while parsing keyword {}",
+                    token, keyword
+                ),
+                Some(Token::Char(ch, _))
+                    // TODO(xymostech): Handle non-ascii?
+                    if ch == keyword_char.to_ascii_lowercase()
+                        || ch == keyword_char.to_ascii_uppercase() =>
+                {
+                    ()
+                }
+                _ => panic!(
+                    "Found invalid token {:?} while parsing keyword {}",
+                    token, keyword
+                ),
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -318,6 +358,27 @@ mod tests {
         with_parser(&["\\count10%"], |parser| {
             parser.state.set_count(false, 10, 1234);
             assert_eq!(parser.parse_number_value(), 1234);
+        });
+    }
+
+    #[test]
+    fn it_parses_optional_keywords() {
+        with_parser(&["   by    pt   TrUe%"], |parser| {
+            parser.parse_optional_keyword_expanded("by");
+
+            parser.parse_optional_keyword_expanded("by");
+            parser.parse_optional_keyword_expanded("pt");
+
+            parser.parse_optional_keyword_expanded("pt");
+            parser.parse_optional_keyword_expanded("true");
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "while parsing keyword")]
+    fn it_fails_parsing_halfway_through_a_keyword() {
+        with_parser(&[" boo%"], |parser| {
+            parser.parse_optional_keyword_expanded("by");
         });
     }
 }
