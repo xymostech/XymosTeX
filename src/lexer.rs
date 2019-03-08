@@ -40,11 +40,15 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(lines: &[&str], state: &'a TeXState) -> Lexer<'a> {
+    pub fn new<T>(lines: &[T], state: &'a TeXState) -> Lexer<'a>
+    where
+        T: AsRef<str>,
+        T: std::string::ToString,
+    {
         let source = lines
             .iter()
-            .map(|&s| {
-                let mut line = String::from(s);
+            .map(|s| {
+                let mut line = s.to_string();
                 line.push('\n');
                 return line.chars().collect();
             })

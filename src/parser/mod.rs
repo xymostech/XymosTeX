@@ -16,7 +16,11 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(lines: &[&str], state: &'a TeXState) -> Parser<'a> {
+    pub fn new<T>(lines: &[T], state: &'a TeXState) -> Parser<'a>
+    where
+        T: AsRef<str>,
+        T: std::string::ToString,
+    {
         let lexer = Lexer::new(lines, &state);
         Parser {
             lexer: lexer,
