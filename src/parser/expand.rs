@@ -4,19 +4,27 @@ use crate::token::Token;
 impl<'a> Parser<'a> {
     pub fn lex_expanded_token(&mut self) -> Option<Token> {
         if self.is_conditional_head() {
+            // Handle conditionals, like \ifnum
             self.expand_conditional();
+            return self.lex_expanded_token();
+        } else if self.is_print_head() {
+            // Handle printing, like \number\count1
+            let replacement = self.expand_print();
+            self.add_upcoming_tokens(replacement);
             return self.lex_expanded_token();
         }
 
         match self.lex_unexpanded_token() {
             None => None,
             Some(token) => {
+                // Handle macro expansion
                 if let Some(makro) = self.state.get_macro(&token) {
                     let replacement_map = self.parse_replacement_map(&makro);
                     let replacement = makro.get_replacement(&replacement_map);
                     self.add_upcoming_tokens(replacement);
                     self.lex_expanded_token()
                 } else {
+                    // Passthrough anything else
                     Some(token)
                 }
             }
@@ -77,6 +85,7 @@ mod tests {
     use crate::category::Category;
     use crate::makro::{Macro, MacroListElem};
     use crate::state::TeXState;
+    use crate::testing::with_parser;
 
     #[test]
     fn it_lexes_tokens() {
@@ -190,5 +199,28 @@ mod tests {
             Some(Token::Char('b', Category::Letter))
         );
         assert_eq!(parser.lex_expanded_token(), None);
+    }
+
+    #[test]
+    fn it_prints_numbers() {
+        with_parser(&["\\count1=-100 %", "\\number\\count1%"], |parser| {
+            parser.parse_assignment();
+            assert_eq!(
+                parser.lex_expanded_token(),
+                Some(Token::Char('-', Category::Other))
+            );
+            assert_eq!(
+                parser.lex_expanded_token(),
+                Some(Token::Char('1', Category::Other))
+            );
+            assert_eq!(
+                parser.lex_expanded_token(),
+                Some(Token::Char('0', Category::Other))
+            );
+            assert_eq!(
+                parser.lex_expanded_token(),
+                Some(Token::Char('0', Category::Other))
+            );
+        });
     }
 }
