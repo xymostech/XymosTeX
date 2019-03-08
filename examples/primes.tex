@@ -1,0 +1,39 @@
+\def\primetrue{\let\ifprime\iftrue}%
+\def\primefalse{\let\ifprime\iffalse}%
+\primetrue
+\def\unknowntrue{\let\ifunknown\iftrue}%
+\def\unknownfalse{\let\ifunknown\iffalse}%
+\unknowntrue
+%\newcount\n  \count20
+%\newcount\p  \count30
+%\newcount\d  \count40
+%\newcount\a  \count50
+\def\relax{}%
+\def\iterate{\body \let\next\iterate \else \let\next\relax \fi \next}%
+\def\loop #1\repeat{\def\body{#1}\iterate}%
+\def\primes#1{2, 3% assume that #1 is at least 3
+  \count20=#1%
+  \advance\count20 by-2 % n more to go
+  \count30=5 % odd primes starting with p
+  \loop\ifnum\count20>0 %
+    \printifprime%
+    \advance\count30 by2 %
+  \repeat}%
+\def\printp{, % we will invoke \printp if p is prime
+  \ifnum\count20=1 and \fi % ‘and’ precedes the last value
+  \number\count30 \advance\count20 by -1 }%
+\def\printifprime{%
+  \testprimality%
+  \ifprime\printp\fi}%
+\def\testprimality{{%
+  \count40=3 \global\primetrue%
+  \loop\trialdivision%
+    \ifunknown\advance\count40 by2 %
+  \repeat}}%
+\def\trialdivision{%
+  \count50=\count30 %
+  \divide\count50 by\count40 %
+  \ifnum\count50>\count40 \unknowntrue\else\unknownfalse\fi%
+  \multiply\count50 by\count40 %
+  \ifnum\count50=\count30 \global\primefalse\unknownfalse\fi}%
+\primes{10}%

@@ -80,6 +80,18 @@ impl<'a> Parser<'a> {
 
         result
     }
+
+    // For early testing, we're not going to worry about producing a box out of
+    // the horizontal list, we'll only worry about the characters that are
+    // produced by parsing a horizontal list. This pulls the characters we
+    // parse out into a vec so external uses don't have to deal with
+    // HorizontalListElems.
+    pub fn parse_horizontal_list_to_chars(&mut self) -> Vec<char> {
+        self.parse_horizontal_list_to_elems()
+            .into_iter()
+            .map(|HorizontalListElem::Char(ch)| ch)
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -139,6 +151,17 @@ mod tests {
         assert_parses_to(
             &["\\def\\a{x}%", "{\\def\\a{y}\\a}%", "\\a"],
             &[HorizontalListElem::Char('y'), HorizontalListElem::Char('x')],
+        );
+    }
+
+    #[test]
+    fn it_parses_to_chars() {
+        let state = TeXState::new();
+        let mut parser = Parser::new(&["bl ah%"], &state);
+
+        assert_eq!(
+            parser.parse_horizontal_list_to_chars(),
+            vec!['b', 'l', ' ', 'a', 'h']
         );
     }
 }
