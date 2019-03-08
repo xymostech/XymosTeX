@@ -40,8 +40,17 @@ impl<'a> Parser<'a> {
             || self.is_arithmetic_head()
     }
 
+    fn is_assignment_prefix(&mut self) -> bool {
+        match self.peek_expanded_token() {
+            Some(token) => self.state.is_token_equal_to_prim(&token, "global"),
+            _ => false,
+        }
+    }
+
     pub fn is_assignment_head(&mut self) -> bool {
-        self.is_macro_assignment_head() || self.is_simple_assignment_head()
+        self.is_assignment_prefix()
+            || self.is_macro_assignment_head()
+            || self.is_simple_assignment_head()
     }
 
     fn parse_variable_assignment(&mut self, global: bool) {
@@ -193,6 +202,7 @@ mod tests {
         let mut parser = Parser::new(&["\\global\\def\\a{x}%"], &state);
 
         state.push_state();
+        assert!(parser.is_assignment_head());
         parser.parse_assignment();
         assert_eq!(parser.lex_unexpanded_token(), None);
         state.pop_state();
