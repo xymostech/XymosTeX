@@ -10,7 +10,7 @@ My plan is to implement features in stages, with each stage having a specific go
 
 ## Stage 1: Calculating Prime Numbers
 
-**Status**: In progress
+**Status**: Done!
 **Difficulty**: Easy
 **Condition for success**: correctly executing interpreting [a series of macros, assignments, and conditionals that produce an output of prime numbers](https://github.com/xymostech/js-tex-parser/blob/master/examples/primes.tex) (this is a simplified version of the same function found in the TeXbook)
 
