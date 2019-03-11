@@ -97,13 +97,13 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::TeXState;
+
+    use crate::testing::with_parser;
 
     fn assert_parses_to(lines: &[&str], expected_toks: &[HorizontalListElem]) {
-        let state = TeXState::new();
-        let mut parser = Parser::new(lines, &state);
-
-        assert_eq!(parser.parse_horizontal_list_to_elems(), expected_toks);
+        with_parser(lines, |parser| {
+            assert_eq!(parser.parse_horizontal_list_to_elems(), expected_toks);
+        });
     }
 
     #[test]
@@ -156,12 +156,11 @@ mod tests {
 
     #[test]
     fn it_parses_to_chars() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["bl ah%"], &state);
-
-        assert_eq!(
-            parser.parse_horizontal_list_to_chars(),
-            vec!['b', 'l', ' ', 'a', 'h']
-        );
+        with_parser(&["bl ah%"], |parser| {
+            assert_eq!(
+                parser.parse_horizontal_list_to_chars(),
+                vec!['b', 'l', ' ', 'a', 'h']
+            );
+        });
     }
 }

@@ -352,37 +352,35 @@ impl<'a> Parser<'a> {
 mod tests {
     mod macro_definition {
         use super::super::*;
-        use crate::state::TeXState;
+
+        use crate::testing::with_parser;
 
         fn assert_parses_to_macro(lines: &[&str], expected_macro: Macro) {
-            let state = TeXState::new();
-            let mut parser = Parser::new(lines, &state);
-
-            assert_eq!(
-                Some(Token::ControlSequence("def".to_string())),
-                parser.lex_unexpanded_token()
-            );
-            assert_eq!(
-                Some(Token::ControlSequence("a".to_string())),
-                parser.lex_unexpanded_token()
-            );
-            assert_eq!(expected_macro, parser.parse_macro_definition());
-            assert_eq!(None, parser.lex_unexpanded_token());
+            with_parser(lines, |parser| {
+                assert_eq!(
+                    Some(Token::ControlSequence("def".to_string())),
+                    parser.lex_unexpanded_token()
+                );
+                assert_eq!(
+                    Some(Token::ControlSequence("a".to_string())),
+                    parser.lex_unexpanded_token()
+                );
+                assert_eq!(expected_macro, parser.parse_macro_definition());
+            });
         }
 
         fn try_parsing_macro(lines: &[&str]) {
-            let state = TeXState::new();
-            let mut parser = Parser::new(lines, &state);
-
-            assert_eq!(
-                Some(Token::ControlSequence("def".to_string())),
-                parser.lex_unexpanded_token()
-            );
-            assert_eq!(
-                Some(Token::ControlSequence("a".to_string())),
-                parser.lex_unexpanded_token()
-            );
-            parser.parse_macro_definition();
+            with_parser(lines, |parser| {
+                assert_eq!(
+                    Some(Token::ControlSequence("def".to_string())),
+                    parser.lex_unexpanded_token()
+                );
+                assert_eq!(
+                    Some(Token::ControlSequence("a".to_string())),
+                    parser.lex_unexpanded_token()
+                );
+                parser.parse_macro_definition();
+            });
         }
 
         #[test]
@@ -498,46 +496,40 @@ mod tests {
     mod replacement_tokens {
         use super::super::*;
 
-        use crate::state::TeXState;
+        use crate::testing::with_parser;
 
         fn assert_parses_to_replacements(
             lines: &[&str],
             macro_parameter_list: Vec<MacroListElem>,
             expected_replacements: Vec<(usize, Vec<Token>)>,
         ) {
-            let state = TeXState::new();
-            let mut parser = Parser::new(lines, &state);
+            with_parser(lines, |parser| {
+                assert_eq!(
+                    parser.lex_unexpanded_token(),
+                    Some(Token::ControlSequence("a".to_string()))
+                );
 
-            assert_eq!(
-                parser.lex_unexpanded_token(),
-                Some(Token::ControlSequence("a".to_string()))
-            );
-
-            let makro = Macro::new(macro_parameter_list, Vec::new());
-            let expected_replacement_map: HashMap<usize, Vec<Token>> =
-                expected_replacements.into_iter().collect();
-            let replacement_map = parser.parse_replacement_map(&makro);
-            assert_eq!(expected_replacement_map, replacement_map);
-
-            assert_eq!(parser.lex_unexpanded_token(), None);
+                let makro = Macro::new(macro_parameter_list, Vec::new());
+                let expected_replacement_map: HashMap<usize, Vec<Token>> =
+                    expected_replacements.into_iter().collect();
+                let replacement_map = parser.parse_replacement_map(&makro);
+                assert_eq!(expected_replacement_map, replacement_map);
+            });
         }
 
         fn try_parsing_replacements(
             lines: &[&str],
             macro_parameter_list: Vec<MacroListElem>,
         ) {
-            let state = TeXState::new();
-            let mut parser = Parser::new(lines, &state);
+            with_parser(lines, |parser| {
+                assert_eq!(
+                    parser.lex_unexpanded_token(),
+                    Some(Token::ControlSequence("a".to_string()))
+                );
 
-            assert_eq!(
-                parser.lex_unexpanded_token(),
-                Some(Token::ControlSequence("a".to_string()))
-            );
-
-            let makro = Macro::new(macro_parameter_list, Vec::new());
-            parser.parse_replacement_map(&makro);
-
-            assert_eq!(parser.lex_unexpanded_token(), None);
+                let makro = Macro::new(macro_parameter_list, Vec::new());
+                parser.parse_replacement_map(&makro);
+            });
         }
 
         #[test]

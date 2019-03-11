@@ -167,171 +167,175 @@ mod tests {
 
     use crate::category::Category;
     use crate::makro::{Macro, MacroListElem};
-    use crate::state::TeXState;
     use crate::testing::with_parser;
 
     #[test]
     fn it_assigns_macros() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["\\def\\a #1x{#1y#1}%"], &state);
+        with_parser(&["\\def\\a #1x{#1y#1}%"], |parser| {
+            parser.parse_assignment();
 
-        parser.parse_assignment();
-        assert_eq!(parser.lex_unexpanded_token(), None);
-
-        assert_eq!(
-            *state
-                .get_macro(&Token::ControlSequence("a".to_string()))
-                .unwrap(),
-            Macro::new(
-                vec![
-                    MacroListElem::Parameter(1),
-                    MacroListElem::Token(Token::Char('x', Category::Letter)),
-                ],
-                vec![
-                    MacroListElem::Parameter(1),
-                    MacroListElem::Token(Token::Char('y', Category::Letter)),
-                    MacroListElem::Parameter(1),
-                ]
-            )
-        );
+            assert_eq!(
+                *parser
+                    .state
+                    .get_macro(&Token::ControlSequence("a".to_string()))
+                    .unwrap(),
+                Macro::new(
+                    vec![
+                        MacroListElem::Parameter(1),
+                        MacroListElem::Token(Token::Char(
+                            'x',
+                            Category::Letter
+                        )),
+                    ],
+                    vec![
+                        MacroListElem::Parameter(1),
+                        MacroListElem::Token(Token::Char(
+                            'y',
+                            Category::Letter
+                        )),
+                        MacroListElem::Parameter(1),
+                    ]
+                )
+            );
+        });
     }
 
     #[test]
     fn it_sets_global_defs() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["\\global\\def\\a{x}%"], &state);
+        with_parser(&["\\global\\def\\a{x}%"], |parser| {
+            parser.state.push_state();
+            assert!(parser.is_assignment_head());
+            parser.parse_assignment();
+            assert_eq!(parser.lex_unexpanded_token(), None);
+            parser.state.pop_state();
 
-        state.push_state();
-        assert!(parser.is_assignment_head());
-        parser.parse_assignment();
-        assert_eq!(parser.lex_unexpanded_token(), None);
-        state.pop_state();
-
-        assert_eq!(
-            *state
-                .get_macro(&Token::ControlSequence("a".to_string()))
-                .unwrap(),
-            Macro::new(
-                vec![],
-                vec![MacroListElem::Token(Token::Char('x', Category::Letter)),]
-            )
-        );
+            assert_eq!(
+                *parser
+                    .state
+                    .get_macro(&Token::ControlSequence("a".to_string()))
+                    .unwrap(),
+                Macro::new(
+                    vec![],
+                    vec![MacroListElem::Token(Token::Char(
+                        'x',
+                        Category::Letter
+                    )),]
+                )
+            );
+        });
     }
 
     #[test]
     fn it_assigns_lets_for_characters() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["\\let\\a=b%"], &state);
+        with_parser(&["\\let\\a=b%"], |parser| {
+            parser.parse_assignment();
 
-        parser.parse_assignment();
-        assert_eq!(parser.lex_unexpanded_token(), None);
-
-        assert_eq!(
-            state.get_renamed_token(&Token::ControlSequence("a".to_string())),
-            Some(Token::Char('b', Category::Letter))
-        );
+            assert_eq!(
+                parser.state.get_renamed_token(&Token::ControlSequence(
+                    "a".to_string()
+                )),
+                Some(Token::Char('b', Category::Letter))
+            );
+        });
     }
 
     #[test]
     fn it_assigns_lets_for_previously_defined_macros() {
-        let state = TeXState::new();
-        let mut parser =
-            Parser::new(&["\\def\\a{x}%", "\\let\\b=\\a%"], &state);
+        with_parser(&["\\def\\a{x}%", "\\let\\b=\\a%"], |parser| {
+            parser.parse_assignment();
+            parser.parse_assignment();
 
-        parser.parse_assignment();
-        parser.parse_assignment();
-        assert_eq!(parser.lex_unexpanded_token(), None);
-
-        assert_eq!(
-            *state
-                .get_macro(&Token::ControlSequence("b".to_string()))
-                .unwrap(),
-            Macro::new(
-                vec![],
-                vec![MacroListElem::Token(Token::Char('x', Category::Letter)),]
-            )
-        );
+            assert_eq!(
+                *parser
+                    .state
+                    .get_macro(&Token::ControlSequence("b".to_string()))
+                    .unwrap(),
+                Macro::new(
+                    vec![],
+                    vec![MacroListElem::Token(Token::Char(
+                        'x',
+                        Category::Letter
+                    )),]
+                )
+            );
+        });
     }
 
     #[test]
     fn it_doesnt_assign_lets_for_active_tokens() {
-        let state = TeXState::new();
-        state.set_category(false, '@', Category::Active);
-        let mut parser = Parser::new(&["\\let\\a=@%"], &state);
+        with_parser(&["\\let\\a=@%"], |parser| {
+            parser.state.set_category(false, '@', Category::Active);
+            parser.parse_assignment();
 
-        parser.parse_assignment();
-        assert_eq!(parser.lex_unexpanded_token(), None);
-
-        assert_eq!(
-            state.get_renamed_token(&Token::ControlSequence("a".to_string())),
-            None
-        );
+            assert_eq!(
+                parser.state.get_renamed_token(&Token::ControlSequence(
+                    "a".to_string()
+                )),
+                None
+            );
+        });
     }
 
     #[test]
     fn it_assigns_lets_for_primitives() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["\\let\\a=\\def%"], &state);
+        with_parser(&["\\let\\a=\\def%"], |parser| {
+            parser.parse_assignment();
 
-        parser.parse_assignment();
-        assert_eq!(parser.lex_unexpanded_token(), None);
-
-        assert!(state.is_token_equal_to_prim(
-            &Token::ControlSequence("a".to_string()),
-            "def"
-        ));
+            assert!(parser.state.is_token_equal_to_prim(
+                &Token::ControlSequence("a".to_string()),
+                "def"
+            ));
+        });
     }
 
     #[test]
     fn it_lets_let_be_let() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["\\let\\a=\\let%", "\\a\\x=y%"], &state);
+        with_parser(&["\\let\\a=\\let%", "\\a\\x=y%"], |parser| {
+            parser.parse_assignment();
+            parser.parse_assignment();
 
-        parser.parse_assignment();
-        parser.parse_assignment();
-        assert_eq!(parser.lex_unexpanded_token(), None);
-
-        assert_eq!(
-            state.get_renamed_token(&Token::ControlSequence("x".to_string())),
-            Some(Token::Char('y', Category::Letter))
-        );
+            assert_eq!(
+                parser.state.get_renamed_token(&Token::ControlSequence(
+                    "x".to_string()
+                )),
+                Some(Token::Char('y', Category::Letter))
+            );
+        });
     }
 
     #[test]
     fn it_lets_def_be_let() {
-        let state = TeXState::new();
-        let mut parser =
-            Parser::new(&["\\let\\a=\\def%", "\\a\\x #1{#1}%"], &state);
+        with_parser(&["\\let\\a=\\def%", "\\a\\x #1{#1}%"], |parser| {
+            parser.parse_assignment();
+            parser.parse_assignment();
 
-        parser.parse_assignment();
-        parser.parse_assignment();
-        assert_eq!(parser.lex_unexpanded_token(), None);
-
-        assert_eq!(
-            *state
-                .get_macro(&Token::ControlSequence("x".to_string()))
-                .unwrap(),
-            Macro::new(
-                vec![MacroListElem::Parameter(1),],
-                vec![MacroListElem::Parameter(1),]
-            )
-        );
+            assert_eq!(
+                *parser
+                    .state
+                    .get_macro(&Token::ControlSequence("x".to_string()))
+                    .unwrap(),
+                Macro::new(
+                    vec![MacroListElem::Parameter(1),],
+                    vec![MacroListElem::Parameter(1),]
+                )
+            );
+        });
     }
 
     #[test]
     fn it_sets_global_lets() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["\\global\\let\\a=b%"], &state);
+        with_parser(&["\\global\\let\\a=b%"], |parser| {
+            parser.state.push_state();
+            parser.parse_assignment();
+            parser.state.pop_state();
 
-        state.push_state();
-        parser.parse_assignment();
-        assert_eq!(parser.lex_unexpanded_token(), None);
-        state.pop_state();
-
-        assert_eq!(
-            state.get_renamed_token(&Token::ControlSequence("a".to_string())),
-            Some(Token::Char('b', Category::Letter))
-        );
+            assert_eq!(
+                parser.state.get_renamed_token(&Token::ControlSequence(
+                    "a".to_string()
+                )),
+                Some(Token::Char('b', Category::Letter))
+            );
+        });
     }
 
     #[test]

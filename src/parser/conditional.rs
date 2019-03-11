@@ -125,161 +125,164 @@ mod tests {
 
     use crate::category::Category;
     use crate::makro::{Macro, MacroListElem};
-    use crate::state::TeXState;
     use crate::testing::with_parser;
 
     #[test]
     fn it_parses_single_body_iftrue() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["\\iftrue x\\fi%"], &state);
-
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(
-            parser.lex_unexpanded_token(),
-            Some(Token::Char('x', Category::Letter))
-        );
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(parser.lex_unexpanded_token(), None);
+        with_parser(&["\\iftrue x\\fi%"], |parser| {
+            assert_eq!(parser.is_conditional_head(), true);
+            parser.expand_conditional();
+            assert_eq!(
+                parser.lex_unexpanded_token(),
+                Some(Token::Char('x', Category::Letter))
+            );
+            assert_eq!(parser.is_conditional_head(), true);
+            parser.expand_conditional();
+            assert_eq!(parser.lex_unexpanded_token(), None);
+        });
     }
 
     #[test]
     fn it_parses_iftrue_with_else() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["\\iftrue x\\else y\\fi%"], &state);
-
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(
-            parser.lex_unexpanded_token(),
-            Some(Token::Char('x', Category::Letter))
-        );
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(parser.lex_unexpanded_token(), None);
+        with_parser(&["\\iftrue x\\else y\\fi%"], |parser| {
+            assert_eq!(parser.is_conditional_head(), true);
+            parser.expand_conditional();
+            assert_eq!(
+                parser.lex_unexpanded_token(),
+                Some(Token::Char('x', Category::Letter))
+            );
+            assert_eq!(parser.is_conditional_head(), true);
+            parser.expand_conditional();
+            assert_eq!(parser.lex_unexpanded_token(), None);
+        });
     }
 
     #[test]
     fn it_parses_single_body_iffalse() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["\\iffalse x\\fi%"], &state);
-
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(parser.lex_unexpanded_token(), None);
+        with_parser(&["\\iffalse x\\fi%"], |parser| {
+            assert_eq!(parser.is_conditional_head(), true);
+            parser.expand_conditional();
+            assert_eq!(parser.lex_unexpanded_token(), None);
+        });
     }
 
     #[test]
     fn it_parses_iffalse_with_else() {
-        let state = TeXState::new();
-        let mut parser = Parser::new(&["\\iffalse x\\else y\\fi%"], &state);
-
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(
-            parser.lex_unexpanded_token(),
-            Some(Token::Char('y', Category::Letter))
-        );
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(parser.lex_unexpanded_token(), None);
+        with_parser(&["\\iffalse x\\else y\\fi%"], |parser| {
+            assert_eq!(parser.is_conditional_head(), true);
+            parser.expand_conditional();
+            assert_eq!(
+                parser.lex_unexpanded_token(),
+                Some(Token::Char('y', Category::Letter))
+            );
+            assert_eq!(parser.is_conditional_head(), true);
+            parser.expand_conditional();
+            assert_eq!(parser.lex_unexpanded_token(), None);
+        });
     }
 
     #[test]
     fn it_expand_macros_in_true_bodies_but_not_false_bodies() {
-        let state = TeXState::new();
-        state.set_macro(
-            false,
-            &Token::ControlSequence("a".to_string()),
-            &Rc::new(Macro::new(
-                vec![],
-                vec![
-                    MacroListElem::Token(Token::Char('x', Category::Letter)),
-                    MacroListElem::Token(Token::ControlSequence(
-                        "else".to_string(),
-                    )),
-                    MacroListElem::Token(Token::Char('y', Category::Letter)),
-                ],
-            )),
-        );
-        state.set_macro(
-            false,
-            &Token::ControlSequence("b".to_string()),
-            &Rc::new(Macro::new(
-                vec![],
-                vec![
-                    MacroListElem::Token(Token::Char('z', Category::Letter)),
-                    MacroListElem::Token(Token::ControlSequence(
-                        "fi".to_string(),
-                    )),
-                ],
-            )),
-        );
-        let mut parser = Parser::new(&["\\iftrue w\\a\\b\\fi%"], &state);
+        with_parser(&["\\iftrue w\\a\\b\\fi%"], |parser| {
+            parser.state.set_macro(
+                false,
+                &Token::ControlSequence("a".to_string()),
+                &Rc::new(Macro::new(
+                    vec![],
+                    vec![
+                        MacroListElem::Token(Token::Char(
+                            'x',
+                            Category::Letter,
+                        )),
+                        MacroListElem::Token(Token::ControlSequence(
+                            "else".to_string(),
+                        )),
+                        MacroListElem::Token(Token::Char(
+                            'y',
+                            Category::Letter,
+                        )),
+                    ],
+                )),
+            );
+            parser.state.set_macro(
+                false,
+                &Token::ControlSequence("b".to_string()),
+                &Rc::new(Macro::new(
+                    vec![],
+                    vec![
+                        MacroListElem::Token(Token::Char(
+                            'z',
+                            Category::Letter,
+                        )),
+                        MacroListElem::Token(Token::ControlSequence(
+                            "fi".to_string(),
+                        )),
+                    ],
+                )),
+            );
 
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(
-            parser.lex_expanded_token(),
-            Some(Token::Char('w', Category::Letter))
-        );
-        assert_eq!(
-            parser.lex_expanded_token(),
-            Some(Token::Char('x', Category::Letter))
-        );
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(parser.lex_unexpanded_token(), None);
+            assert_eq!(parser.is_conditional_head(), true);
+            parser.expand_conditional();
+            assert_eq!(
+                parser.lex_expanded_token(),
+                Some(Token::Char('w', Category::Letter))
+            );
+            assert_eq!(
+                parser.lex_expanded_token(),
+                Some(Token::Char('x', Category::Letter))
+            );
+            assert_eq!(parser.is_conditional_head(), true);
+            parser.expand_conditional();
+            assert_eq!(parser.lex_unexpanded_token(), None);
+        });
     }
 
     #[test]
     fn it_allows_conditional_primitives_to_be_let() {
-        let state = TeXState::new();
-        state.set_let(
-            false,
-            &Token::ControlSequence("iftruex".to_string()),
-            &Token::ControlSequence("iftrue".to_string()),
-        );
-        state.set_let(
-            false,
-            &Token::ControlSequence("iffalsex".to_string()),
-            &Token::ControlSequence("iffalse".to_string()),
-        );
-        state.set_let(
-            false,
-            &Token::ControlSequence("fix".to_string()),
-            &Token::ControlSequence("fi".to_string()),
-        );
-        state.set_let(
-            false,
-            &Token::ControlSequence("elsex".to_string()),
-            &Token::ControlSequence("else".to_string()),
-        );
-        let mut parser = Parser::new(
+        with_parser(
             &["\\iftruex a\\elsex b\\fix%", "\\iffalsex a\\elsex b\\fix%"],
-            &state,
-        );
+            |parser| {
+                parser.state.set_let(
+                    false,
+                    &Token::ControlSequence("iftruex".to_string()),
+                    &Token::ControlSequence("iftrue".to_string()),
+                );
+                parser.state.set_let(
+                    false,
+                    &Token::ControlSequence("iffalsex".to_string()),
+                    &Token::ControlSequence("iffalse".to_string()),
+                );
+                parser.state.set_let(
+                    false,
+                    &Token::ControlSequence("fix".to_string()),
+                    &Token::ControlSequence("fi".to_string()),
+                );
+                parser.state.set_let(
+                    false,
+                    &Token::ControlSequence("elsex".to_string()),
+                    &Token::ControlSequence("else".to_string()),
+                );
 
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(
-            parser.lex_expanded_token(),
-            Some(Token::Char('a', Category::Letter))
-        );
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+                assert_eq!(
+                    parser.lex_expanded_token(),
+                    Some(Token::Char('a', Category::Letter))
+                );
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
 
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-        assert_eq!(
-            parser.lex_expanded_token(),
-            Some(Token::Char('b', Category::Letter))
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+                assert_eq!(
+                    parser.lex_expanded_token(),
+                    Some(Token::Char('b', Category::Letter))
+                );
+                assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+                assert_eq!(parser.lex_unexpanded_token(), None);
+            },
         );
-        assert_eq!(parser.is_conditional_head(), true);
-        parser.expand_conditional();
-
-        assert_eq!(parser.lex_unexpanded_token(), None);
     }
 
     #[test]
