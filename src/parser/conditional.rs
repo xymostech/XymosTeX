@@ -17,14 +17,18 @@ fn check_relation(rel: Relation, left: i32, right: i32) -> bool {
 }
 
 impl<'a> Parser<'a> {
+    fn is_conditional_start(&mut self, token: &Token) -> bool {
+        self.state.is_token_equal_to_prim(token, "iftrue")
+            || self.state.is_token_equal_to_prim(token, "iffalse")
+            || self.state.is_token_equal_to_prim(token, "ifnum")
+    }
+
     pub fn is_conditional_head(&mut self) -> bool {
         match self.peek_unexpanded_token() {
             Some(token) => {
-                self.state.is_token_equal_to_prim(&token, "else")
+                self.is_conditional_start(&token)
+                    || self.state.is_token_equal_to_prim(&token, "else")
                     || self.state.is_token_equal_to_prim(&token, "fi")
-                    || self.state.is_token_equal_to_prim(&token, "iftrue")
-                    || self.state.is_token_equal_to_prim(&token, "iffalse")
-                    || self.state.is_token_equal_to_prim(&token, "ifnum")
             }
             _ => false,
         }
@@ -36,7 +40,12 @@ impl<'a> Parser<'a> {
         let mut ends_with_else = false;
         loop {
             let token = self.lex_unexpanded_token().unwrap();
-            if self.state.is_token_equal_to_prim(&token, "fi") {
+            if self.is_conditional_start(&token) {
+                // If we see a conditional start while we're skipping, we need
+                // to just skip to the end of that inner conditional before we
+                // continue looking for the outer \fi.
+                self.skip_to_fi();
+            } else if self.state.is_token_equal_to_prim(&token, "fi") {
                 break;
             } else if self.state.is_token_equal_to_prim(&token, "else") {
                 ends_with_else = true;
@@ -46,14 +55,16 @@ impl<'a> Parser<'a> {
         ends_with_else
     }
 
-    fn skip_from_else(&mut self) {
-        // When we encounter an \else, we know that we're in a 'true'
-        // conditional because in a 'false' conditional, we always already
-        // parse the \else token in skip_to_fi_or_else(). Thus, we just need to
-        // skip tokens until we see a \fi.
+    // Skips tokens until a \fi is found.
+    fn skip_to_fi(&mut self) {
         loop {
             let token = self.lex_unexpanded_token().unwrap();
-            if self.state.is_token_equal_to_prim(&token, "fi") {
+            if self.is_conditional_start(&token) {
+                // If we see a conditional start while we're skipping, we need
+                // to just skip to the end of that inner conditional before we
+                // continue looking for the outer \fi.
+                self.skip_to_fi();
+            } else if self.state.is_token_equal_to_prim(&token, "fi") {
                 break;
             }
         }
@@ -96,7 +107,11 @@ impl<'a> Parser<'a> {
                 panic!("Extra \\else");
             }
             self.conditional_depth -= 1;
-            self.skip_from_else();
+            // When we encounter an \else, we know that we're in a 'true'
+            // conditional because in a 'false' conditional, we always already
+            // parse the \else token in skip_to_fi_or_else(). Thus, we just
+            // need to skip tokens until we see a \fi.
+            self.skip_to_fi();
         } else if self.state.is_token_equal_to_prim(&token, "iftrue") {
             self.handle_true();
         } else if self.state.is_token_equal_to_prim(&token, "iffalse") {
@@ -355,6 +370,61 @@ mod tests {
                     Some(Token::Char('t', Category::Letter))
                 );
                 assert_eq!(parser.is_conditional_head(), true);
+                parser.expand_conditional();
+            },
+        );
+    }
+
+    #[test]
+    fn it_handles_ifs_inside_of_ifs() {
+        with_parser(
+            &[
+                "\\iftrue \\iftrue x\\fi \\fi%",
+                "\\iffalse \\iftrue x\\fi \\fi%",
+                "\\iftrue x\\else \\iftrue x\\fi \\fi%",
+                "\\iffalse x\\else \\iftrue x\\fi \\fi%",
+            ],
+            |parser| {
+                // true inside true
+                assert!(parser.is_conditional_head());
+                parser.expand_conditional();
+                assert!(parser.is_conditional_head());
+                parser.expand_conditional();
+                assert_eq!(
+                    parser.lex_unexpanded_token(),
+                    Some(Token::Char('x', Category::Letter))
+                );
+                assert!(parser.is_conditional_head());
+                parser.expand_conditional();
+                assert!(parser.is_conditional_head());
+                parser.expand_conditional();
+
+                // true inside false
+                parser.expand_conditional();
+
+                // true inside else of true
+                assert!(parser.is_conditional_head());
+                parser.expand_conditional();
+                assert_eq!(
+                    parser.lex_unexpanded_token(),
+                    Some(Token::Char('x', Category::Letter))
+                );
+                assert!(parser.is_conditional_head());
+                parser.expand_conditional();
+                assert!(parser.is_conditional_head());
+
+                // true inside else of false
+                assert!(parser.is_conditional_head());
+                parser.expand_conditional();
+                assert!(parser.is_conditional_head());
+                parser.expand_conditional();
+                assert_eq!(
+                    parser.lex_unexpanded_token(),
+                    Some(Token::Char('x', Category::Letter))
+                );
+                assert!(parser.is_conditional_head());
+                parser.expand_conditional();
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
             },
         );
