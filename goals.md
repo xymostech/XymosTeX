@@ -12,7 +12,7 @@ My plan is to implement features in stages, with each stage having a specific go
 
 **Status**: Done!
 **Difficulty**: Easy
-**Condition for success**: correctly executing interpreting [a series of macros, assignments, and conditionals that produce an output of prime numbers](https://github.com/xymostech/js-tex-parser/blob/master/examples/primes.tex) (this is a simplified version of the same function found in the TeXbook)
+**Condition for success**: correctly interpreting [a series of macros, assignments, and conditionals that produce an output of prime numbers](examples/primes.tex) (this is a simplified version of the same function found in the TeXbook)
 
 The goal of this first stage is to get some of the core parsing and lexing working. A large part of this stage will be ensuring that assignment, expansion, and conditionals work correctly.
 
@@ -22,35 +22,43 @@ Understanding and implementing the concepts in this stage is actually fairly dif
 
 **Status**: Not yet started
 **Difficulty**: Medium
+**Condition for success**: correctly evaluating and printing metrics for boxes and building horizontal boxes from [commands that build horizontal boxes at different widths with glue](examples/boxes.tex)
+
+Instead of producing simple textual output as a result of the parsing, in this stage I will begin producing TeX boxes. I'll need to begin parsing character metrics for the individual characters to get the sizes for individual characters, and start allowing glue inside of horizontal boxes. I'll need to add box registers, and I'll need to allow setting the glue in a box, allow for reading metrics about the boxes, and allow for nesting boxes inside of other boxes.
+
+## Stage 3: Vertical mode
+
+**Status**: Not yet started
+**Difficulty**: Medium
 **Condition for success**: ???
 
-Instead of producing simple textual output as a result of the parsing, in this stage I will begin producing TeX boxes. I'll need to begin parsing character metrics for the individual characters to get the sizes for individual characters, and start allowing glue inside of horizontal boxes. I'd also like to begin parsing in vertical mode and then progress normally into horizontal mode instead of starting in horizontal mode.
+At this point, I'll be able to start parsing from (internal) vertical mode, have that correctly call out to a (restricted) horizontal mode, and then return back to vertical mode to produce vertical boxes. This will add vertical glue as well.
 
-## Stage 3: Math Parsing
+## Stage 4: Math Parsing
 
 **Status**: Not yet started
 **Difficulty**: Medium
 **Condition for success**: Be able to parse a complicated mathematical expression into a box
 
-## Stage 4: DVI Output
+## Stage 5: DVI Output
 
 **Status**: Not yet started
 **Difficulty**: Medium
 **Condition for success**: ???
 
-## Stage 5: Paragraph & Line Breaking
+## Stage 6: Paragraph & Line Breaking
 
 **Status**: Not yet started
 **Difficulty**: Hard
 **Condition for success**: ???
 
-## Stage 6: ???
+## Stage 7: ???
 
 **Status**: Not yet started
-**Difficulty**: ???
+**Difficulty**: ??? (Probably hard)
 **Condition for success**: ???
 
-## Stage 7: trip.tex
+## Stage 8: trip.tex
 
 **Status**: Not yet started
 **Difficulty**: Hard

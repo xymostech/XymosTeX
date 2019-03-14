@@ -1,0 +1,11 @@
+%
+% Correct output:
+% 2877216447828127431Aa Gg Zz3276800Aa Gg Zz2752512Aa Gg Zz
+%
+\def\boxcontents{Aa\hskip 5pt plus2pt minus2ptGg\hskip 3pt plus1fil minus1ptZz}%
+\setbox1=\hbox{\boxcontents}%
+\number\wd1 \number\ht1 \number\dp1 \box1%
+\setbox1=\hbox to50pt{\boxcontents}%
+\number\wd1 \box1%
+\setbox1=\hbox to42pt{\boxcontents}%
+\number\wd1 \box1%
