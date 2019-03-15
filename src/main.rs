@@ -4,6 +4,7 @@ mod makro;
 mod parser;
 mod state;
 mod testing;
+mod tfm;
 mod token;
 mod variable;
 
