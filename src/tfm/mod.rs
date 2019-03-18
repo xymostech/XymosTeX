@@ -64,6 +64,7 @@ struct TFMFile {
     font_parameters: Vec<f64>,
 }
 
+mod accessors;
 mod file_reader;
 mod read_tfm;
 mod test_data;
