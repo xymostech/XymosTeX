@@ -53,14 +53,31 @@ impl<'a> Parser<'a> {
         value
     }
 
-    pub fn parse_unsigned_number(&mut self) -> u32 {
-        // TODO(xymostech): this removes the distinction between "normal" and
-        // "coerced" integers. Fix that
-        if self.is_integer_constant_head() {
-            self.parse_integer_constant()
+    fn is_internal_integer_head(&mut self) -> bool {
+        self.is_variable_head()
+    }
+
+    fn parse_internal_integer(&mut self) -> i32 {
+        if self.is_variable_head() {
+            let variable = self.parse_variable();
+            variable.get(self.state)
         } else {
             panic!("unimplemented");
         }
+    }
+
+    fn parse_normal_integer(&mut self) -> i32 {
+        if self.is_internal_integer_head() {
+            self.parse_internal_integer()
+        } else if self.is_integer_constant_head() {
+            self.parse_integer_constant() as i32
+        } else {
+            panic!("unimplemented");
+        }
+    }
+
+    fn parse_unsigned_number(&mut self) -> i32 {
+        self.parse_normal_integer()
     }
 
     // Parses some number of +s and -s into an overall numeric sign, which is
@@ -87,12 +104,6 @@ impl<'a> Parser<'a> {
         sign
     }
 
-    fn parse_number(&mut self) -> i32 {
-        let sign = self.parse_optional_signs();
-        let number = self.parse_unsigned_number();
-        sign * (number as i32)
-    }
-
     pub fn parse_8bit_number(&mut self) -> u8 {
         let number = self.parse_number();
         if number < 0 || number > 255 {
@@ -101,12 +112,47 @@ impl<'a> Parser<'a> {
         number as u8
     }
 
-    pub fn parse_number_value(&mut self) -> i32 {
-        if self.is_variable_head() {
-            let variable = self.parse_variable();
-            variable.get(self.state)
-        } else {
-            self.parse_number()
-        }
+    pub fn parse_number(&mut self) -> i32 {
+        let sign = self.parse_optional_signs();
+        let value = self.parse_unsigned_number();
+        sign * value
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::testing::with_parser;
+
+    #[test]
+    fn it_parses_8bit_numbers() {
+        with_parser(&["0 %", "255 %", "-+-  123 %"], |parser| {
+            assert_eq!(parser.parse_8bit_number(), 0);
+            assert_eq!(parser.parse_8bit_number(), 255);
+            assert_eq!(parser.parse_8bit_number(), 123);
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid 8-bit number: -1234")]
+    fn it_fails_parsing_8bit_numbers() {
+        with_parser(&["-1234%"], |parser| {
+            parser.parse_8bit_number();
+        });
+    }
+
+    #[test]
+    fn it_parses_numbers_from_variables() {
+        with_parser(&["\\count10%"], |parser| {
+            parser.state.set_count(false, 10, 1234);
+            assert_eq!(parser.parse_number(), 1234);
+        });
+    }
+
+    #[test]
+    fn it_parses_negative_integer_variables() {
+        with_parser(&["-\\count10%"], |parser| {
+            parser.state.set_count(false, 10, 1234);
+            assert_eq!(parser.parse_number(), -1234);
+        });
     }
 }

@@ -24,7 +24,7 @@ impl<'a> Parser<'a> {
         let head = self.lex_unexpanded_token().unwrap();
 
         if self.state.is_token_equal_to_prim(&head, "number") {
-            let value = self.parse_number_value();
+            let value = self.parse_number();
             self.print_number(value)
         } else {
             panic!("unimplemented");

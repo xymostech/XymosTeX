@@ -117,9 +117,9 @@ impl<'a> Parser<'a> {
         } else if self.state.is_token_equal_to_prim(&token, "iffalse") {
             self.handle_false();
         } else if self.state.is_token_equal_to_prim(&token, "ifnum") {
-            let num1 = self.parse_number_value();
+            let num1 = self.parse_number();
             let relation = self.parse_relation();
-            let num2 = self.parse_number_value();
+            let num2 = self.parse_number();
 
             if check_relation(relation, num1, num2) {
                 self.handle_true();

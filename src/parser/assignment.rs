@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
     fn parse_variable_assignment(&mut self, global: bool) {
         let variable = self.parse_variable();
         self.parse_equals_expanded();
-        let value = self.parse_number_value();
+        let value = self.parse_number();
         variable.set(self.state, global, value);
     }
 
@@ -98,15 +98,15 @@ impl<'a> Parser<'a> {
         self.parse_optional_spaces_expanded();
 
         if self.state.is_token_equal_to_prim(&tok, "advance") {
-            let number = self.parse_number_value();
+            let number = self.parse_number();
             // TODO(xymostech): ensure this doesn't overflow
             variable.set(self.state, global, variable.get(self.state) + number);
         } else if self.state.is_token_equal_to_prim(&tok, "multiply") {
-            let number = self.parse_number_value();
+            let number = self.parse_number();
             // TODO(xymostech): ensure this doesn't overflow
             variable.set(self.state, global, variable.get(self.state) * number);
         } else if self.state.is_token_equal_to_prim(&tok, "divide") {
-            let number = self.parse_number_value();
+            let number = self.parse_number();
             variable.set(self.state, global, variable.get(self.state) / number);
         } else {
             panic!("Invalid arithmetic head: {:?}", tok);

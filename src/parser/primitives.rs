@@ -230,31 +230,6 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_8bit_numbers() {
-        with_parser(&["0 %", "255 %", "-+-  123 %"], |parser| {
-            assert_eq!(parser.parse_8bit_number(), 0);
-            assert_eq!(parser.parse_8bit_number(), 255);
-            assert_eq!(parser.parse_8bit_number(), 123);
-        });
-    }
-
-    #[test]
-    #[should_panic(expected = "Invalid 8-bit number: -1234")]
-    fn it_fails_parsing_8bit_numbers() {
-        with_parser(&["-1234%"], |parser| {
-            parser.parse_8bit_number();
-        });
-    }
-
-    #[test]
-    fn it_parses_number_values_from_variables() {
-        with_parser(&["\\count10%"], |parser| {
-            parser.state.set_count(false, 10, 1234);
-            assert_eq!(parser.parse_number_value(), 1234);
-        });
-    }
-
-    #[test]
     fn it_parses_optional_keywords() {
         with_parser(&["   by    pt   TrUe%"], |parser| {
             parser.parse_optional_keyword_expanded("by");
