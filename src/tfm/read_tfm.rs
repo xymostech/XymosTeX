@@ -1,7 +1,6 @@
 use std::io;
 
 use crate::tfm::file_reader::TeXFileReader;
-use crate::tfm::test_data::BASIC_TFM;
 use crate::tfm::*;
 
 impl TFMFile {
@@ -196,6 +195,8 @@ impl TFMFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::tfm::test_data::BASIC_TFM;
 
     #[test]
     fn it_reads_basics() {

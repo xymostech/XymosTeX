@@ -1,5 +1,4 @@
 use crate::dimension::{Dimen, Unit};
-use crate::tfm::test_data::BASIC_TFM;
 use crate::tfm::{CharInfoEntry, TFMFile};
 
 impl TFMFile {
@@ -37,6 +36,8 @@ impl TFMFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::tfm::test_data::BASIC_TFM;
 
     #[test]
     fn get_basic_dimensions() {
