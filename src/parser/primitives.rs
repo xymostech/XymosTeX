@@ -6,6 +6,22 @@ use crate::category::Category;
 use crate::parser::Parser;
 use crate::token::Token;
 
+/// Checks if a token matches a character from a keyword. In particular, this
+/// matches if it is a char token whose char component equals the the keyword
+/// character case-insensitively.
+pub fn token_equals_keyword_char(tok: &Token, ch: char) -> bool {
+    match tok {
+        Token::Char(_, Category::Active) => false,
+        Token::Char(tok_ch, _) =>
+        // TODO(xymostech): Handle non-ascii?
+        {
+            *tok_ch == ch.to_ascii_lowercase()
+                || *tok_ch == ch.to_ascii_uppercase()
+        }
+        _ => false,
+    }
+}
+
 impl<'a> Parser<'a> {
     // Parse 0 or more space tokens and ignore them
     pub fn parse_optional_spaces_unexpanded(&mut self) {
@@ -63,35 +79,16 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_optional_keyword_expanded(&mut self, keyword: &str) {
+    /// Parses a keyword (which is indicated in the TeXbook grammar by letters
+    /// in typewriter font). Panics if the keyword is not immediately found.
+    pub fn parse_keyword_expanded(&mut self, keyword: &str) {
         self.parse_optional_spaces_expanded();
-
-        let first_char = keyword.chars().next().unwrap();
-
-        // If the first token doesn't match the keyword we're looking for, just
-        // bail out now.
-        match self.peek_expanded_token() {
-            Some(Token::Char(_, Category::Active)) => return,
-            Some(Token::Char(ch, _))
-                if ch == first_char.to_ascii_lowercase()
-                    || ch == first_char.to_ascii_uppercase() =>
-            {
-                ()
-            }
-            _ => return,
-        }
 
         for keyword_char in keyword.chars() {
             let token = self.lex_expanded_token();
             match token {
-                Some(Token::Char(_, Category::Active)) => panic!(
-                    "Found invalid token {:?} while parsing keyword {}",
-                    token, keyword
-                ),
-                Some(Token::Char(ch, _))
-                    // TODO(xymostech): Handle non-ascii?
-                    if ch == keyword_char.to_ascii_lowercase()
-                        || ch == keyword_char.to_ascii_uppercase() =>
+                Some(ref tok)
+                    if token_equals_keyword_char(tok, keyword_char) =>
                 {
                     ()
                 }
@@ -101,6 +98,24 @@ impl<'a> Parser<'a> {
                 ),
             }
         }
+    }
+
+    /// Parses an optional keyword. Panics if the keyword is only partially
+    /// found.
+    pub fn parse_optional_keyword_expanded(&mut self, keyword: &str) {
+        self.parse_optional_spaces_expanded();
+
+        let first_char = keyword.chars().next().unwrap();
+
+        // If the first token doesn't match the keyword we're looking for, just
+        // bail out now.
+        match self.peek_expanded_token() {
+            Some(ref tok) if token_equals_keyword_char(tok, first_char) => (),
+            _ => return,
+        }
+
+        // Now that we're confident the keyword is actually there, parse it.
+        self.parse_keyword_expanded(keyword);
     }
 }
 
@@ -247,6 +262,23 @@ mod tests {
     fn it_fails_parsing_halfway_through_a_keyword() {
         with_parser(&[" boo%"], |parser| {
             parser.parse_optional_keyword_expanded("by");
+        });
+    }
+
+    #[test]
+    fn it_parses_required_keywords() {
+        with_parser(&[" pt  minus  fillll%"], |parser| {
+            parser.parse_keyword_expanded("pt");
+            parser.parse_keyword_expanded("minus");
+            parser.parse_keyword_expanded("fillll");
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "while parsing keyword")]
+    fn it_fails_parsing_missing_required_keywords() {
+        with_parser(&[" blah"], |parser| {
+            parser.parse_keyword_expanded("pt");
         });
     }
 }
