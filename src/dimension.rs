@@ -1,7 +1,7 @@
 use std::ops::{Add, Div, Mul, Sub};
 
-static DIMEN_MAX: i32 = 1 << 30 - 1;
-static DIMEN_MIN: i32 = 1 - 1 << 30;
+static DIMEN_MAX: i32 = (1 << 30) - 1;
+static DIMEN_MIN: i32 = 1 - (1 << 30);
 
 #[derive(Debug, Clone, Copy)]
 pub enum Unit {
@@ -162,5 +162,10 @@ mod tests {
     #[should_panic(expected = "Dimension too large")]
     fn it_checks_large_dimensions() {
         Dimen(1073741824).validate();
+    }
+
+    #[test]
+    fn it_supports_negative_dimens() {
+        assert_eq!(Dimen::from_unit(-123.0, Unit::Point), Dimen(-8060928));
     }
 }
