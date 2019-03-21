@@ -2,14 +2,14 @@ use crate::category::Category;
 use crate::parser::Parser;
 use crate::token::Token;
 
-fn is_token_digit(token: &Token) -> bool {
+pub fn is_token_digit(token: &Token) -> bool {
     match token {
         Token::Char(ch, Category::Other) => *ch >= '0' && *ch <= '9',
         _ => false,
     }
 }
 
-fn token_digit_value(token: &Token) -> u8 {
+pub fn token_digit_value(token: &Token) -> u8 {
     if let Token::Char(ch, Category::Other) = token {
         if *ch >= '0' && *ch <= '9' {
             (*ch as u8) - ('0' as u8)
@@ -53,11 +53,11 @@ impl<'a> Parser<'a> {
         value
     }
 
-    fn is_internal_integer_head(&mut self) -> bool {
+    pub fn is_internal_integer_head(&mut self) -> bool {
         self.is_variable_head()
     }
 
-    fn parse_internal_integer(&mut self) -> i32 {
+    pub fn parse_internal_integer(&mut self) -> i32 {
         if self.is_variable_head() {
             let variable = self.parse_variable();
             variable.get(self.state)

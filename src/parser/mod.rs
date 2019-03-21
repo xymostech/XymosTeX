@@ -33,6 +33,7 @@ impl<'a> Parser<'a> {
 
 mod assignment;
 mod conditional;
+mod dimen;
 mod expand;
 mod horizontal_list;
 mod makro;
