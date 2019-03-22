@@ -1,5 +1,5 @@
 use crate::category::Category;
-use crate::dimension::{Dimen, Unit};
+use crate::dimension::{Dimen, FilDimen, SpringDimen, Unit};
 use crate::parser::number::{is_token_digit, token_digit_value};
 use crate::parser::primitives::token_equals_keyword_char;
 use crate::parser::Parser;
@@ -24,7 +24,17 @@ fn equals_unit(
 enum ParsedUnit {
     Em,
     Ex,
+    Fil,
+    Fill,
+    Filll,
     PhysicalUnit(bool, Unit),
+}
+
+enum UnitOrFil {
+    Fil,
+    Fill,
+    Filll,
+    Unit(Unit),
 }
 
 // Since we don't have a real \mag parameter yet, we just use this constant
@@ -32,22 +42,44 @@ enum ParsedUnit {
 const MAG_FACTOR: i32 = 1000;
 
 impl<'a> Parser<'a> {
-    fn parse_dimen(&mut self) -> Dimen {
+    pub fn parse_dimen(&mut self) -> Dimen {
+        match self.parse_spring_dimen(false) {
+            SpringDimen::Dimen(dimen) => dimen,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Parses a SpringDimen. If allow_fil is false, this will panic if it
+    /// sees units with fils.
+    pub fn parse_spring_dimen(&mut self, allow_fil: bool) -> SpringDimen {
         let sign = self.parse_optional_signs();
-        let value = self.parse_unsigned_dimen();
+        let value = self.parse_unsigned_dimen(allow_fil);
 
         value * sign
     }
 
-    fn parse_unsigned_dimen(&mut self) -> Dimen {
-        self.parse_normal_dimen()
+    fn parse_unsigned_dimen(&mut self, allow_fil: bool) -> SpringDimen {
+        self.parse_normal_dimen(allow_fil)
     }
 
-    fn parse_normal_dimen(&mut self) -> Dimen {
+    fn parse_normal_dimen(&mut self, allow_fil: bool) -> SpringDimen {
         let factor = self.parse_factor();
-        let (unit_factor, unit) = self.parse_unit_of_measure();
+        let (unit_factor, unit_or_fil) = self.parse_unit_of_measure(allow_fil);
 
-        Dimen::from_unit(factor * unit_factor, unit)
+        match unit_or_fil {
+            UnitOrFil::Unit(unit) => {
+                SpringDimen::Dimen(Dimen::from_unit(factor * unit_factor, unit))
+            }
+            UnitOrFil::Fil => {
+                SpringDimen::FilDimen(FilDimen::Fil(factor * unit_factor))
+            }
+            UnitOrFil::Fill => {
+                SpringDimen::FilDimen(FilDimen::Fill(factor * unit_factor))
+            }
+            UnitOrFil::Filll => {
+                SpringDimen::FilDimen(FilDimen::Filll(factor * unit_factor))
+            }
+        }
     }
 
     fn is_almost_normal_integer_head(&mut self) -> bool {
@@ -146,7 +178,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Parses a "unit of measure". Returns a tuple of (factor, unit). We can't
+    // Parses a "unit of measure". Returns a (factor, unit) tuple. We can't
     // just return a unit because:
     // * Sometimes a "unit of measure" is actually a variable, in which case
     //   we're probably going to end up with (<number>, ScaledPoint) as we turn
@@ -155,30 +187,33 @@ impl<'a> Parser<'a> {
     //   like an em which depends on the current font we're using.
     // * Sometimes, we find a "true" unit, which depends on the current
     //   magnification (from \mag)
-    fn parse_unit_of_measure(&mut self) -> (f64, Unit) {
+    fn parse_unit_of_measure(&mut self, allow_fil: bool) -> (f64, UnitOrFil) {
         if self.is_internal_integer_head() {
             let value = self.parse_internal_integer();
-            (value as f64, Unit::ScaledPoint)
+            (value as f64, UnitOrFil::Unit(Unit::ScaledPoint))
         } else {
-            match self.parse_unit() {
+            match self.parse_unit(allow_fil) {
                 ParsedUnit::PhysicalUnit(is_true, unit) => {
                     if is_true {
                         // TODO(xymostech): Lookup the \mag factor from the
                         // state instead of just using a constant.
-                        (1000.0 / (MAG_FACTOR as f64), unit)
+                        (1000.0 / (MAG_FACTOR as f64), UnitOrFil::Unit(unit))
                     } else {
-                        (1.0, unit)
+                        (1.0, UnitOrFil::Unit(unit))
                     }
                 }
                 // These need font metrics to be looked up before we can
                 // correctly get the values for this.
                 ParsedUnit::Em => panic!("unimplemented"),
                 ParsedUnit::Ex => panic!("unimplemented"),
+                ParsedUnit::Fil => (1.0, UnitOrFil::Fil),
+                ParsedUnit::Fill => (1.0, UnitOrFil::Fill),
+                ParsedUnit::Filll => (1.0, UnitOrFil::Filll),
             }
         }
     }
 
-    fn parse_unit(&mut self) -> ParsedUnit {
+    fn parse_unit(&mut self, allow_fil: bool) -> ParsedUnit {
         self.parse_optional_spaces_expanded();
 
         let mut is_true_unit = false;
@@ -195,44 +230,90 @@ impl<'a> Parser<'a> {
             is_true_unit = true;
         }
 
-        // Since all of the units have 2 characters, just parse both character
-        // tokens up front.
+        // Since all of the units have at least 2 characters, just parse both
+        // character tokens up front.
         let unit_first = self.lex_expanded_token().unwrap();
         let unit_second = self.lex_expanded_token().unwrap();
 
-        self.parse_optional_space_expanded();
-
         // Check to see which unit the first and second tokens match.
         if equals_unit(&unit_first, &unit_second, ['p', 't']) {
+            self.parse_optional_space_expanded();
             ParsedUnit::PhysicalUnit(is_true_unit, Unit::Point)
         } else if equals_unit(&unit_first, &unit_second, ['p', 'c']) {
+            self.parse_optional_space_expanded();
             ParsedUnit::PhysicalUnit(is_true_unit, Unit::Pica)
         } else if equals_unit(&unit_first, &unit_second, ['i', 'n']) {
+            self.parse_optional_space_expanded();
             ParsedUnit::PhysicalUnit(is_true_unit, Unit::Inch)
         } else if equals_unit(&unit_first, &unit_second, ['b', 'p']) {
+            self.parse_optional_space_expanded();
             ParsedUnit::PhysicalUnit(is_true_unit, Unit::BigPoint)
         } else if equals_unit(&unit_first, &unit_second, ['c', 'm']) {
+            self.parse_optional_space_expanded();
             ParsedUnit::PhysicalUnit(is_true_unit, Unit::Centimeter)
         } else if equals_unit(&unit_first, &unit_second, ['m', 'm']) {
+            self.parse_optional_space_expanded();
             ParsedUnit::PhysicalUnit(is_true_unit, Unit::Millimeter)
         } else if equals_unit(&unit_first, &unit_second, ['d', 'd']) {
+            self.parse_optional_space_expanded();
             ParsedUnit::PhysicalUnit(is_true_unit, Unit::DidotPoint)
         } else if equals_unit(&unit_first, &unit_second, ['c', 'c']) {
+            self.parse_optional_space_expanded();
             ParsedUnit::PhysicalUnit(is_true_unit, Unit::Cicero)
         } else if equals_unit(&unit_first, &unit_second, ['s', 'p']) {
+            self.parse_optional_space_expanded();
             ParsedUnit::PhysicalUnit(is_true_unit, Unit::ScaledPoint)
         } else if equals_unit(&unit_first, &unit_second, ['e', 'm']) {
+            self.parse_optional_space_expanded();
             if is_true_unit {
                 panic!("Invalid unit with true: em");
             }
             ParsedUnit::Em
         } else if equals_unit(&unit_first, &unit_second, ['e', 'x']) {
+            self.parse_optional_space_expanded();
             if is_true_unit {
                 panic!("Invalid unit with true: ex");
             }
             ParsedUnit::Ex
+        } else if equals_unit(&unit_first, &unit_second, ['f', 'i']) {
+            if !allow_fil {
+                panic!("Invalid unit: fil*");
+            }
+
+            if is_true_unit {
+                panic!("Invalid unit with true: fil*");
+            }
+
+            let first_l = self.lex_expanded_token().unwrap();
+            if !token_equals_keyword_char(&first_l, 'l') {
+                panic!(
+                    "Invalid unit: {:?}{:?}{:?}",
+                    unit_first, unit_second, first_l
+                );
+            }
+
+            let mut unit = ParsedUnit::Fil;
+            loop {
+                let maybe_next_l = self.peek_expanded_token();
+                match maybe_next_l {
+                    Some(ref tok) if token_equals_keyword_char(tok, 'l') => {
+                        self.lex_expanded_token();
+                        unit = match unit {
+                            ParsedUnit::Fil => ParsedUnit::Fill,
+                            ParsedUnit::Fill => ParsedUnit::Filll,
+                            ParsedUnit::Filll => panic!("Invalid unit: fillll"),
+                            _ => unreachable!(),
+                        };
+                    }
+                    _ => break,
+                }
+            }
+
+            self.parse_optional_space_expanded();
+
+            unit
         } else {
-            panic!("Invalid unit: {:?}{:?}%", unit_first, unit_second);
+            panic!("Invalid unit: {:?}{:?}", unit_first, unit_second);
         }
     }
 }
@@ -367,5 +448,34 @@ mod tests {
             parser.parse_dimen();
             assert_eq!(parser.lex_unexpanded_token(), None);
         });
+    }
+
+    #[test]
+    fn it_parses_fils() {
+        with_parser(
+            &["1fil %", "1fill %", "1filll %", "12.3fil %", "-1fil %"],
+            |parser| {
+                assert_eq!(
+                    parser.parse_spring_dimen(true),
+                    SpringDimen::FilDimen(FilDimen::Fil(1.0))
+                );
+                assert_eq!(
+                    parser.parse_spring_dimen(true),
+                    SpringDimen::FilDimen(FilDimen::Fill(1.0))
+                );
+                assert_eq!(
+                    parser.parse_spring_dimen(true),
+                    SpringDimen::FilDimen(FilDimen::Filll(1.0))
+                );
+                assert_eq!(
+                    parser.parse_spring_dimen(true),
+                    SpringDimen::FilDimen(FilDimen::Fil(12.3))
+                );
+                assert_eq!(
+                    parser.parse_spring_dimen(true),
+                    SpringDimen::FilDimen(FilDimen::Fil(-1.0))
+                );
+            },
+        );
     }
 }

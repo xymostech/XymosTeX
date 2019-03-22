@@ -90,6 +90,44 @@ impl Div<i32> for Dimen {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum FilDimen {
+    Fil(f64),
+    Fill(f64),
+    Filll(f64),
+}
+
+impl Mul<f64> for FilDimen {
+    type Output = FilDimen;
+
+    fn mul(self, other: f64) -> FilDimen {
+        match self {
+            FilDimen::Fil(f) => FilDimen::Fil(f * other),
+            FilDimen::Fill(f) => FilDimen::Fill(f * other),
+            FilDimen::Filll(f) => FilDimen::Filll(f * other),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SpringDimen {
+    Dimen(Dimen),
+    FilDimen(FilDimen),
+}
+
+impl Mul<i32> for SpringDimen {
+    type Output = SpringDimen;
+
+    fn mul(self, other: i32) -> SpringDimen {
+        match self {
+            SpringDimen::FilDimen(fil) => {
+                SpringDimen::FilDimen(fil * (other as f64))
+            }
+            SpringDimen::Dimen(dimen) => SpringDimen::Dimen(dimen * other),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
