@@ -100,9 +100,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parses an optional keyword. Panics if the keyword is only partially
-    /// found.
-    pub fn parse_optional_keyword_expanded(&mut self, keyword: &str) {
+    /// Parses an optional keyword. Returns true if the keyword was parsed and
+    /// false if not.
+    pub fn parse_optional_keyword_expanded(&mut self, keyword: &str) -> bool {
         self.parse_optional_spaces_expanded();
 
         let first_char = keyword.chars().next().unwrap();
@@ -111,11 +111,29 @@ impl<'a> Parser<'a> {
         // bail out now.
         match self.peek_expanded_token() {
             Some(ref tok) if token_equals_keyword_char(tok, first_char) => (),
-            _ => return,
+            _ => return false,
         }
 
         // Now that we're confident the keyword is actually there, parse it.
-        self.parse_keyword_expanded(keyword);
+        let mut parsed_toks = Vec::new();
+
+        for keyword_char in keyword.chars() {
+            let token = self.peek_expanded_token();
+            match token {
+                Some(ref tok)
+                    if token_equals_keyword_char(tok, keyword_char) =>
+                {
+                    let tok = self.lex_expanded_token().unwrap();
+                    parsed_toks.push(tok);
+                }
+                _ => {
+                    self.add_upcoming_tokens(parsed_toks);
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 }
 
@@ -247,21 +265,15 @@ mod tests {
     #[test]
     fn it_parses_optional_keywords() {
         with_parser(&["   by    pt   TrUe%"], |parser| {
-            parser.parse_optional_keyword_expanded("by");
+            assert_eq!(parser.parse_optional_keyword_expanded("by"), true);
 
-            parser.parse_optional_keyword_expanded("by");
-            parser.parse_optional_keyword_expanded("pt");
+            assert_eq!(parser.parse_optional_keyword_expanded("by"), false);
+            assert_eq!(parser.parse_optional_keyword_expanded("pc"), false);
+            assert_eq!(parser.parse_optional_keyword_expanded("pt"), true);
 
-            parser.parse_optional_keyword_expanded("pt");
-            parser.parse_optional_keyword_expanded("true");
-        });
-    }
-
-    #[test]
-    #[should_panic(expected = "while parsing keyword")]
-    fn it_fails_parsing_halfway_through_a_keyword() {
-        with_parser(&[" boo%"], |parser| {
-            parser.parse_optional_keyword_expanded("by");
+            assert_eq!(parser.parse_optional_keyword_expanded("pt"), false);
+            assert_eq!(parser.parse_optional_keyword_expanded("trust"), false);
+            assert_eq!(parser.parse_optional_keyword_expanded("true"), true);
         });
     }
 

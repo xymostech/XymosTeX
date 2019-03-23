@@ -69,7 +69,11 @@ impl<'a> Parser<'a> {
         self.upcoming_tokens.push(token);
     }
 
-    fn add_upcoming_tokens(&mut self, tokens: Vec<Token>) {
+    // Adds multiple tokens with add_upcoming_token(). We add the tokens in
+    // reverse so that the first token in the list gets parsed next first.
+    // Note: Use this function sparingly! For efficiency's sake, we should try
+    // only peek one token ahead when we can.
+    pub fn add_upcoming_tokens(&mut self, tokens: Vec<Token>) {
         for token in tokens.into_iter().rev() {
             self.add_upcoming_token(token);
         }
