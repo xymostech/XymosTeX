@@ -46,17 +46,21 @@ impl Dimen {
         self
     }
 
+    pub fn zero() -> Dimen {
+        Dimen(0)
+    }
+
     // Given a number of a given unit, create a Dimen.
     pub fn from_unit(num: f64, from_unit: Unit) -> Dimen {
         let scale = get_scale(from_unit);
-        return Dimen((num * scale.0 / scale.1) as i32).validate();
+        Dimen((num * scale.0 / scale.1) as i32).validate()
     }
 
     // Given a Dimen and a unit to convert that to, returns the amount of that unit
     // that are in that Dimen.
     fn to_unit(&self, to_unit: Unit) -> f64 {
         let scale = get_scale(to_unit);
-        return (self.0 as f64) * scale.1 / scale.0;
+        (self.0 as f64) * scale.1 / scale.0
     }
 }
 

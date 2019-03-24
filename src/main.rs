@@ -1,5 +1,6 @@
 mod category;
 mod dimension;
+mod glue;
 mod lexer;
 mod makro;
 mod parser;
