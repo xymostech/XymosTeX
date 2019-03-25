@@ -4,7 +4,7 @@ use crate::dimension::{Dimen, SpringDimen};
 use crate::glue::Glue;
 
 impl<'a> Parser<'a> {
-    fn parse_glue(&mut self) -> Glue {
+    pub fn parse_glue(&mut self) -> Glue {
         let space = self.parse_dimen();
 
         let mut stretch = SpringDimen::Dimen(Dimen::zero());

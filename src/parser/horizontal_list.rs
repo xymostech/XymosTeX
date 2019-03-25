@@ -1,10 +1,12 @@
 use crate::category::Category;
+use crate::glue::Glue;
 use crate::parser::Parser;
 use crate::token::Token;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 enum HorizontalListElem {
     Char(char),
+    HSkip(Glue),
 }
 
 impl<'a> Parser<'a> {
@@ -55,11 +57,19 @@ impl<'a> Parser<'a> {
                     _ => panic!("unimplemented"),
                 }
             }
-            Some(Token::ControlSequence(seq)) => {
-                if seq == "par" {
-                    self.lex_expanded_token();
-                    Some(HorizontalListElem::Char(' '))
-                } else if self.is_assignment_head() {
+            Some(ref tok) if self.state.is_token_equal_to_prim(tok, "par") => {
+                self.lex_expanded_token();
+                Some(HorizontalListElem::Char(' '))
+            }
+            Some(ref tok)
+                if self.state.is_token_equal_to_prim(tok, "hskip") =>
+            {
+                self.lex_expanded_token();
+                let glue = self.parse_glue();
+                Some(HorizontalListElem::HSkip(glue))
+            }
+            _ => {
+                if self.is_assignment_head() {
                     self.parse_assignment();
                     self.parse_horizontal_list_elem(group_level)
                 } else {
@@ -89,7 +99,10 @@ impl<'a> Parser<'a> {
     pub fn parse_horizontal_list_to_chars(&mut self) -> Vec<char> {
         self.parse_horizontal_list_to_elems()
             .into_iter()
-            .map(|HorizontalListElem::Char(ch)| ch)
+            .map(|elem| match elem {
+                HorizontalListElem::Char(ch) => ch,
+                HorizontalListElem::HSkip(_) => ' ',
+            })
             .collect()
     }
 }
@@ -98,6 +111,7 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
+    use crate::dimension::{Dimen, FilDimen, SpringDimen, Unit};
     use crate::testing::with_parser;
 
     fn assert_parses_to(lines: &[&str], expected_toks: &[HorizontalListElem]) {
@@ -162,5 +176,21 @@ mod tests {
                 vec!['b', 'l', ' ', 'a', 'h']
             );
         });
+    }
+
+    #[test]
+    fn it_parses_hskip_tokens() {
+        assert_parses_to(
+            &["a\\hskip -3pt minus 2.3fil b%"],
+            &[
+                HorizontalListElem::Char('a'),
+                HorizontalListElem::HSkip(Glue {
+                    space: Dimen::from_unit(-3.0, Unit::Point),
+                    stretch: SpringDimen::Dimen(Dimen::zero()),
+                    shrink: SpringDimen::FilDimen(FilDimen::Fil(2.3)),
+                }),
+                HorizontalListElem::Char('b'),
+            ],
+        );
     }
 }
