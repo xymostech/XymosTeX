@@ -1,6 +1,6 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Mutex;
 
 use crate::category::Category;
 use crate::makro::Macro;
@@ -257,13 +257,12 @@ impl TeXStateStack {
 
 // A lot of the state in TeX is treated as global state, where we need to be
 // able to read and write to it from wherever we are in the parsing process. In
-// order to accomplish this in a type-safe way, we keep a mutex pointing to the
-// actual TeX state and then pull the state out of the mutex whenever we need
-// it. We aren't using multiple threads or anything, we're just (ab)using the
-// ability to get a mutable reference to the inner state even when other
-// references exist.
+// order to accomplish this in a type-safe way, we keep a RefCell pointing to
+// the actual TeX state and then pull the state out of the RefCell whenever we
+// need it. Since we only ever pull the state out of the RefCell in the methods
+// on TeXState, we can't ever end up with the RefCell being borrwed twice.
 pub struct TeXState {
-    state_stack: Mutex<TeXStateStack>,
+    state_stack: RefCell<TeXStateStack>,
 }
 
 // Since we're mostly want to just be calling the same-named functions from
@@ -283,17 +282,17 @@ macro_rules! generate_stack_func {
 impl TeXState {
     pub fn new() -> TeXState {
         TeXState {
-            state_stack: Mutex::new(TeXStateStack::new()),
+            state_stack: RefCell::new(TeXStateStack::new()),
         }
     }
 
-    // Helper function for making pulling the TeXStateStack out of the mutex
+    // Helper function for making pulling the TeXStateStack out of the RefCell
     // easier.
     fn with_stack<T, F>(&self, func: F) -> T
     where
         F: FnOnce(&mut TeXStateStack) -> T,
     {
-        let mut stack = self.state_stack.lock().unwrap();
+        let mut stack = self.state_stack.borrow_mut();
         func(&mut stack)
     }
 
