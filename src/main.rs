@@ -2,6 +2,7 @@ mod category;
 mod dimension;
 mod glue;
 mod lexer;
+mod list;
 mod makro;
 mod parser;
 mod state;

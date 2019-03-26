@@ -1,13 +1,8 @@
 use crate::category::Category;
 use crate::glue::Glue;
+use crate::list::HorizontalListElem;
 use crate::parser::Parser;
 use crate::token::Token;
-
-#[derive(Debug, PartialEq)]
-enum HorizontalListElem {
-    Char(char),
-    HSkip(Glue),
-}
 
 impl<'a> Parser<'a> {
     fn replace_renamed_token(
@@ -79,7 +74,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_horizontal_list_to_elems(&mut self) -> Vec<HorizontalListElem> {
+    fn parse_horizontal_list(&mut self) -> Vec<HorizontalListElem> {
         let mut result = Vec::new();
 
         let mut group_level = 0;
@@ -97,7 +92,7 @@ impl<'a> Parser<'a> {
     // parse out into a vec so external uses don't have to deal with
     // HorizontalListElems.
     pub fn parse_horizontal_list_to_chars(&mut self) -> Vec<char> {
-        self.parse_horizontal_list_to_elems()
+        self.parse_horizontal_list()
             .into_iter()
             .map(|elem| match elem {
                 HorizontalListElem::Char(ch) => ch,
@@ -116,7 +111,7 @@ mod tests {
 
     fn assert_parses_to(lines: &[&str], expected_toks: &[HorizontalListElem]) {
         with_parser(lines, |parser| {
-            assert_eq!(parser.parse_horizontal_list_to_elems(), expected_toks);
+            assert_eq!(parser.parse_horizontal_list(), expected_toks);
         });
     }
 
