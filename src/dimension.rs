@@ -94,26 +94,31 @@ impl Div<i32> for Dimen {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum FilDimen {
-    Fil(f64),
-    Fill(f64),
-    Filll(f64),
+#[derive(Debug, PartialEq, Eq)]
+pub enum FilKind {
+    Fil,
+    Fill,
+    Filll,
 }
 
-impl Mul<f64> for FilDimen {
-    type Output = FilDimen;
+#[derive(Debug, PartialEq, Eq)]
+pub struct FilDimen(FilKind, i32);
 
-    fn mul(self, other: f64) -> FilDimen {
-        match self {
-            FilDimen::Fil(f) => FilDimen::Fil(f * other),
-            FilDimen::Fill(f) => FilDimen::Fill(f * other),
-            FilDimen::Filll(f) => FilDimen::Filll(f * other),
-        }
+impl FilDimen {
+    pub fn new(kind: FilKind, value: f64) -> Self {
+        FilDimen(kind, (value * 65536.0) as i32)
     }
 }
 
-#[derive(Debug, PartialEq)]
+impl Mul<i32> for FilDimen {
+    type Output = FilDimen;
+
+    fn mul(self, other: i32) -> FilDimen {
+        FilDimen(self.0, self.1 * other)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum SpringDimen {
     Dimen(Dimen),
     FilDimen(FilDimen),
@@ -124,9 +129,7 @@ impl Mul<i32> for SpringDimen {
 
     fn mul(self, other: i32) -> SpringDimen {
         match self {
-            SpringDimen::FilDimen(fil) => {
-                SpringDimen::FilDimen(fil * (other as f64))
-            }
+            SpringDimen::FilDimen(fil) => SpringDimen::FilDimen(fil * other),
             SpringDimen::Dimen(dimen) => SpringDimen::Dimen(dimen * other),
         }
     }

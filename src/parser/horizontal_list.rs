@@ -111,7 +111,7 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
-    use crate::dimension::{Dimen, FilDimen, SpringDimen, Unit};
+    use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
     use crate::testing::with_parser;
 
     fn assert_parses_to(lines: &[&str], expected_toks: &[HorizontalListElem]) {
@@ -187,7 +187,10 @@ mod tests {
                 HorizontalListElem::HSkip(Glue {
                     space: Dimen::from_unit(-3.0, Unit::Point),
                     stretch: SpringDimen::Dimen(Dimen::zero()),
-                    shrink: SpringDimen::FilDimen(FilDimen::Fil(2.3)),
+                    shrink: SpringDimen::FilDimen(FilDimen::new(
+                        FilKind::Fil,
+                        2.3,
+                    )),
                 }),
                 HorizontalListElem::Char('b'),
             ],

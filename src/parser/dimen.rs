@@ -1,5 +1,5 @@
 use crate::category::Category;
-use crate::dimension::{Dimen, FilDimen, SpringDimen, Unit};
+use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
 use crate::parser::number::{is_token_digit, token_digit_value};
 use crate::parser::primitives::token_equals_keyword_char;
 use crate::parser::Parser;
@@ -70,15 +70,18 @@ impl<'a> Parser<'a> {
             UnitOrFil::Unit(unit) => {
                 SpringDimen::Dimen(Dimen::from_unit(factor * unit_factor, unit))
             }
-            UnitOrFil::Fil => {
-                SpringDimen::FilDimen(FilDimen::Fil(factor * unit_factor))
-            }
-            UnitOrFil::Fill => {
-                SpringDimen::FilDimen(FilDimen::Fill(factor * unit_factor))
-            }
-            UnitOrFil::Filll => {
-                SpringDimen::FilDimen(FilDimen::Filll(factor * unit_factor))
-            }
+            UnitOrFil::Fil => SpringDimen::FilDimen(FilDimen::new(
+                FilKind::Fil,
+                factor * unit_factor,
+            )),
+            UnitOrFil::Fill => SpringDimen::FilDimen(FilDimen::new(
+                FilKind::Fill,
+                factor * unit_factor,
+            )),
+            UnitOrFil::Filll => SpringDimen::FilDimen(FilDimen::new(
+                FilKind::Filll,
+                factor * unit_factor,
+            )),
         }
     }
 
@@ -457,23 +460,23 @@ mod tests {
             |parser| {
                 assert_eq!(
                     parser.parse_spring_dimen(true),
-                    SpringDimen::FilDimen(FilDimen::Fil(1.0))
+                    SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.0))
                 );
                 assert_eq!(
                     parser.parse_spring_dimen(true),
-                    SpringDimen::FilDimen(FilDimen::Fill(1.0))
+                    SpringDimen::FilDimen(FilDimen::new(FilKind::Fill, 1.0))
                 );
                 assert_eq!(
                     parser.parse_spring_dimen(true),
-                    SpringDimen::FilDimen(FilDimen::Filll(1.0))
+                    SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 1.0))
                 );
                 assert_eq!(
                     parser.parse_spring_dimen(true),
-                    SpringDimen::FilDimen(FilDimen::Fil(12.3))
+                    SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 12.3))
                 );
                 assert_eq!(
                     parser.parse_spring_dimen(true),
-                    SpringDimen::FilDimen(FilDimen::Fil(-1.0))
+                    SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, -1.0))
                 );
             },
         );
