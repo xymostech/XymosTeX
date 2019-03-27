@@ -2,6 +2,6 @@ use crate::glue::Glue;
 
 #[derive(Debug, PartialEq)]
 pub enum HorizontalListElem {
-    Char(char),
+    Char { chr: char, font: String },
     HSkip(Glue),
 }

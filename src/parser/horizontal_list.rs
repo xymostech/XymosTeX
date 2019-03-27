@@ -32,9 +32,19 @@ impl<'a> Parser<'a> {
             Some(Token::Char(ch, cat)) => {
                 self.lex_expanded_token();
                 match cat {
-                    Category::Letter => Some(HorizontalListElem::Char(ch)),
-                    Category::Other => Some(HorizontalListElem::Char(ch)),
-                    Category::Space => Some(HorizontalListElem::Char(' ')),
+                    Category::Letter => Some(HorizontalListElem::Char {
+                        chr: ch,
+                        font: self.state.get_current_font(),
+                    }),
+                    Category::Other => Some(HorizontalListElem::Char {
+                        chr: ch,
+                        font: self.state.get_current_font(),
+                    }),
+                    // TODO(xymostech): change this to an HSkip
+                    Category::Space => Some(HorizontalListElem::Char {
+                        chr: ch,
+                        font: self.state.get_current_font(),
+                    }),
                     Category::BeginGroup => {
                         *group_level += 1;
                         self.state.push_state();
@@ -54,7 +64,11 @@ impl<'a> Parser<'a> {
             }
             Some(ref tok) if self.state.is_token_equal_to_prim(tok, "par") => {
                 self.lex_expanded_token();
-                Some(HorizontalListElem::Char(' '))
+                // TODO(xymostech): change this to an HSkip
+                Some(HorizontalListElem::Char {
+                    chr: ' ',
+                    font: self.state.get_current_font(),
+                })
             }
             Some(ref tok)
                 if self.state.is_token_equal_to_prim(tok, "hskip") =>
@@ -95,7 +109,7 @@ impl<'a> Parser<'a> {
         self.parse_horizontal_list()
             .into_iter()
             .map(|elem| match elem {
-                HorizontalListElem::Char(ch) => ch,
+                HorizontalListElem::Char { chr: ch, font: _ } => ch,
                 HorizontalListElem::HSkip(_) => ' ',
             })
             .collect()
@@ -119,7 +133,16 @@ mod tests {
     fn it_parses_letters() {
         assert_parses_to(
             &["ab%"],
-            &[HorizontalListElem::Char('a'), HorizontalListElem::Char('b')],
+            &[
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'b',
+                    font: "cmr10".to_string(),
+                },
+            ],
         );
     }
 
@@ -128,9 +151,18 @@ mod tests {
         assert_parses_to(
             &["a{b}c%"],
             &[
-                HorizontalListElem::Char('a'),
-                HorizontalListElem::Char('b'),
-                HorizontalListElem::Char('c'),
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'b',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'c',
+                    font: "cmr10".to_string(),
+                },
             ],
         );
     }
@@ -140,9 +172,18 @@ mod tests {
         assert_parses_to(
             &["\\def\\a{b}%", "a\\a c%"],
             &[
-                HorizontalListElem::Char('a'),
-                HorizontalListElem::Char('b'),
-                HorizontalListElem::Char('c'),
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'b',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'c',
+                    font: "cmr10".to_string(),
+                },
             ],
         );
     }
@@ -151,7 +192,10 @@ mod tests {
     fn it_handles_let_assigned_tokens() {
         assert_parses_to(
             &["\\let\\a=a%", "\\a%"],
-            &[HorizontalListElem::Char('a')],
+            &[HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmr10".to_string(),
+            }],
         );
     }
 
@@ -159,7 +203,16 @@ mod tests {
     fn it_handles_grouping() {
         assert_parses_to(
             &["\\def\\a{x}%", "{\\def\\a{y}\\a}%", "\\a"],
-            &[HorizontalListElem::Char('y'), HorizontalListElem::Char('x')],
+            &[
+                HorizontalListElem::Char {
+                    chr: 'y',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'x',
+                    font: "cmr10".to_string(),
+                },
+            ],
         );
     }
 
@@ -178,7 +231,10 @@ mod tests {
         assert_parses_to(
             &["a\\hskip -3pt minus 2.3fil b%"],
             &[
-                HorizontalListElem::Char('a'),
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
                 HorizontalListElem::HSkip(Glue {
                     space: Dimen::from_unit(-3.0, Unit::Point),
                     stretch: SpringDimen::Dimen(Dimen::zero()),
@@ -187,7 +243,10 @@ mod tests {
                         2.3,
                     )),
                 }),
-                HorizontalListElem::Char('b'),
+                HorizontalListElem::Char {
+                    chr: 'b',
+                    font: "cmr10".to_string(),
+                },
             ],
         );
     }
