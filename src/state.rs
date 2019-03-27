@@ -46,6 +46,10 @@ pub struct TeXStateInner {
     // except that i32 can also hold the value -2147483648. We should keep
     // close track of that).
     count_registers: [i32; 256],
+
+    // We keep track of the name of the current font. Metrics and other
+    // information about the font are stored elsewhere.
+    current_font: String,
 }
 
 impl TeXStateInner {
@@ -88,6 +92,8 @@ impl TeXStateInner {
             category_map: initial_categories,
             token_definition_map: token_definitions,
             count_registers: [0; 256],
+            // TODO(xymostech): This should initially be "nullfont"
+            current_font: "cmr10".to_string(),
         }
     }
 
@@ -184,6 +190,10 @@ impl TeXStateInner {
 
         self.count_registers[register_index as usize] = value;
     }
+
+    fn get_current_font(&self) -> String {
+        self.current_font.clone()
+    }
 }
 
 // TeX keeps a stack of different states around, and pushes a copy of the
@@ -253,6 +263,7 @@ impl TeXStateStack {
     generate_inner_func!(fn is_token_equal_to_prim(token: &Token, cs: &str) -> bool);
     generate_inner_func!(fn get_count(register_index: u8) -> i32);
     generate_inner_global_func!(fn set_count(global: bool, register_index: u8, value: i32));
+    generate_inner_func!(fn get_current_font() -> String);
 }
 
 // A lot of the state in TeX is treated as global state, where we need to be
@@ -308,6 +319,7 @@ impl TeXState {
     generate_stack_func!(fn is_token_equal_to_prim(token: &Token, cs: &str) -> bool);
     generate_stack_func!(fn get_count(register_index: u8) -> i32);
     generate_stack_func!(fn set_count(global: bool, register_index: u8, value: i32));
+    generate_stack_func!(fn get_current_font() -> String);
 }
 
 #[cfg(test)]
