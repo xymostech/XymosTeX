@@ -1,8 +1,17 @@
 use crate::category::Category;
+use crate::dimension::{Dimen, SpringDimen, Unit};
 use crate::glue::Glue;
 use crate::list::HorizontalListElem;
 use crate::parser::Parser;
 use crate::token::Token;
+
+fn get_space_glue() -> Glue {
+    Glue {
+        space: Dimen::from_unit(3.33333, Unit::Point),
+        stretch: SpringDimen::Dimen(Dimen::from_unit(1.66666, Unit::Point)),
+        shrink: SpringDimen::Dimen(Dimen::from_unit(1.11111, Unit::Point)),
+    }
+}
 
 impl<'a> Parser<'a> {
     fn replace_renamed_token(
@@ -40,11 +49,9 @@ impl<'a> Parser<'a> {
                         chr: ch,
                         font: self.state.get_current_font(),
                     }),
-                    // TODO(xymostech): change this to an HSkip
-                    Category::Space => Some(HorizontalListElem::Char {
-                        chr: ch,
-                        font: self.state.get_current_font(),
-                    }),
+                    Category::Space => {
+                        Some(HorizontalListElem::HSkip(get_space_glue()))
+                    }
                     Category::BeginGroup => {
                         *group_level += 1;
                         self.state.push_state();
@@ -64,11 +71,7 @@ impl<'a> Parser<'a> {
             }
             Some(ref tok) if self.state.is_token_equal_to_prim(tok, "par") => {
                 self.lex_expanded_token();
-                // TODO(xymostech): change this to an HSkip
-                Some(HorizontalListElem::Char {
-                    chr: ' ',
-                    font: self.state.get_current_font(),
-                })
+                self.parse_horizontal_list_elem(group_level)
             }
             Some(ref tok)
                 if self.state.is_token_equal_to_prim(tok, "hskip") =>
@@ -210,6 +213,41 @@ mod tests {
                 },
                 HorizontalListElem::Char {
                     chr: 'x',
+                    font: "cmr10".to_string(),
+                },
+            ],
+        );
+    }
+
+    #[test]
+    fn it_parses_space_to_glue() {
+        assert_parses_to(
+            &["a %"],
+            &[
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::HSkip(get_space_glue()),
+            ],
+        );
+    }
+
+    #[test]
+    fn it_ignores_par() {
+        // NOTE(xymostech): This is only correct behavior in restricted
+        // horizontal mode. There isn't currently a distinction between that
+        // and normal horizontal mode here yet, so we'll just choose the easy
+        // behavior.
+        assert_parses_to(
+            &["a%", "", "b%"],
+            &[
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'b',
                     font: "cmr10".to_string(),
                 },
             ],
