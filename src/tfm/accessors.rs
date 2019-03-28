@@ -14,22 +14,22 @@ impl TFMFile {
         &self.char_infos[char_info_index]
     }
 
-    fn get_width(&self, chr: char) -> Dimen {
+    pub fn get_width(&self, chr: char) -> Dimen {
         let char_info = self.get_char_info(chr);
 
         Dimen::from_unit(self.widths[char_info.width_index], Unit::Point)
     }
 
-    fn get_height(&self, chr: char) -> Dimen {
+    pub fn get_height(&self, chr: char) -> Dimen {
         let char_info = self.get_char_info(chr);
 
-        Dimen::from_unit(self.heights[char_info.width_index], Unit::Point)
+        Dimen::from_unit(self.heights[char_info.height_index], Unit::Point)
     }
 
-    fn get_depth(&self, chr: char) -> Dimen {
+    pub fn get_depth(&self, chr: char) -> Dimen {
         let char_info = self.get_char_info(chr);
 
-        Dimen::from_unit(self.depths[char_info.width_index], Unit::Point)
+        Dimen::from_unit(self.depths[char_info.depth_index], Unit::Point)
     }
 }
 
