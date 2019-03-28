@@ -1,3 +1,4 @@
+use std::cmp::{Ordering, PartialOrd};
 use std::ops::{Add, Div, Mul, Sub};
 
 static DIMEN_MAX: i32 = (1 << 30) - 1;
@@ -64,6 +65,12 @@ impl Dimen {
     }
 }
 
+impl PartialOrd for Dimen {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.0.cmp(&other.0))
+    }
+}
+
 impl Add for Dimen {
     type Output = Dimen;
     fn add(self, other: Dimen) -> Dimen {
@@ -94,19 +101,47 @@ impl Div<i32> for Dimen {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum FilKind {
     Fil,
     Fill,
     Filll,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FilDimen(FilKind, i32);
 
 impl FilDimen {
     pub fn new(kind: FilKind, value: f64) -> Self {
         FilDimen(kind, (value * 65536.0) as i32)
+    }
+}
+
+impl Add for FilDimen {
+    type Output = FilDimen;
+
+    fn add(self, other: FilDimen) -> FilDimen {
+        match self {
+            // Fillls are larger than any amount of fill or fil
+            FilDimen(FilKind::Filll, a) => match other {
+                FilDimen(FilKind::Filll, b) => FilDimen(FilKind::Filll, a + b),
+                _ => FilDimen(FilKind::Filll, a),
+            },
+
+            // Fills are larger than fils but smaller than any filll
+            FilDimen(FilKind::Fill, a) => match other {
+                FilDimen(FilKind::Filll, _) => other,
+                FilDimen(FilKind::Fill, b) => FilDimen(FilKind::Fill, a + b),
+                _ => FilDimen(FilKind::Fill, a),
+            },
+
+            // Fills are smaller than any filll or fill
+            FilDimen(FilKind::Fil, a) => match other {
+                FilDimen(FilKind::Filll, _) => other,
+                FilDimen(FilKind::Fill, _) => other,
+                FilDimen(FilKind::Fil, b) => FilDimen(FilKind::Fil, a + b),
+            },
+        }
     }
 }
 
@@ -118,10 +153,32 @@ impl Mul<i32> for FilDimen {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SpringDimen {
     Dimen(Dimen),
     FilDimen(FilDimen),
+}
+
+impl Add for SpringDimen {
+    type Output = SpringDimen;
+
+    fn add(self, other: SpringDimen) -> SpringDimen {
+        match self {
+            SpringDimen::Dimen(a) => match other {
+                SpringDimen::Dimen(b) => SpringDimen::Dimen(a + b),
+                // Since a FilDimen represents an infinite dimension, when
+                // adding them we don't need to keep track of the non-infinite
+                // part of the dimension. So, we just return the infinite part
+                // here.
+                SpringDimen::FilDimen(_) => other,
+            },
+            SpringDimen::FilDimen(a) => match other {
+                // Same as above.
+                SpringDimen::Dimen(_) => SpringDimen::FilDimen(a),
+                SpringDimen::FilDimen(b) => SpringDimen::FilDimen(a + b),
+            },
+        }
+    }
 }
 
 impl Mul<i32> for SpringDimen {
@@ -212,5 +269,77 @@ mod tests {
     #[test]
     fn it_supports_negative_dimens() {
         assert_eq!(Dimen::from_unit(-123.0, Unit::Point), Dimen(-8060928));
+    }
+
+    #[test]
+    fn it_adds_spring_dimens() {
+        // dimen + dimen = dimen
+        assert_eq!(
+            SpringDimen::Dimen(Dimen(1234)) + SpringDimen::Dimen(Dimen(2345)),
+            SpringDimen::Dimen(Dimen(3579))
+        );
+
+        // dimen + fil = fil
+        assert_eq!(
+            SpringDimen::Dimen(Dimen(1234))
+                + SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2)),
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2))
+        );
+
+        // dimen + fil = fil
+        assert_eq!(
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2))
+                + SpringDimen::Dimen(Dimen(1234)),
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2))
+        );
+
+        // fil + fil = fil
+        assert_eq!(
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2))
+                + SpringDimen::Dimen(Dimen(1234)),
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2))
+        );
+
+        // fil + fill = fill
+        assert_eq!(
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2))
+                + SpringDimen::FilDimen(FilDimen::new(FilKind::Fill, 2.3)),
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fill, 2.3))
+        );
+
+        // fill + fil = fill
+        assert_eq!(
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fill, 2.3))
+                + SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2)),
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fill, 2.3))
+        );
+
+        // filll + fill = filll
+        assert_eq!(
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 3.4))
+                + SpringDimen::FilDimen(FilDimen::new(FilKind::Fill, 2.3)),
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 3.4))
+        );
+
+        // fill + filll = filll
+        assert_eq!(
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fill, 2.3))
+                + SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 3.4)),
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 3.4))
+        );
+
+        // fil + filll = filll
+        assert_eq!(
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2))
+                + SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 3.4)),
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 3.4))
+        );
+
+        // filll + fil = filll
+        assert_eq!(
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 3.4))
+                + SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2)),
+            SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 3.4))
+        );
     }
 }
