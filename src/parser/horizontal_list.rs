@@ -91,7 +91,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_horizontal_list(&mut self) -> Vec<HorizontalListElem> {
+    pub fn parse_horizontal_list(&mut self) -> Vec<HorizontalListElem> {
         let mut result = Vec::new();
 
         let mut group_level = 0;

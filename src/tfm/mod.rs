@@ -47,7 +47,7 @@ struct ExtRecipe {
 }
 
 #[derive(Debug, PartialEq)]
-struct TFMFile {
+pub struct TFMFile {
     first_char: usize,
     last_char: usize,
 

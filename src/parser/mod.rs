@@ -32,6 +32,7 @@ impl<'a> Parser<'a> {
 }
 
 mod assignment;
+mod boxes;
 mod conditional;
 mod dimen;
 mod expand;
