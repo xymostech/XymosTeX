@@ -1,9 +1,15 @@
+use std::fs;
 use std::io;
 
 use crate::tfm::file_reader::TeXFileReader;
 use crate::tfm::*;
 
 impl TFMFile {
+    pub fn from_path(path: &str) -> io::Result<TFMFile> {
+        let file = fs::File::open(path)?;
+        TFMFile::new(file)
+    }
+
     pub fn new<T: io::Read>(reader: T) -> io::Result<TFMFile> {
         let mut file_reader = TeXFileReader::new(reader);
 

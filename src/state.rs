@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use crate::category::Category;
 use crate::makro::Macro;
+use crate::tfm::TFMFile;
 use crate::token::Token;
 
 // A list of all primitive control sequences, used so that we can \let other
@@ -274,6 +275,11 @@ impl TeXStateStack {
 // on TeXState, we can't ever end up with the RefCell being borrwed twice.
 pub struct TeXState {
     state_stack: RefCell<TeXStateStack>,
+
+    // Stores metrics information about a given font file. We don't store this
+    // in the `TeXStateInner` because loading the font metrics is global and
+    // isn't affected by grouping.
+    font_metrics: HashMap<String, TFMFile>,
 }
 
 // Since we're mostly want to just be calling the same-named functions from
@@ -292,8 +298,21 @@ macro_rules! generate_stack_func {
 
 impl TeXState {
     pub fn new() -> TeXState {
+        // TODO(xymostech): Use kpathsea to figure out where the cmr10 metrics
+        // live instead of just hardcoding it for my system!!!
+        let cmr_font_path =
+            "/usr/local/texlive/2018/texmf-dist/fonts/tfm/public/cm/cmr10.tfm";
+        let cmr_metrics = match TFMFile::from_path(cmr_font_path) {
+            Ok(metrics) => metrics,
+            Err(err) => panic!("Error reading cmr10 font metrics: {:?}", err),
+        };
+
+        let mut font_metrics = HashMap::new();
+        font_metrics.insert("cmr10".to_string(), cmr_metrics);
+
         TeXState {
             state_stack: RefCell::new(TeXStateStack::new()),
+            font_metrics: font_metrics,
         }
     }
 
@@ -320,6 +339,10 @@ impl TeXState {
     generate_stack_func!(fn get_count(register_index: u8) -> i32);
     generate_stack_func!(fn set_count(global: bool, register_index: u8, value: i32));
     generate_stack_func!(fn get_current_font() -> String);
+
+    pub fn get_metrics_for_font(&self, font: &str) -> Option<&TFMFile> {
+        self.font_metrics.get(font)
+    }
 }
 
 #[cfg(test)]
