@@ -37,7 +37,7 @@ impl TFMFile {
 mod tests {
     use super::*;
 
-    use crate::tfm::test_data::BASIC_TFM;
+    use crate::tfm::test_data::{BASIC_TFM, CMR10_TFM};
 
     #[test]
     fn get_basic_dimensions() {
@@ -55,5 +55,19 @@ mod tests {
             font_metrics.get_depth('a'),
             Dimen::from_unit(0.5, Unit::Point)
         );
+    }
+
+    #[test]
+    fn get_cmr10_dimensions() {
+        let font_metrics = TFMFile::new(CMR10_TFM).unwrap();
+
+        assert!(font_metrics.get_height('a') > Dimen::zero());
+        assert!(font_metrics.get_height('t') > font_metrics.get_height('a'));
+        assert!(font_metrics.get_depth('g') > Dimen::zero());
+        assert!(font_metrics.get_width('w') > font_metrics.get_width('i'));
+
+        for ch in (0 as u8)..128 {
+            assert!(font_metrics.get_width(ch as char) > Dimen::zero());
+        }
     }
 }

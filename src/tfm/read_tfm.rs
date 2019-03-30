@@ -202,7 +202,7 @@ impl TFMFile {
 mod tests {
     use super::*;
 
-    use crate::tfm::test_data::BASIC_TFM;
+    use crate::tfm::test_data::{BASIC_TFM, CMR10_TFM};
 
     #[test]
     fn it_reads_basics() {
@@ -241,5 +241,10 @@ mod tests {
                 font_parameters: vec![0.0, 4.0, 1.0, 2.0, 5.5, 4.0, 1.0,],
             }
         );
+    }
+
+    #[test]
+    fn it_successfully_reads_cmr10() {
+        TFMFile::new(CMR10_TFM).unwrap();
     }
 }

@@ -65,3 +65,6 @@ pub static BASIC_TFM: [u8; 160] = [
     0b0000_0000, 0b0100_0000, 0b0000_0000, 0b0000_0000,
     0b0000_0000, 0b0001_0000, 0b0000_0000, 0b0000_0000,
 ];
+
+#[cfg(test)]
+pub static CMR10_TFM: &[u8] = include_bytes!("test_files/cmr10.tfm");
