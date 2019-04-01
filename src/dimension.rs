@@ -101,6 +101,22 @@ impl Div<i32> for Dimen {
     }
 }
 
+impl Div<&Dimen> for &Dimen {
+    type Output = f64;
+
+    fn div(self, other: &Dimen) -> f64 {
+        (self.0 as f64) / (other.0 as f64)
+    }
+}
+
+impl Div<&FilDimen> for &Dimen {
+    type Output = f64;
+
+    fn div(self, other: &FilDimen) -> f64 {
+        (self.0 as f64) / (other.1 as f64)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum FilKind {
     Fil,
@@ -109,7 +125,7 @@ pub enum FilKind {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct FilDimen(FilKind, i32);
+pub struct FilDimen(pub FilKind, i32);
 
 impl FilDimen {
     pub fn new(kind: FilKind, value: f64) -> Self {

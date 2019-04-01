@@ -1,4 +1,4 @@
-use crate::dimension::{Dimen, SpringDimen};
+use crate::dimension::Dimen;
 use crate::glue::Glue;
 use crate::state::TeXState;
 
