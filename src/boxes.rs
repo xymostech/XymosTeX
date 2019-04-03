@@ -3,7 +3,7 @@ use crate::list::HorizontalListElem;
 
 #[derive(Debug, PartialEq)]
 pub enum GlueSetRatioKind {
-    Dimen,
+    Finite,
     Fil,
     Fill,
     Filll,

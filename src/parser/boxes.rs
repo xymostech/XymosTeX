@@ -17,7 +17,7 @@ fn set_glue(
 ) -> GlueSetRatio {
     match stretch_available {
         SpringDimen::Dimen(stretch_dimen) => GlueSetRatio::from(
-            GlueSetRatioKind::Dimen,
+            GlueSetRatioKind::Finite,
             // TODO(xymostech): Ensure this isn't <-1.0
             stretch_needed / stretch_dimen,
         ),
@@ -168,7 +168,7 @@ mod tests {
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Dimen, 5.0))
+                Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 5.0))
             );
         });
     }
@@ -244,7 +244,7 @@ mod tests {
                 assert_eq!(hbox.width, fixed_width);
                 assert_eq!(
                     hbox.glue_set_ratio,
-                    Some(GlueSetRatio::from(GlueSetRatioKind::Dimen, 2.0))
+                    Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 2.0))
                 );
             },
         );
@@ -263,7 +263,7 @@ mod tests {
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Dimen, -0.5))
+                Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5))
             );
         });
     }
@@ -301,7 +301,7 @@ mod tests {
             assert_eq!(hbox.width, expected_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Dimen, 2.0))
+                Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 2.0))
             );
         });
     }
@@ -341,7 +341,7 @@ mod tests {
             assert_eq!(hbox.width, expected_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Dimen, -0.5))
+                Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5))
             );
         });
     }
