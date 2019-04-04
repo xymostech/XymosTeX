@@ -11,7 +11,8 @@ use crate::token::Token;
 // control sequences equal to them.
 const ALL_PRIMITIVES: &[&str] = &[
     "iftrue", "iffalse", "fi", "else", "def", "let", "global", "count",
-    "ifnum", "advance", "multiply", "divide", "number", "par", "hskip",
+    "ifnum", "advance", "multiply", "divide", "number", "par", "hskip", "hbox",
+    "relax",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {

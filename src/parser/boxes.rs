@@ -1,7 +1,9 @@
-use crate::boxes::{GlueSetRatio, GlueSetRatioKind, HorizontalBox};
+use crate::boxes::{Box, GlueSetRatio, GlueSetRatioKind, HorizontalBox};
+use crate::category::Category;
 use crate::dimension::{Dimen, SpringDimen};
 use crate::glue::Glue;
 use crate::parser::Parser;
+use crate::token::Token;
 
 enum BoxLayout {
     NaturalWidth,
@@ -95,6 +97,54 @@ impl<'a> Parser<'a> {
 
             list: list,
             glue_set_ratio: set_ratio,
+        }
+    }
+
+    fn parse_box_specification(&mut self) -> BoxLayout {
+        if self.parse_optional_keyword_expanded("to") {
+            let dimen = self.parse_dimen();
+            self.parse_filler_expanded();
+            BoxLayout::FixedWidth(dimen)
+        } else if self.parse_optional_keyword_expanded("spread") {
+            let dimen = self.parse_dimen();
+            self.parse_filler_expanded();
+            BoxLayout::Spread(dimen)
+        } else {
+            self.parse_filler_expanded();
+            BoxLayout::NaturalWidth
+        }
+    }
+
+    fn is_box_head(&mut self) -> bool {
+        match self.peek_expanded_token() {
+            Some(token) => self.state.is_token_equal_to_prim(&token, "hbox"),
+            _ => false,
+        }
+    }
+
+    fn parse_box(&mut self) -> Box {
+        let head = self.lex_expanded_token().unwrap();
+
+        if self.state.is_token_equal_to_prim(&head, "hbox") {
+            let layout = self.parse_box_specification();
+
+            // We expect a { after the box specification
+            match self.lex_expanded_token() {
+                Some(Token::Char(_, Category::BeginGroup)) => (),
+                _ => panic!("Expected { when parsing box"),
+            }
+
+            let hbox = self.parse_horizontal_box(&layout);
+
+            // And there should always be a } after the horizontal list
+            match self.lex_expanded_token() {
+                Some(Token::Char(_, Category::EndGroup)) => (),
+                _ => panic!("Expected } when parsing box"),
+            }
+
+            Box::HorizontalBox(hbox)
+        } else {
+            panic!("unimplemented");
         }
     }
 }
@@ -343,6 +393,53 @@ mod tests {
                 hbox.glue_set_ratio,
                 Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5))
             );
+        });
+    }
+
+    #[test]
+    fn it_parses_horizontal_boxes_with_natural_width() {
+        with_parser(&["\\hbox{abc}%"], |parser| {
+            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let expected_width = metrics.get_width('a')
+                + metrics.get_width('b')
+                + metrics.get_width('c');
+
+            assert!(parser.is_box_head());
+            let hbox = parser.parse_box();
+            let Box::HorizontalBox(hbox) = hbox;
+
+            assert_eq!(hbox.list.len(), 3);
+            assert_eq!(hbox.glue_set_ratio, None);
+            assert_eq!(hbox.width, expected_width);
+        });
+    }
+
+    #[test]
+    fn it_parses_horizontal_boxes_with_fixed_width() {
+        with_parser(&["\\hbox to20pt{a\\hskip 0pt plus1filc}%"], |parser| {
+            assert!(parser.is_box_head());
+            let hbox = parser.parse_box();
+            let Box::HorizontalBox(hbox) = hbox;
+
+            assert_eq!(hbox.list.len(), 3);
+            assert_eq!(hbox.width, Dimen::from_unit(20.0, Unit::Point));
+        });
+    }
+
+    #[test]
+    fn it_parses_horizontal_boxes_with_spread_width() {
+        with_parser(&["\\hbox spread5pt{a\\hskip 0pt plus1filc}%"], |parser| {
+            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let expected_width = metrics.get_width('a')
+                + metrics.get_width('c')
+                + Dimen::from_unit(5.0, Unit::Point);
+
+            assert!(parser.is_box_head());
+            let hbox = parser.parse_box();
+            let Box::HorizontalBox(hbox) = hbox;
+
+            assert_eq!(hbox.list.len(), 3);
+            assert_eq!(hbox.width, expected_width);
         });
     }
 }

@@ -38,37 +38,43 @@ impl<'a> Parser<'a> {
         let expanded_renamed_token = self.replace_renamed_token(expanded_token);
         match expanded_renamed_token {
             None => None,
-            Some(Token::Char(ch, cat)) => {
-                self.lex_expanded_token();
-                match cat {
-                    Category::Letter => Some(HorizontalListElem::Char {
+            Some(Token::Char(ch, cat)) => match cat {
+                Category::Letter => {
+                    self.lex_expanded_token();
+                    Some(HorizontalListElem::Char {
                         chr: ch,
                         font: self.state.get_current_font(),
-                    }),
-                    Category::Other => Some(HorizontalListElem::Char {
+                    })
+                }
+                Category::Other => {
+                    self.lex_expanded_token();
+                    Some(HorizontalListElem::Char {
                         chr: ch,
                         font: self.state.get_current_font(),
-                    }),
-                    Category::Space => {
-                        Some(HorizontalListElem::HSkip(get_space_glue()))
-                    }
-                    Category::BeginGroup => {
-                        *group_level += 1;
-                        self.state.push_state();
+                    })
+                }
+                Category::Space => {
+                    self.lex_expanded_token();
+                    Some(HorizontalListElem::HSkip(get_space_glue()))
+                }
+                Category::BeginGroup => {
+                    self.lex_expanded_token();
+                    *group_level += 1;
+                    self.state.push_state();
+                    self.parse_horizontal_list_elem(group_level)
+                }
+                Category::EndGroup => {
+                    if *group_level == 0 {
+                        None
+                    } else {
+                        self.lex_expanded_token();
+                        *group_level -= 1;
+                        self.state.pop_state();
                         self.parse_horizontal_list_elem(group_level)
                     }
-                    Category::EndGroup => {
-                        if *group_level == 0 {
-                            None
-                        } else {
-                            *group_level -= 1;
-                            self.state.pop_state();
-                            self.parse_horizontal_list_elem(group_level)
-                        }
-                    }
-                    _ => panic!("unimplemented"),
                 }
-            }
+                _ => panic!("unimplemented"),
+            },
             Some(ref tok) if self.state.is_token_equal_to_prim(tok, "par") => {
                 self.lex_expanded_token();
                 self.parse_horizontal_list_elem(group_level)
@@ -260,6 +266,18 @@ mod tests {
             assert_eq!(
                 parser.parse_horizontal_list_to_chars(),
                 vec!['b', 'l', ' ', 'a', 'h']
+            );
+        });
+    }
+
+    #[test]
+    fn it_stops_parsing_at_mismatched_brace() {
+        with_parser(&["a{b{c}d{e}f}g}%"], |parser| {
+            let hlist = parser.parse_horizontal_list();
+            assert_eq!(hlist.len(), 7);
+            assert_eq!(
+                parser.lex_expanded_token(),
+                Some(Token::Char('}', Category::EndGroup))
             );
         });
     }

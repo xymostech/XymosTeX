@@ -51,3 +51,7 @@ pub struct HorizontalBox {
     // For each glue, this says how much the glue should stretch/shrink by.
     pub glue_set_ratio: Option<GlueSetRatio>,
 }
+
+pub enum Box {
+    HorizontalBox(HorizontalBox),
+}

@@ -135,6 +135,24 @@ impl<'a> Parser<'a> {
 
         true
     }
+
+    /// Parses a <filler>, which is any amount of spaces and \relax
+    pub fn parse_filler_expanded(&mut self) {
+        self.parse_optional_spaces_expanded();
+        loop {
+            match self.peek_expanded_token() {
+                None => break,
+                Some(token) => {
+                    if self.state.is_token_equal_to_prim(&token, "relax") {
+                        self.lex_expanded_token();
+                    } else {
+                        break;
+                    }
+                }
+            }
+            self.parse_optional_spaces_expanded();
+        }
+    }
 }
 
 #[cfg(test)]
