@@ -2,7 +2,7 @@ use crate::dimension::Dimen;
 use crate::glue::Glue;
 use crate::state::TeXState;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum HorizontalListElem {
     Char { chr: char, font: String },
     HSkip(Glue),

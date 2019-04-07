@@ -1,4 +1,4 @@
-use crate::boxes::{Box, GlueSetRatio, GlueSetRatioKind, HorizontalBox};
+use crate::boxes::{GlueSetRatio, GlueSetRatioKind, HorizontalBox, TeXBox};
 use crate::category::Category;
 use crate::dimension::{Dimen, SpringDimen};
 use crate::glue::Glue;
@@ -122,7 +122,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_box(&mut self) -> Box {
+    fn parse_box(&mut self) -> TeXBox {
         let head = self.lex_expanded_token().unwrap();
 
         if self.state.is_token_equal_to_prim(&head, "hbox") {
@@ -142,7 +142,7 @@ impl<'a> Parser<'a> {
                 _ => panic!("Expected } when parsing box"),
             }
 
-            Box::HorizontalBox(hbox)
+            TeXBox::HorizontalBox(hbox)
         } else {
             panic!("unimplemented");
         }
@@ -406,7 +406,7 @@ mod tests {
 
             assert!(parser.is_box_head());
             let hbox = parser.parse_box();
-            let Box::HorizontalBox(hbox) = hbox;
+            let TeXBox::HorizontalBox(hbox) = hbox;
 
             assert_eq!(hbox.list.len(), 3);
             assert_eq!(hbox.glue_set_ratio, None);
@@ -419,7 +419,7 @@ mod tests {
         with_parser(&["\\hbox to20pt{a\\hskip 0pt plus1filc}%"], |parser| {
             assert!(parser.is_box_head());
             let hbox = parser.parse_box();
-            let Box::HorizontalBox(hbox) = hbox;
+            let TeXBox::HorizontalBox(hbox) = hbox;
 
             assert_eq!(hbox.list.len(), 3);
             assert_eq!(hbox.width, Dimen::from_unit(20.0, Unit::Point));
@@ -436,7 +436,7 @@ mod tests {
 
             assert!(parser.is_box_head());
             let hbox = parser.parse_box();
-            let Box::HorizontalBox(hbox) = hbox;
+            let TeXBox::HorizontalBox(hbox) = hbox;
 
             assert_eq!(hbox.list.len(), 3);
             assert_eq!(hbox.width, expected_width);

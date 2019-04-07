@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::boxes::TeXBox;
 use crate::category::Category;
 use crate::makro::Macro;
 use crate::tfm::TFMFile;
@@ -49,6 +50,19 @@ pub struct TeXStateInner {
     // close track of that).
     count_registers: [i32; 256],
 
+    // TeX's 256 box registers. The values are designed such that:
+    //  * When entering a new group, we don't make a copy of a box by making
+    //    the values Rc.
+    //  * When we use a box (via \box<n>), we can pull the box out of the state
+    //    and it will be inaccessible from the other places that store a
+    //    reference to this box (via RefCell).
+    // We don't store these as an array because it's likely that all of the
+    // boxes won't be used all the time, and we don't want to allocate 256 of
+    // these if they're not going to be used.
+    // TODO(xymostech): Check the assumption that most of these aren't used
+    // most of the time.
+    box_registers: HashMap<u8, Rc<RefCell<Option<TeXBox>>>>,
+
     // We keep track of the name of the current font. Metrics and other
     // information about the font are stored elsewhere.
     current_font: String,
@@ -94,6 +108,7 @@ impl TeXStateInner {
             category_map: initial_categories,
             token_definition_map: token_definitions,
             count_registers: [0; 256],
+            box_registers: HashMap::new(),
             // TODO(xymostech): This should initially be "nullfont"
             current_font: "cmr10".to_string(),
         }
@@ -196,6 +211,22 @@ impl TeXStateInner {
     fn get_current_font(&self) -> String {
         self.current_font.clone()
     }
+
+    fn get_box(&self, box_index: u8) -> Option<TeXBox> {
+        self.box_registers
+            .get(&box_index)
+            .and_then(|box_refcell| box_refcell.replace(None))
+    }
+
+    fn get_box_copy(&self, box_index: u8) -> Option<TeXBox> {
+        self.box_registers
+            .get(&box_index)
+            .and_then(|box_refcell| (*box_refcell.borrow()).clone())
+    }
+
+    fn set_box(&mut self, box_index: u8, tex_box: Rc<RefCell<Option<TeXBox>>>) {
+        self.box_registers.insert(box_index, tex_box);
+    }
 }
 
 // TeX keeps a stack of different states around, and pushes a copy of the
@@ -266,6 +297,23 @@ impl TeXStateStack {
     generate_inner_func!(fn get_count(register_index: u8) -> i32);
     generate_inner_global_func!(fn set_count(global: bool, register_index: u8, value: i32));
     generate_inner_func!(fn get_current_font() -> String);
+
+    generate_inner_func!(fn get_box(box_index: u8) -> Option<TeXBox>);
+    generate_inner_func!(fn get_box_copy(box_index: u8) -> Option<TeXBox>);
+    // Because globally setting boxes means that we should share references
+    // between the different stack levels, we can't handle generating this
+    // function automatically with `generate_inner_global_func!()`.
+    fn set_box(&mut self, global: bool, box_index: u8, tex_box: TeXBox) {
+        let wrapped_box = Rc::new(RefCell::new(Some(tex_box)));
+        if global {
+            for state in &mut self.state_stack {
+                state.set_box(box_index, wrapped_box.clone());
+            }
+        } else {
+            let len = self.state_stack.len();
+            self.state_stack[len - 1].set_box(box_index, wrapped_box);
+        }
+    }
 }
 
 // A lot of the state in TeX is treated as global state, where we need to be
@@ -341,6 +389,10 @@ impl TeXState {
     generate_stack_func!(fn set_count(global: bool, register_index: u8, value: i32));
     generate_stack_func!(fn get_current_font() -> String);
 
+    generate_stack_func!(fn get_box(box_index: u8) -> Option<TeXBox>);
+    generate_stack_func!(fn get_box_copy(box_index: u8) -> Option<TeXBox>);
+    generate_stack_func!(fn set_box(global: bool, box_index: u8, tex_box: TeXBox));
+
     pub fn get_metrics_for_font(&self, font: &str) -> Option<&TFMFile> {
         self.font_metrics.get(font)
     }
@@ -349,6 +401,9 @@ impl TeXState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::boxes::HorizontalBox;
+    use crate::dimension::{Dimen, Unit};
 
     #[test]
     fn it_correctly_sets_categories() {
@@ -426,5 +481,127 @@ mod tests {
             &Token::ControlSequence("boo".to_string()),
             "let"
         ));
+    }
+
+    #[test]
+    fn it_retrieves_boxes_once() {
+        let state = TeXState::new();
+
+        let expected_box = TeXBox::HorizontalBox(HorizontalBox {
+            height: Dimen::from_unit(0.0, Unit::Point),
+            depth: Dimen::from_unit(0.0, Unit::Point),
+            width: Dimen::from_unit(0.0, Unit::Point),
+            list: Vec::new(),
+            glue_set_ratio: None,
+        });
+
+        // \setbox0=\hbox{}
+        // \box0
+        // \box0
+        state.set_box(false, 0, expected_box.clone());
+        assert_eq!(Some(expected_box), state.get_box(0));
+        assert_eq!(None, state.get_box(0));
+    }
+
+    #[test]
+    fn it_retrieves_box_copies() {
+        let state = TeXState::new();
+
+        let test_box = TeXBox::HorizontalBox(HorizontalBox {
+            height: Dimen::from_unit(0.0, Unit::Point),
+            depth: Dimen::from_unit(0.0, Unit::Point),
+            width: Dimen::from_unit(0.0, Unit::Point),
+            list: Vec::new(),
+            glue_set_ratio: None,
+        });
+
+        // \setbox0=\hbox{}
+        // \copy0
+        // \box0
+        state.set_box(false, 0, test_box);
+        assert!(state.get_box_copy(0).is_some());
+        assert!(state.get_box(0).is_some());
+    }
+
+    #[test]
+    fn it_reuses_references_among_stack_frames() {
+        let state = TeXState::new();
+
+        let test_box = TeXBox::HorizontalBox(HorizontalBox {
+            height: Dimen::from_unit(0.0, Unit::Point),
+            depth: Dimen::from_unit(0.0, Unit::Point),
+            width: Dimen::from_unit(0.0, Unit::Point),
+            list: Vec::new(),
+            glue_set_ratio: None,
+        });
+
+        // \setbox0=\hbox{}
+        // {\box0}
+        // \box0
+        state.set_box(false, 0, test_box.clone());
+        state.push_state();
+        assert_eq!(Some(test_box), state.get_box(0));
+        state.pop_state();
+        assert_eq!(None, state.get_box(0));
+    }
+
+    #[test]
+    fn it_makes_new_references_in_new_stack_frames() {
+        let state = TeXState::new();
+
+        let outer_box = TeXBox::HorizontalBox(HorizontalBox {
+            height: Dimen::from_unit(0.0, Unit::Point),
+            depth: Dimen::from_unit(0.0, Unit::Point),
+            width: Dimen::from_unit(0.0, Unit::Point),
+            list: Vec::new(),
+            glue_set_ratio: None,
+        });
+
+        let inner_box = TeXBox::HorizontalBox(HorizontalBox {
+            height: Dimen::from_unit(0.0, Unit::Point),
+            depth: Dimen::from_unit(0.0, Unit::Point),
+            width: Dimen::from_unit(1.0, Unit::Point),
+            list: Vec::new(),
+            glue_set_ratio: None,
+        });
+
+        // \setbox0=\hbox{}
+        // {\setbox0=\hbox{}
+        // {\box0}
+        // \box0}
+        // \box0
+        state.set_box(false, 0, outer_box.clone());
+        state.push_state();
+        state.set_box(false, 0, inner_box.clone());
+        state.push_state();
+        assert_eq!(Some(inner_box), state.get_box(0));
+        state.pop_state();
+        assert_eq!(None, state.get_box(0));
+        state.pop_state();
+        assert_eq!(Some(outer_box), state.get_box(0));
+    }
+
+    #[test]
+    fn it_uses_the_same_reference_for_global_box_assignments() {
+        let state = TeXState::new();
+
+        let test_box = TeXBox::HorizontalBox(HorizontalBox {
+            height: Dimen::from_unit(0.0, Unit::Point),
+            depth: Dimen::from_unit(0.0, Unit::Point),
+            width: Dimen::from_unit(0.0, Unit::Point),
+            list: Vec::new(),
+            glue_set_ratio: None,
+        });
+
+        // {{\global\setbox0=\hbox{}}
+        // \box0}
+        // \box0
+        state.push_state();
+        state.push_state();
+        state.set_box(true, 0, test_box.clone());
+        state.pop_state();
+        assert_eq!(Some(test_box), state.get_box(0));
+        state.pop_state();
+        assert_eq!(None, state.get_box(0));
     }
 }

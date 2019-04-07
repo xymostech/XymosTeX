@@ -1,7 +1,7 @@
 use crate::dimension::{Dimen, FilKind};
 use crate::list::HorizontalListElem;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum GlueSetRatioKind {
     Finite,
     Fil,
@@ -21,7 +21,7 @@ impl GlueSetRatioKind {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct GlueSetRatio {
     // What kinds of glue should be stretching. For instance, if this is
     // GlueSetRatioKind::Fil then only glues with fil stretch/shrink components
@@ -42,6 +42,7 @@ impl GlueSetRatio {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct HorizontalBox {
     pub height: Dimen,
     pub depth: Dimen,
@@ -52,6 +53,7 @@ pub struct HorizontalBox {
     pub glue_set_ratio: Option<GlueSetRatio>,
 }
 
-pub enum Box {
+#[derive(Clone, Debug, PartialEq)]
+pub enum TeXBox {
     HorizontalBox(HorizontalBox),
 }
