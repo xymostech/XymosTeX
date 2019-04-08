@@ -3,10 +3,7 @@ use crate::variable::Variable;
 
 impl<'a> Parser<'a> {
     pub fn is_variable_head(&mut self) -> bool {
-        match self.peek_expanded_token() {
-            Some(token) => self.state.is_token_equal_to_prim(&token, "count"),
-            _ => false,
-        }
+        self.is_next_expanded_token_in_set_of_primitives(&["count"])
     }
 
     pub fn parse_variable(&mut self) -> Variable {

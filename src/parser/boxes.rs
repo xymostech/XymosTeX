@@ -116,10 +116,7 @@ impl<'a> Parser<'a> {
     }
 
     fn is_box_head(&mut self) -> bool {
-        match self.peek_expanded_token() {
-            Some(token) => self.state.is_token_equal_to_prim(&token, "hbox"),
-            _ => false,
-        }
+        self.is_next_expanded_token_in_set_of_primitives(&["hbox"])
     }
 
     fn parse_box(&mut self) -> TeXBox {

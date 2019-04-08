@@ -10,28 +10,17 @@ impl<'a> Parser<'a> {
     }
 
     fn is_macro_assignment_head(&mut self) -> bool {
-        match self.peek_expanded_token() {
-            Some(token) => self.state.is_token_equal_to_prim(&token, "def"),
-            _ => false,
-        }
+        self.is_next_expanded_token_in_set_of_primitives(&["def"])
     }
 
     fn is_let_assignment_head(&mut self) -> bool {
-        match self.peek_expanded_token() {
-            Some(token) => self.state.is_token_equal_to_prim(&token, "let"),
-            _ => false,
-        }
+        self.is_next_expanded_token_in_set_of_primitives(&["let"])
     }
 
     fn is_arithmetic_head(&mut self) -> bool {
-        match self.peek_expanded_token() {
-            Some(token) => {
-                self.state.is_token_equal_to_prim(&token, "advance")
-                    || self.state.is_token_equal_to_prim(&token, "multiply")
-                    || self.state.is_token_equal_to_prim(&token, "divide")
-            }
-            _ => false,
-        }
+        self.is_next_expanded_token_in_set_of_primitives(&[
+            "advance", "multiply", "divide",
+        ])
     }
 
     fn is_simple_assignment_head(&mut self) -> bool {
@@ -41,10 +30,7 @@ impl<'a> Parser<'a> {
     }
 
     fn is_assignment_prefix(&mut self) -> bool {
-        match self.peek_expanded_token() {
-            Some(token) => self.state.is_token_equal_to_prim(&token, "global"),
-            _ => false,
-        }
+        self.is_next_expanded_token_in_set_of_primitives(&["global"])
     }
 
     pub fn is_assignment_head(&mut self) -> bool {

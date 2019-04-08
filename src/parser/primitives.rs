@@ -153,6 +153,18 @@ impl<'a> Parser<'a> {
             self.parse_optional_spaces_expanded();
         }
     }
+
+    pub fn is_next_expanded_token_in_set_of_primitives(
+        &mut self,
+        primitives: &[&str],
+    ) -> bool {
+        match self.peek_expanded_token() {
+            Some(token) => primitives
+                .iter()
+                .any(|prim| self.state.is_token_equal_to_prim(&token, prim)),
+            _ => false,
+        }
+    }
 }
 
 #[cfg(test)]
