@@ -27,6 +27,7 @@ impl<'a> Parser<'a> {
         self.is_let_assignment_head()
             || self.is_variable_assignment_head()
             || self.is_arithmetic_head()
+            || self.is_box_assignment_head()
     }
 
     fn is_assignment_prefix(&mut self) -> bool {
@@ -108,7 +109,27 @@ impl<'a> Parser<'a> {
 
             self.state
                 .set_macro(global, &control_sequence, &Rc::new(makro));
+        } else {
+            panic!("unimplemented");
         }
+    }
+
+    fn is_box_assignment_head(&mut self) -> bool {
+        self.is_next_expanded_token_in_set_of_primitives(&["setbox"])
+    }
+
+    fn parse_box_assignment(&mut self, global: bool) {
+        let tok = self.lex_expanded_token().unwrap();
+
+        if !self.state.is_token_equal_to_prim(&tok, "setbox") {
+            panic!("Invalid box assignment head: {:?}", tok);
+        }
+
+        let box_index = self.parse_8bit_number();
+        self.parse_equals_expanded();
+        let tex_box = self.parse_box();
+
+        self.state.set_box(global, box_index, tex_box);
     }
 
     fn parse_simple_assignment(&mut self, global: bool) {
@@ -118,6 +139,8 @@ impl<'a> Parser<'a> {
             self.parse_let_assignment(global)
         } else if self.is_arithmetic_head() {
             self.parse_arithmetic(global)
+        } else if self.is_box_assignment_head() {
+            self.parse_box_assignment(global)
         } else {
             panic!("unimplemented");
         }
@@ -381,5 +404,15 @@ mod tests {
                 assert_eq!(parser.state.get_count(0), 15);
             },
         );
+    }
+
+    #[test]
+    fn it_sets_boxes() {
+        with_parser(&["\\setbox123=\\hbox{a}%"], |parser| {
+            assert!(parser.is_assignment_head());
+            parser.parse_assignment();
+
+            assert!(parser.state.get_box(123).is_some());
+        });
     }
 }

@@ -119,7 +119,7 @@ impl<'a> Parser<'a> {
         self.is_next_expanded_token_in_set_of_primitives(&["hbox"])
     }
 
-    fn parse_box(&mut self) -> TeXBox {
+    pub fn parse_box(&mut self) -> TeXBox {
         let head = self.lex_expanded_token().unwrap();
 
         if self.state.is_token_equal_to_prim(&head, "hbox") {
