@@ -1,0 +1,17 @@
+sudo: false
+dist: xenial
+language: rust
+rust:
+- stable
+- beta
+- nightly
+addons:
+  apt:
+    packages:
+      - pkg-config
+      - texlive
+      - libkpathsea6
+      - libkpathsea-dev
+env:
+  global:
+    - RUST_TEST_THREADS=1
