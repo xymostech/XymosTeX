@@ -1,6 +1,6 @@
-sudo: false
 dist: xenial
 language: rust
+cache: cargo
 rust:
 - stable
 - beta
@@ -8,10 +8,17 @@ rust:
 addons:
   apt:
     packages:
-      - pkg-config
       - texlive
       - libkpathsea6
       - libkpathsea-dev
 env:
   global:
     - RUST_TEST_THREADS=1
+before_cache: |
+  if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]]; then
+    RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin -f
+  fi
+after_success: |
+  if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]]; then
+    cargo tarpaulin -v --ciserver travis-ci --coveralls $TRAVIS_JOB_ID
+  fi
