@@ -1,5 +1,4 @@
-rs-tex
-======
+# rs-tex [![Build Status](https://travis-ci.com/xymostech/rs-tex.svg?branch=master)](https://travis-ci.com/xymostech/rs-tex)
 
 This project is an attempt to build an implementation of TeX in Rust. The overall goals of this project are:
 
