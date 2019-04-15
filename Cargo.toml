@@ -5,3 +5,4 @@ authors = ["Emily Eisenberg <xymostech@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+kpathsea = "0.2.1"

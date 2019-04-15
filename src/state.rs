@@ -347,11 +347,16 @@ macro_rules! generate_stack_func {
 
 impl TeXState {
     pub fn new() -> TeXState {
-        // TODO(xymostech): Use kpathsea to figure out where the cmr10 metrics
-        // live instead of just hardcoding it for my system!!!
-        let cmr_font_path =
-            "/usr/local/texlive/2018/texmf-dist/fonts/tfm/public/cm/cmr10.tfm";
-        let cmr_metrics = match TFMFile::from_path(cmr_font_path) {
+        // TODO(xymostech): Make it so that we only actually load fonts when
+        // they are referenced. We need to preload this one since we set it as
+        // the default current font.
+        let kpse =
+            kpathsea::Kpaths::new().expect("Error initializing kpathsea");
+        let cmr_font_path = kpse
+            .find_file("cmr10.tfm")
+            .expect("Couldn't find crm10.tfm");
+
+        let cmr_metrics = match TFMFile::from_path(&cmr_font_path) {
             Ok(metrics) => metrics,
             Err(err) => panic!("Error reading cmr10 font metrics: {:?}", err),
         };
