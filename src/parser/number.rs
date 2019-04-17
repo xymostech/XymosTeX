@@ -54,12 +54,12 @@ impl<'a> Parser<'a> {
     }
 
     pub fn is_internal_integer_head(&mut self) -> bool {
-        self.is_variable_head()
+        self.is_integer_variable_head()
     }
 
     pub fn parse_internal_integer(&mut self) -> i32 {
-        if self.is_variable_head() {
-            let variable = self.parse_variable();
+        if self.is_integer_variable_head() {
+            let variable = self.parse_integer_variable();
             variable.get(self.state)
         } else {
             panic!("unimplemented");

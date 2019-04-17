@@ -1,17 +1,17 @@
 use crate::parser::Parser;
-use crate::variable::Variable;
+use crate::variable::IntegerVariable;
 
 impl<'a> Parser<'a> {
-    pub fn is_variable_head(&mut self) -> bool {
+    pub fn is_integer_variable_head(&mut self) -> bool {
         self.is_next_expanded_token_in_set_of_primitives(&["count"])
     }
 
-    pub fn parse_variable(&mut self) -> Variable {
+    pub fn parse_integer_variable(&mut self) -> IntegerVariable {
         let token = self.lex_expanded_token().unwrap();
 
         if self.state.is_token_equal_to_prim(&token, "count") {
             let index = self.parse_8bit_number();
-            Variable::Count(index)
+            IntegerVariable::CountRegister(index)
         } else {
             panic!("unimplemented");
         }
@@ -31,12 +31,21 @@ mod tests {
             |parser| {
                 parser.parse_assignment();
 
-                assert!(parser.is_variable_head());
-                assert_eq!(parser.parse_variable(), Variable::Count(0));
-                assert!(parser.is_variable_head());
-                assert_eq!(parser.parse_variable(), Variable::Count(255));
-                assert!(parser.is_variable_head());
-                assert_eq!(parser.parse_variable(), Variable::Count(255));
+                assert!(parser.is_integer_variable_head());
+                assert_eq!(
+                    parser.parse_integer_variable(),
+                    IntegerVariable::CountRegister(0)
+                );
+                assert!(parser.is_integer_variable_head());
+                assert_eq!(
+                    parser.parse_integer_variable(),
+                    IntegerVariable::CountRegister(255)
+                );
+                assert!(parser.is_integer_variable_head());
+                assert_eq!(
+                    parser.parse_integer_variable(),
+                    IntegerVariable::CountRegister(255)
+                );
             },
         );
     }

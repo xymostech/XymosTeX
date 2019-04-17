@@ -6,7 +6,7 @@ use crate::token::Token;
 
 impl<'a> Parser<'a> {
     fn is_variable_assignment_head(&mut self) -> bool {
-        self.is_variable_head()
+        self.is_integer_variable_head()
     }
 
     fn is_macro_assignment_head(&mut self) -> bool {
@@ -41,7 +41,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_variable_assignment(&mut self, global: bool) {
-        let variable = self.parse_variable();
+        let variable = self.parse_integer_variable();
         self.parse_equals_expanded();
         let value = self.parse_number();
         variable.set(self.state, global, value);
@@ -80,7 +80,7 @@ impl<'a> Parser<'a> {
 
     fn parse_arithmetic(&mut self, global: bool) {
         let tok = self.lex_expanded_token().unwrap();
-        let variable = self.parse_variable();
+        let variable = self.parse_integer_variable();
         self.parse_optional_keyword_expanded("by");
         self.parse_optional_spaces_expanded();
 
