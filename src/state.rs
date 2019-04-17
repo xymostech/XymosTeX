@@ -227,6 +227,21 @@ impl TeXStateInner {
     fn set_box(&mut self, box_index: u8, tex_box: Rc<RefCell<Option<TeXBox>>>) {
         self.box_registers.insert(box_index, tex_box);
     }
+
+    fn with_box<T, F>(&self, box_index: u8, func: F) -> Option<T>
+    where
+        F: FnOnce(&mut TeXBox) -> T,
+    {
+        if let Some(box_refcell) = self.box_registers.get(&box_index) {
+            if let Some(ref mut tex_box) = *box_refcell.borrow_mut() {
+                Some(func(tex_box))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 // TeX keeps a stack of different states around, and pushes a copy of the
@@ -314,6 +329,13 @@ impl TeXStateStack {
             self.state_stack[len - 1].set_box(box_index, wrapped_box);
         }
     }
+
+    fn with_box<T, F>(&self, box_index: u8, func: F) -> Option<T>
+    where
+        F: FnOnce(&mut TeXBox) -> T,
+    {
+        self.state_stack[self.state_stack.len() - 1].with_box(box_index, func)
+    }
 }
 
 // A lot of the state in TeX is treated as global state, where we need to be
@@ -397,6 +419,20 @@ impl TeXState {
     generate_stack_func!(fn get_box(box_index: u8) -> Option<TeXBox>);
     generate_stack_func!(fn get_box_copy(box_index: u8) -> Option<TeXBox>);
     generate_stack_func!(fn set_box(global: bool, box_index: u8, tex_box: TeXBox));
+
+    /// Run a function on a mutable reference to a Box in a given Box register.
+    /// This allows access and mutations to the boxes without removing or
+    /// copying the boxes out. Returns None if there is no box at that register
+    /// index.
+    ///
+    /// Note that this currently only runs on the top box of the state stack;
+    /// there is no way to access or mutate boxes in other parts of the stack.
+    pub fn with_box<T, F>(&self, box_index: u8, func: F) -> Option<T>
+    where
+        F: FnOnce(&mut TeXBox) -> T,
+    {
+        self.with_stack(|stack| stack.with_box(box_index, func))
+    }
 
     pub fn get_metrics_for_font(&self, font: &str) -> Option<&TFMFile> {
         self.font_metrics.get(font)
@@ -608,5 +644,36 @@ mod tests {
         assert_eq!(Some(test_box), state.get_box(0));
         state.pop_state();
         assert_eq!(None, state.get_box(0));
+    }
+
+    #[test]
+    fn it_provides_mutable_access_to_boxes() {
+        let state = TeXState::new();
+
+        let test_box = TeXBox::HorizontalBox(HorizontalBox {
+            height: Dimen::from_unit(1.0, Unit::Point),
+            depth: Dimen::from_unit(2.0, Unit::Point),
+            width: Dimen::from_unit(3.0, Unit::Point),
+            list: Vec::new(),
+            glue_set_ratio: None,
+        });
+
+        state.set_box(true, 0, test_box.clone());
+        state.push_state();
+
+        // We have access to the box
+        assert_eq!(
+            state.with_box(0, |box_ref| box_ref.mut_width().clone()),
+            Some(Dimen::from_unit(3.0, Unit::Point))
+        );
+
+        state.with_box(0, |box_ref| {
+            *box_ref.mut_depth() = Dimen::from_unit(4.0, Unit::Point)
+        });
+        state.pop_state();
+
+        // We mutated the box
+        let mut final_box = state.get_box(0).unwrap();
+        assert_eq!(*final_box.mut_depth(), Dimen::from_unit(4.0, Unit::Point));
     }
 }

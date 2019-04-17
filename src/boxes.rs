@@ -57,3 +57,20 @@ pub struct HorizontalBox {
 pub enum TeXBox {
     HorizontalBox(HorizontalBox),
 }
+
+impl TeXBox {
+    pub fn mut_height(&mut self) -> &mut Dimen {
+        let TeXBox::HorizontalBox(hbox) = self;
+        &mut hbox.height
+    }
+
+    pub fn mut_width(&mut self) -> &mut Dimen {
+        let TeXBox::HorizontalBox(hbox) = self;
+        &mut hbox.width
+    }
+
+    pub fn mut_depth(&mut self) -> &mut Dimen {
+        let TeXBox::HorizontalBox(hbox) = self;
+        &mut hbox.depth
+    }
+}
