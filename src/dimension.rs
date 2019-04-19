@@ -63,6 +63,12 @@ impl Dimen {
         let scale = get_scale(to_unit);
         (self.0 as f64) * scale.1 / scale.0
     }
+
+    // Returns the exact number of scaled points in the Dimen. This might be
+    // used in a place where a dimen is coerced into an integer.
+    pub fn as_scaled_points(&self) -> i32 {
+        self.0
+    }
 }
 
 impl PartialOrd for Dimen {

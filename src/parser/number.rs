@@ -66,6 +66,10 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn is_normal_integer_head(&mut self) -> bool {
+        self.is_internal_integer_head() || self.is_integer_constant_head()
+    }
+
     fn parse_normal_integer(&mut self) -> i32 {
         if self.is_internal_integer_head() {
             self.parse_internal_integer()
@@ -76,8 +80,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn is_coerced_integer_head(&mut self) -> bool {
+        self.is_internal_dimen_head()
+    }
+
+    fn parse_coerced_integer(&mut self) -> i32 {
+        let dimen = self.parse_internal_dimen();
+        dimen.as_scaled_points()
+    }
+
     fn parse_unsigned_number(&mut self) -> i32 {
-        self.parse_normal_integer()
+        if self.is_normal_integer_head() {
+            self.parse_normal_integer()
+        } else if self.is_coerced_integer_head() {
+            self.parse_coerced_integer()
+        } else {
+            panic!("Invalid unsigned number head");
+        }
     }
 
     // Parses some number of +s and -s into an overall numeric sign, which is
@@ -153,6 +172,24 @@ mod tests {
         with_parser(&["-\\count10%"], |parser| {
             parser.state.set_count(false, 10, 1234);
             assert_eq!(parser.parse_number(), -1234);
+        });
+    }
+
+    #[test]
+    fn it_parses_coerced_dimens() {
+        with_parser(&[r"\setbox0=\hbox{g}%", r"\wd0%", r"-\ht0%"], |parser| {
+            parser.parse_assignment();
+
+            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+
+            assert_eq!(
+                parser.parse_number(),
+                metrics.get_width('g').as_scaled_points()
+            );
+            assert_eq!(
+                parser.parse_number(),
+                -1 * metrics.get_height('g').as_scaled_points()
+            );
         });
     }
 }

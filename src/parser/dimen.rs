@@ -319,6 +319,19 @@ impl<'a> Parser<'a> {
             panic!("Invalid unit: {:?}{:?}", unit_first, unit_second);
         }
     }
+
+    pub fn is_internal_dimen_head(&mut self) -> bool {
+        self.is_dimen_variable_head()
+    }
+
+    pub fn parse_internal_dimen(&mut self) -> Dimen {
+        if self.is_dimen_variable_head() {
+            let variable = self.parse_dimen_variable();
+            variable.get(self.state)
+        } else {
+            panic!("unimplemented");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -480,5 +493,20 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn it_parses_internal_dimens() {
+        with_parser(&[r"\setbox0=\hbox{a}%", r"\wd0%", r"\ht0"], |parser| {
+            parser.parse_assignment();
+
+            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+
+            assert!(parser.is_internal_dimen_head());
+            assert_eq!(parser.parse_internal_dimen(), metrics.get_width('a'));
+
+            assert!(parser.is_internal_dimen_head());
+            assert_eq!(parser.parse_internal_dimen(), metrics.get_height('a'));
+        });
     }
 }
