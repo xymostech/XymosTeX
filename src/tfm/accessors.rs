@@ -17,19 +17,28 @@ impl TFMFile {
     pub fn get_width(&self, chr: char) -> Dimen {
         let char_info = self.get_char_info(chr);
 
-        Dimen::from_unit(self.widths[char_info.width_index], Unit::Point)
+        Dimen::from_unit(
+            self.header.design_size * self.widths[char_info.width_index],
+            Unit::Point,
+        )
     }
 
     pub fn get_height(&self, chr: char) -> Dimen {
         let char_info = self.get_char_info(chr);
 
-        Dimen::from_unit(self.heights[char_info.height_index], Unit::Point)
+        Dimen::from_unit(
+            self.header.design_size * self.heights[char_info.height_index],
+            Unit::Point,
+        )
     }
 
     pub fn get_depth(&self, chr: char) -> Dimen {
         let char_info = self.get_char_info(chr);
 
-        Dimen::from_unit(self.depths[char_info.depth_index], Unit::Point)
+        Dimen::from_unit(
+            self.header.design_size * self.depths[char_info.depth_index],
+            Unit::Point,
+        )
     }
 }
 
@@ -45,15 +54,15 @@ mod tests {
 
         assert_eq!(
             font_metrics.get_width('a'),
-            Dimen::from_unit(3.5, Unit::Point)
+            Dimen::from_unit(17.5, Unit::Point)
         );
         assert_eq!(
             font_metrics.get_height('a'),
-            Dimen::from_unit(5.5, Unit::Point)
+            Dimen::from_unit(27.5, Unit::Point)
         );
         assert_eq!(
             font_metrics.get_depth('a'),
-            Dimen::from_unit(0.5, Unit::Point)
+            Dimen::from_unit(2.5, Unit::Point)
         );
     }
 

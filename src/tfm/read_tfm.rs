@@ -216,7 +216,7 @@ mod tests {
 
                 header: TFMHeader {
                     checksum: 0xABCDEFAB,
-                    design_size: 10.0,
+                    design_size: 5.0,
                     coding_scheme: "testing".to_string(),
                     parc_font_identifier: "hi parc".to_string(),
                     seven_bit_safe: true,
@@ -245,6 +245,9 @@ mod tests {
 
     #[test]
     fn it_successfully_reads_cmr10() {
-        TFMFile::new(CMR10_TFM).unwrap();
+        let cmr10 = TFMFile::new(CMR10_TFM).unwrap();
+
+        // Test one specific metric that we can compare to TeX
+        assert_eq!(cmr10.get_width('a').as_scaled_points(), 327681);
     }
 }
