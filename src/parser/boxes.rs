@@ -5,7 +5,7 @@ use crate::glue::Glue;
 use crate::parser::Parser;
 use crate::token::Token;
 
-enum BoxLayout {
+pub enum BoxLayout {
     NaturalWidth,
     FixedWidth(Dimen),
     Spread(Dimen),
@@ -32,7 +32,10 @@ fn set_glue(
 }
 
 impl<'a> Parser<'a> {
-    fn parse_horizontal_box(&mut self, layout: &BoxLayout) -> HorizontalBox {
+    pub fn parse_horizontal_box(
+        &mut self,
+        layout: &BoxLayout,
+    ) -> HorizontalBox {
         let list = self.parse_horizontal_list();
 
         let mut height = Dimen::zero();
@@ -143,6 +146,13 @@ impl<'a> Parser<'a> {
         } else {
             panic!("unimplemented");
         }
+    }
+
+    // Used for early testing, when we're not going to be inspecting a whole
+    // output box.
+    pub fn parse_horizontal_box_to_chars(&mut self) -> Vec<char> {
+        let hbox = self.parse_horizontal_box(&BoxLayout::NaturalWidth);
+        hbox.to_chars()
     }
 }
 
@@ -437,6 +447,16 @@ mod tests {
 
             assert_eq!(hbox.list.len(), 3);
             assert_eq!(hbox.width, expected_width);
+        });
+    }
+
+    #[test]
+    fn it_parses_chars_from_horizontal_boxes() {
+        with_parser(&["a {b }c%"], |parser| {
+            assert_eq!(
+                parser.parse_horizontal_box_to_chars(),
+                vec!['a', ' ', 'b', ' ', 'c']
+            );
         });
     }
 }

@@ -108,21 +108,6 @@ impl<'a> Parser<'a> {
 
         result
     }
-
-    // For early testing, we're not going to worry about producing a box out of
-    // the horizontal list, we'll only worry about the characters that are
-    // produced by parsing a horizontal list. This pulls the characters we
-    // parse out into a vec so external uses don't have to deal with
-    // HorizontalListElems.
-    pub fn parse_horizontal_list_to_chars(&mut self) -> Vec<char> {
-        self.parse_horizontal_list()
-            .into_iter()
-            .map(|elem| match elem {
-                HorizontalListElem::Char { chr: ch, font: _ } => ch,
-                HorizontalListElem::HSkip(_) => ' ',
-            })
-            .collect()
-    }
 }
 
 #[cfg(test)]
@@ -258,16 +243,6 @@ mod tests {
                 },
             ],
         );
-    }
-
-    #[test]
-    fn it_parses_to_chars() {
-        with_parser(&["bl ah%"], |parser| {
-            assert_eq!(
-                parser.parse_horizontal_list_to_chars(),
-                vec!['b', 'l', ' ', 'a', 'h']
-            );
-        });
     }
 
     #[test]

@@ -2,7 +2,6 @@ use crate::lexer::Lexer;
 use crate::state::TeXState;
 use crate::token::Token;
 
-#[allow(dead_code)] // TODO(xymostech): remove this once state is used
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
     state: &'a TeXState,

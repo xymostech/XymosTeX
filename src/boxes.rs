@@ -53,12 +53,40 @@ pub struct HorizontalBox {
     pub glue_set_ratio: Option<GlueSetRatio>,
 }
 
+impl HorizontalBox {
+    pub fn to_chars(&self) -> Vec<char> {
+        self.list
+            .iter()
+            .flat_map(|elem| match elem {
+                HorizontalListElem::Char { chr: ch, font: _ } => vec![*ch],
+                HorizontalListElem::HSkip(_) => vec![' '],
+                HorizontalListElem::Box(tex_box) => tex_box.to_chars(),
+            })
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum TeXBox {
     HorizontalBox(HorizontalBox),
 }
 
 impl TeXBox {
+    pub fn height(&self) -> &Dimen {
+        let TeXBox::HorizontalBox(hbox) = self;
+        &hbox.height
+    }
+
+    pub fn width(&self) -> &Dimen {
+        let TeXBox::HorizontalBox(hbox) = self;
+        &hbox.width
+    }
+
+    pub fn depth(&self) -> &Dimen {
+        let TeXBox::HorizontalBox(hbox) = self;
+        &hbox.depth
+    }
+
     pub fn mut_height(&mut self) -> &mut Dimen {
         let TeXBox::HorizontalBox(hbox) = self;
         &mut hbox.height
@@ -72,5 +100,60 @@ impl TeXBox {
     pub fn mut_depth(&mut self) -> &mut Dimen {
         let TeXBox::HorizontalBox(hbox) = self;
         &mut hbox.depth
+    }
+
+    // For early testing, we're not actually going to outputting a DVI file
+    // with the correctly formatted text. So to test things, we'll just pull
+    // out the contents of the box as a list of characters.
+    pub fn to_chars(&self) -> Vec<char> {
+        let TeXBox::HorizontalBox(hbox) = self;
+        hbox.to_chars()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::glue::Glue;
+
+    #[test]
+    fn it_parses_to_chars() {
+        let test_box = TeXBox::HorizontalBox(HorizontalBox {
+            width: Dimen::zero(),
+            height: Dimen::zero(),
+            depth: Dimen::zero(),
+
+            list: vec![
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::HSkip(Glue::from_dimen(Dimen::zero())),
+                HorizontalListElem::Box(TeXBox::HorizontalBox(HorizontalBox {
+                    width: Dimen::zero(),
+                    height: Dimen::zero(),
+                    depth: Dimen::zero(),
+
+                    list: vec![
+                        HorizontalListElem::Char {
+                            chr: 'b',
+                            font: "cmr10".to_string(),
+                        },
+                        HorizontalListElem::HSkip(Glue::from_dimen(
+                            Dimen::zero(),
+                        )),
+                    ],
+                    glue_set_ratio: None,
+                })),
+                HorizontalListElem::Char {
+                    chr: 'c',
+                    font: "cmr10".to_string(),
+                },
+            ],
+            glue_set_ratio: None,
+        });
+
+        assert_eq!(test_box.to_chars(), vec!['a', ' ', 'b', ' ', 'c']);
     }
 }

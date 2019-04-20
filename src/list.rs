@@ -1,3 +1,4 @@
+use crate::boxes::TeXBox;
 use crate::dimension::Dimen;
 use crate::glue::Glue;
 use crate::state::TeXState;
@@ -6,6 +7,7 @@ use crate::state::TeXState;
 pub enum HorizontalListElem {
     Char { chr: char, font: String },
     HSkip(Glue),
+    Box(TeXBox),
 }
 
 impl HorizontalListElem {
@@ -24,6 +26,12 @@ impl HorizontalListElem {
             HorizontalListElem::HSkip(glue) => {
                 (Dimen::zero(), Dimen::zero(), glue.clone())
             }
+
+            HorizontalListElem::Box(tex_box) => (
+                *tex_box.height(),
+                *tex_box.depth(),
+                Glue::from_dimen(*tex_box.width()),
+            ),
         }
     }
 }
