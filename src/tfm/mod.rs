@@ -67,4 +67,6 @@ pub struct TFMFile {
 mod accessors;
 mod file_reader;
 mod read_tfm;
+
+#[cfg(test)]
 mod test_data;

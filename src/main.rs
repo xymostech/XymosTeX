@@ -7,10 +7,12 @@ mod list;
 mod makro;
 mod parser;
 mod state;
-mod testing;
 mod tfm;
 mod token;
 mod variable;
+
+#[cfg(test)]
+mod testing;
 
 use std::io;
 use std::io::prelude::*;
