@@ -90,6 +90,9 @@ impl<'a> Parser<'a> {
                 if self.is_assignment_head() {
                     self.parse_assignment();
                     self.parse_horizontal_list_elem(group_level)
+                } else if self.is_box_head() {
+                    let tex_box = self.parse_box();
+                    Some(HorizontalListElem::Box(tex_box))
                 } else {
                     panic!("unimplemented!");
                 }
@@ -114,6 +117,7 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
+    use crate::boxes::{HorizontalBox, TeXBox};
     use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
     use crate::testing::with_parser;
 
@@ -280,5 +284,56 @@ mod tests {
                 },
             ],
         );
+    }
+
+    #[test]
+    fn it_parses_box_elems() {
+        with_parser(&[r"a\hbox{a\hskip 2pt plus1filg}b%"], |parser| {
+            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+
+            let total_width = metrics.get_width('a')
+                + metrics.get_width('g')
+                + Dimen::from_unit(2.0, Unit::Point);
+
+            assert_eq!(
+                parser.parse_horizontal_list(),
+                &[
+                    HorizontalListElem::Char {
+                        chr: 'a',
+                        font: "cmr10".to_string(),
+                    },
+                    HorizontalListElem::Box(TeXBox::HorizontalBox(
+                        HorizontalBox {
+                            width: total_width,
+                            height: metrics.get_height('a'),
+                            depth: metrics.get_depth('g'),
+
+                            list: vec![
+                                HorizontalListElem::Char {
+                                    chr: 'a',
+                                    font: "cmr10".to_string(),
+                                },
+                                HorizontalListElem::HSkip(Glue {
+                                    space: Dimen::from_unit(2.0, Unit::Point),
+                                    stretch: SpringDimen::FilDimen(
+                                        FilDimen::new(FilKind::Fil, 1.0)
+                                    ),
+                                    shrink: SpringDimen::Dimen(Dimen::zero()),
+                                }),
+                                HorizontalListElem::Char {
+                                    chr: 'g',
+                                    font: "cmr10".to_string(),
+                                },
+                            ],
+                            glue_set_ratio: None,
+                        }
+                    )),
+                    HorizontalListElem::Char {
+                        chr: 'b',
+                        font: "cmr10".to_string(),
+                    },
+                ]
+            );
+        });
     }
 }

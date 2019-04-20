@@ -118,7 +118,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn is_box_head(&mut self) -> bool {
+    pub fn is_box_head(&mut self) -> bool {
         self.is_next_expanded_token_in_set_of_primitives(&["hbox"])
     }
 
