@@ -91,8 +91,12 @@ impl<'a> Parser<'a> {
                     self.parse_assignment();
                     self.parse_horizontal_list_elem(group_level)
                 } else if self.is_box_head() {
-                    let tex_box = self.parse_box();
-                    Some(HorizontalListElem::Box(tex_box))
+                    let maybe_tex_box = self.parse_box();
+                    if let Some(tex_box) = maybe_tex_box {
+                        Some(HorizontalListElem::Box(tex_box))
+                    } else {
+                        self.parse_horizontal_list_elem(group_level)
+                    }
                 } else {
                     panic!("unimplemented!");
                 }
@@ -287,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn it_parses_box_elems() {
+    fn it_parses_explicit_box_elems() {
         with_parser(&[r"a\hbox{a\hskip 2pt plus1filg}b%"], |parser| {
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
 
@@ -335,5 +339,38 @@ mod tests {
                 ]
             );
         });
+    }
+
+    #[test]
+    fn it_parses_box_register_elems() {
+        with_parser(&[r"\setbox0=\hbox{a}%", r"\box0%"], |parser| {
+            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+
+            let list = parser.parse_horizontal_list();
+
+            assert_eq!(list.len(), 1);
+            if let HorizontalListElem::Box(ref tex_box) = list[0] {
+                assert_eq!(tex_box.width(), &metrics.get_width('a'));
+            } else {
+                panic!("Element is not a box: {:?}", list[0]);
+            }
+        });
+    }
+
+    #[test]
+    fn it_ignores_void_boxes() {
+        assert_parses_to(
+            &[r"a\box123b%"],
+            &[
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'b',
+                    font: "cmr10".to_string(),
+                },
+            ],
+        );
     }
 }

@@ -119,10 +119,10 @@ impl<'a> Parser<'a> {
     }
 
     pub fn is_box_head(&mut self) -> bool {
-        self.is_next_expanded_token_in_set_of_primitives(&["hbox"])
+        self.is_next_expanded_token_in_set_of_primitives(&["hbox", "box"])
     }
 
-    pub fn parse_box(&mut self) -> TeXBox {
+    pub fn parse_box(&mut self) -> Option<TeXBox> {
         let head = self.lex_expanded_token().unwrap();
 
         if self.state.is_token_equal_to_prim(&head, "hbox") {
@@ -142,7 +142,10 @@ impl<'a> Parser<'a> {
                 _ => panic!("Expected } when parsing box"),
             }
 
-            TeXBox::HorizontalBox(hbox)
+            Some(TeXBox::HorizontalBox(hbox))
+        } else if self.state.is_token_equal_to_prim(&head, "box") {
+            let box_index = self.parse_8bit_number();
+            self.state.get_box(box_index)
         } else {
             panic!("unimplemented");
         }
@@ -412,7 +415,7 @@ mod tests {
                 + metrics.get_width('c');
 
             assert!(parser.is_box_head());
-            let hbox = parser.parse_box();
+            let hbox = parser.parse_box().unwrap();
             let TeXBox::HorizontalBox(hbox) = hbox;
 
             assert_eq!(hbox.list.len(), 3);
@@ -425,7 +428,7 @@ mod tests {
     fn it_parses_horizontal_boxes_with_fixed_width() {
         with_parser(&["\\hbox to20pt{a\\hskip 0pt plus1filc}%"], |parser| {
             assert!(parser.is_box_head());
-            let hbox = parser.parse_box();
+            let hbox = parser.parse_box().unwrap();
             let TeXBox::HorizontalBox(hbox) = hbox;
 
             assert_eq!(hbox.list.len(), 3);
@@ -442,7 +445,7 @@ mod tests {
                 + Dimen::from_unit(5.0, Unit::Point);
 
             assert!(parser.is_box_head());
-            let hbox = parser.parse_box();
+            let hbox = parser.parse_box().unwrap();
             let TeXBox::HorizontalBox(hbox) = hbox;
 
             assert_eq!(hbox.list.len(), 3);
@@ -457,6 +460,23 @@ mod tests {
                 parser.parse_horizontal_box_to_chars(),
                 vec!['a', ' ', 'b', ' ', 'c']
             );
+        });
+    }
+
+    #[test]
+    fn it_parses_boxes_from_box_registers() {
+        with_parser(&[r"\setbox0=\hbox{a}%", r"\box0", r"\box0"], |parser| {
+            parser.parse_assignment();
+
+            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+
+            assert!(parser.is_box_head());
+
+            let parsed_box = parser.parse_box().unwrap();
+            assert_eq!(parsed_box.width(), &metrics.get_width('a'));
+
+            assert!(parser.is_box_head());
+            assert_eq!(parser.parse_box(), None);
         });
     }
 }

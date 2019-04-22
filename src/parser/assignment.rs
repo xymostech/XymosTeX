@@ -127,9 +127,11 @@ impl<'a> Parser<'a> {
 
         let box_index = self.parse_8bit_number();
         self.parse_equals_expanded();
-        let tex_box = self.parse_box();
+        let maybe_tex_box = self.parse_box();
 
-        self.state.set_box(global, box_index, tex_box);
+        if let Some(tex_box) = maybe_tex_box {
+            self.state.set_box(global, box_index, tex_box);
+        }
     }
 
     fn parse_simple_assignment(&mut self, global: bool) {
