@@ -5,4 +5,5 @@ authors = ["Emily Eisenberg <xymostech@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-kpathsea = "0.2.1"
+kpathsea = "0.2.2"
+lazy_static = "1.3.0"

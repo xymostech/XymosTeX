@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate lazy_static;
+
 mod boxes;
 mod category;
 mod dimension;
@@ -6,6 +9,7 @@ mod lexer;
 mod list;
 mod makro;
 mod parser;
+mod paths;
 mod state;
 mod tfm;
 mod token;

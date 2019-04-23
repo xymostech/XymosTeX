@@ -11,9 +11,6 @@ addons:
       - texlive
       - libkpathsea6
       - libkpathsea-dev
-env:
-  global:
-    - RUST_TEST_THREADS=1
 before_cache: |
   if [[ "$TRAVIS_RUST_VERSION" == "nightly" ]]; then
     RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin -f

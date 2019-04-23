@@ -5,6 +5,7 @@ use std::rc::Rc;
 use crate::boxes::TeXBox;
 use crate::category::Category;
 use crate::makro::Macro;
+use crate::paths::get_path_to_font;
 use crate::tfm::TFMFile;
 use crate::token::Token;
 
@@ -372,16 +373,10 @@ impl TeXState {
         // TODO(xymostech): Make it so that we only actually load fonts when
         // they are referenced. We need to preload this one since we set it as
         // the default current font.
-        let kpse =
-            kpathsea::Kpaths::new().expect("Error initializing kpathsea");
-        let cmr_font_path = kpse
-            .find_file("cmr10.tfm")
-            .expect("Couldn't find crm10.tfm");
-
-        let cmr_metrics = match TFMFile::from_path(&cmr_font_path) {
-            Ok(metrics) => metrics,
-            Err(err) => panic!("Error reading cmr10 font metrics: {:?}", err),
-        };
+        let cmr_font_path =
+            get_path_to_font("cmr10.tfm").expect("Couldn't find crm10.tfm");
+        let cmr_metrics = TFMFile::from_path(&cmr_font_path)
+            .expect("Failed to read cmr10.tfm");
 
         let mut font_metrics = HashMap::new();
         font_metrics.insert("cmr10".to_string(), cmr_metrics);
