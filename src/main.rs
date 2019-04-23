@@ -13,6 +13,8 @@ mod variable;
 
 #[cfg(test)]
 mod testing;
+#[cfg(test)]
+mod tests;
 
 use std::io;
 use std::io::prelude::*;

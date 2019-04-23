@@ -20,7 +20,7 @@ Understanding and implementing the concepts in this stage is actually fairly dif
 
 ## Stage 2: Making Boxes
 
-**Status**: Not yet started
+**Status**: Done!
 **Difficulty**: Medium
 **Condition for success**: correctly evaluating and printing metrics for boxes and building horizontal boxes from [commands that build horizontal boxes at different widths with glue](examples/boxes.tex)
 
@@ -28,7 +28,7 @@ Instead of producing simple textual output as a result of the parsing, in this s
 
 ## Stage 3: Vertical mode
 
-**Status**: Not yet started
+**Status**: In progress
 **Difficulty**: Medium
 **Condition for success**: ???
 
