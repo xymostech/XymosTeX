@@ -1,0 +1,31 @@
+%
+% Expected output:
+%
+%  a
+%  b
+%
+%  c
+% d
+% e
+% 307858633666375127431
+%  f
+%  g
+%
+%  h
+% i
+% j
+a\par
+b\vskip1pt
+\indent c\par
+\noindent d\par
+\hbox{e}
+\setbox0=\vbox{
+    \indent f\par
+    g\vskip1pt
+    \indent h\par
+    \noindent i\par
+    \hbox{j}
+}
+\noindent \number\wd0 \number\ht0 \number\dp0 \par
+\box0
+\end

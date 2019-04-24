@@ -30,7 +30,7 @@ Instead of producing simple textual output as a result of the parsing, in this s
 
 **Status**: In progress
 **Difficulty**: Medium
-**Condition for success**: ???
+**Condition for success**: correctly parsing, building, and measuring the vertical boxes from [commands that build vertical boxes and enter and leave vertical and horizontal mode using different techniques](examples/vertical.tex)
 
 At this point, I'll be able to start parsing from (internal) vertical mode, have that correctly call out to a (restricted) horizontal mode, and then return back to vertical mode to produce vertical boxes. This will add vertical glue as well.
 
