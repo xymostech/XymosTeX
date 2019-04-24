@@ -35,8 +35,9 @@ impl<'a> Parser<'a> {
     pub fn parse_horizontal_box(
         &mut self,
         layout: &BoxLayout,
+        restricted: bool,
     ) -> HorizontalBox {
-        let list = self.parse_horizontal_list();
+        let list = self.parse_horizontal_list(restricted);
 
         let mut height = Dimen::zero();
         let mut depth = Dimen::zero();
@@ -134,7 +135,7 @@ impl<'a> Parser<'a> {
                 _ => panic!("Expected { when parsing box"),
             }
 
-            let hbox = self.parse_horizontal_box(&layout);
+            let hbox = self.parse_horizontal_box(&layout, true);
 
             // And there should always be a } after the horizontal list
             match self.lex_expanded_token() {
@@ -154,7 +155,7 @@ impl<'a> Parser<'a> {
     // Used for early testing, when we're not going to be inspecting a whole
     // output box.
     pub fn parse_horizontal_box_to_chars(&mut self) -> Vec<char> {
-        let hbox = self.parse_horizontal_box(&BoxLayout::NaturalWidth);
+        let hbox = self.parse_horizontal_box(&BoxLayout::NaturalWidth, true);
         hbox.to_chars()
     }
 }
@@ -169,7 +170,8 @@ mod tests {
     #[test]
     fn it_parses_boxes_with_characters() {
         with_parser(&["gb%"], |parser| {
-            let hbox = parser.parse_horizontal_box(&BoxLayout::NaturalWidth);
+            let hbox =
+                parser.parse_horizontal_box(&BoxLayout::NaturalWidth, true);
 
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
 
@@ -185,7 +187,8 @@ mod tests {
     #[test]
     fn it_parses_boxes_with_glue() {
         with_parser(&["\\hskip 1pt \\hskip 2pt plus 1fil%"], |parser| {
-            let hbox = parser.parse_horizontal_box(&BoxLayout::NaturalWidth);
+            let hbox =
+                parser.parse_horizontal_box(&BoxLayout::NaturalWidth, true);
 
             assert_eq!(hbox.height, Dimen::zero());
             assert_eq!(hbox.depth, Dimen::zero());
@@ -196,7 +199,8 @@ mod tests {
     #[test]
     fn it_parses_boxes_with_glue_and_characters() {
         with_parser(&["b\\hskip 2pt g%"], |parser| {
-            let hbox = parser.parse_horizontal_box(&BoxLayout::NaturalWidth);
+            let hbox =
+                parser.parse_horizontal_box(&BoxLayout::NaturalWidth, true);
 
             assert_eq!(hbox.list.len(), 3);
 
@@ -222,8 +226,10 @@ mod tests {
                 + metrics.get_width('b')
                 + Dimen::from_unit(5.0, Unit::Point);
 
-            let hbox = parser
-                .parse_horizontal_box(&BoxLayout::FixedWidth(fixed_width));
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::FixedWidth(fixed_width),
+                true,
+            );
 
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
@@ -242,8 +248,10 @@ mod tests {
                 + metrics.get_width('b')
                 + Dimen::from_unit(5.0, Unit::Point);
 
-            let hbox = parser
-                .parse_horizontal_box(&BoxLayout::FixedWidth(fixed_width));
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::FixedWidth(fixed_width),
+                true,
+            );
 
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
@@ -259,8 +267,10 @@ mod tests {
                 + metrics.get_width('b')
                 + Dimen::from_unit(5.0, Unit::Point);
 
-            let hbox = parser
-                .parse_horizontal_box(&BoxLayout::FixedWidth(fixed_width));
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::FixedWidth(fixed_width),
+                true,
+            );
 
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
@@ -276,8 +286,10 @@ mod tests {
                 + metrics.get_width('b')
                 + Dimen::from_unit(5.0, Unit::Point);
 
-            let hbox = parser
-                .parse_horizontal_box(&BoxLayout::FixedWidth(fixed_width));
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::FixedWidth(fixed_width),
+                true,
+            );
 
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
@@ -298,8 +310,10 @@ mod tests {
                     + metrics.get_width('b')
                     + Dimen::from_unit(6.0, Unit::Point);
 
-                let hbox = parser
-                    .parse_horizontal_box(&BoxLayout::FixedWidth(fixed_width));
+                let hbox = parser.parse_horizontal_box(
+                    &BoxLayout::FixedWidth(fixed_width),
+                    true,
+                );
 
                 assert_eq!(hbox.width, fixed_width);
                 assert_eq!(
@@ -317,8 +331,10 @@ mod tests {
             let fixed_width = metrics.get_width('a') + metrics.get_width('b')
                 - Dimen::from_unit(1.0, Unit::Point);
 
-            let hbox = parser
-                .parse_horizontal_box(&BoxLayout::FixedWidth(fixed_width));
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::FixedWidth(fixed_width),
+                true,
+            );
 
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
@@ -335,8 +351,10 @@ mod tests {
             let fixed_width = metrics.get_width('a') + metrics.get_width('b')
                 - Dimen::from_unit(4.0, Unit::Point);
 
-            let hbox = parser
-                .parse_horizontal_box(&BoxLayout::FixedWidth(fixed_width));
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::FixedWidth(fixed_width),
+                true,
+            );
 
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
@@ -349,9 +367,10 @@ mod tests {
     #[test]
     fn it_stretches_boxes_with_finite_glue_when_spread() {
         with_parser(&["a\\hskip 0pt plus3pt b%"], |parser| {
-            let hbox = parser.parse_horizontal_box(&BoxLayout::Spread(
-                Dimen::from_unit(6.0, Unit::Point),
-            ));
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::Spread(Dimen::from_unit(6.0, Unit::Point)),
+                true,
+            );
 
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
             let expected_width = metrics.get_width('a')
@@ -369,9 +388,10 @@ mod tests {
     #[test]
     fn it_stretches_boxes_with_infinite_glue_when_spread() {
         with_parser(&["a\\hskip 0pt plus1fill b%"], |parser| {
-            let hbox = parser.parse_horizontal_box(&BoxLayout::Spread(
-                Dimen::from_unit(6.0, Unit::Point),
-            ));
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::Spread(Dimen::from_unit(6.0, Unit::Point)),
+                true,
+            );
 
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
             let expected_width = metrics.get_width('a')
@@ -389,9 +409,10 @@ mod tests {
     #[test]
     fn it_shrinks_boxes_with_finite_glue_when_spread() {
         with_parser(&["a\\hskip 0pt minus2pt b%"], |parser| {
-            let hbox = parser.parse_horizontal_box(&BoxLayout::Spread(
-                Dimen::from_unit(-1.0, Unit::Point),
-            ));
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::Spread(Dimen::from_unit(-1.0, Unit::Point)),
+                true,
+            );
 
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
             let expected_width = metrics.get_width('a')

@@ -33,6 +33,7 @@ impl<'a> Parser<'a> {
     fn parse_horizontal_list_elem(
         &mut self,
         group_level: &mut usize,
+        restricted: bool,
     ) -> Option<HorizontalListElem> {
         let expanded_token = self.peek_expanded_token();
         let expanded_renamed_token = self.replace_renamed_token(expanded_token);
@@ -61,7 +62,7 @@ impl<'a> Parser<'a> {
                     self.lex_expanded_token();
                     *group_level += 1;
                     self.state.push_state();
-                    self.parse_horizontal_list_elem(group_level)
+                    self.parse_horizontal_list_elem(group_level, restricted)
                 }
                 Category::EndGroup => {
                     if *group_level == 0 {
@@ -70,14 +71,23 @@ impl<'a> Parser<'a> {
                         self.lex_expanded_token();
                         *group_level -= 1;
                         self.state.pop_state();
-                        self.parse_horizontal_list_elem(group_level)
+                        self.parse_horizontal_list_elem(group_level, restricted)
                     }
                 }
                 _ => panic!("unimplemented"),
             },
             Some(ref tok) if self.state.is_token_equal_to_prim(tok, "par") => {
                 self.lex_expanded_token();
-                self.parse_horizontal_list_elem(group_level)
+
+                if restricted {
+                    self.parse_horizontal_list_elem(group_level, restricted)
+                } else {
+                    // In unrestricted horizontal mode, \par terminates the
+                    // list parsing.
+                    // TODO(xymostech): This also is supposed to do some extra
+                    // work before finishing the list.
+                    None
+                }
             }
             Some(ref tok)
                 if self.state.is_token_equal_to_prim(tok, "hskip") =>
@@ -89,13 +99,13 @@ impl<'a> Parser<'a> {
             _ => {
                 if self.is_assignment_head() {
                     self.parse_assignment();
-                    self.parse_horizontal_list_elem(group_level)
+                    self.parse_horizontal_list_elem(group_level, restricted)
                 } else if self.is_box_head() {
                     let maybe_tex_box = self.parse_box();
                     if let Some(tex_box) = maybe_tex_box {
                         Some(HorizontalListElem::Box(tex_box))
                     } else {
-                        self.parse_horizontal_list_elem(group_level)
+                        self.parse_horizontal_list_elem(group_level, restricted)
                     }
                 } else {
                     panic!("unimplemented!");
@@ -104,11 +114,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_horizontal_list(&mut self) -> Vec<HorizontalListElem> {
+    pub fn parse_horizontal_list(
+        &mut self,
+        restricted: bool,
+    ) -> Vec<HorizontalListElem> {
         let mut result = Vec::new();
 
         let mut group_level = 0;
-        while let Some(elem) = self.parse_horizontal_list_elem(&mut group_level)
+        while let Some(elem) =
+            self.parse_horizontal_list_elem(&mut group_level, restricted)
         {
             result.push(elem);
         }
@@ -125,10 +139,18 @@ mod tests {
     use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
     use crate::testing::with_parser;
 
-    fn assert_parses_to(lines: &[&str], expected_toks: &[HorizontalListElem]) {
+    fn assert_parses_to_with_restricted(
+        lines: &[&str],
+        expected_toks: &[HorizontalListElem],
+        restricted: bool,
+    ) {
         with_parser(lines, |parser| {
-            assert_eq!(parser.parse_horizontal_list(), expected_toks);
+            assert_eq!(parser.parse_horizontal_list(restricted), expected_toks);
         });
+    }
+
+    fn assert_parses_to(lines: &[&str], expected_toks: &[HorizontalListElem]) {
+        assert_parses_to_with_restricted(lines, expected_toks, true);
     }
 
     #[test]
@@ -233,30 +255,9 @@ mod tests {
     }
 
     #[test]
-    fn it_ignores_par() {
-        // NOTE(xymostech): This is only correct behavior in restricted
-        // horizontal mode. There isn't currently a distinction between that
-        // and normal horizontal mode here yet, so we'll just choose the easy
-        // behavior.
-        assert_parses_to(
-            &["a%", "", "b%"],
-            &[
-                HorizontalListElem::Char {
-                    chr: 'a',
-                    font: "cmr10".to_string(),
-                },
-                HorizontalListElem::Char {
-                    chr: 'b',
-                    font: "cmr10".to_string(),
-                },
-            ],
-        );
-    }
-
-    #[test]
     fn it_stops_parsing_at_mismatched_brace() {
         with_parser(&["a{b{c}d{e}f}g}%"], |parser| {
-            let hlist = parser.parse_horizontal_list();
+            let hlist = parser.parse_horizontal_list(true);
             assert_eq!(hlist.len(), 7);
             assert_eq!(
                 parser.lex_expanded_token(),
@@ -300,7 +301,7 @@ mod tests {
                 + Dimen::from_unit(2.0, Unit::Point);
 
             assert_eq!(
-                parser.parse_horizontal_list(),
+                parser.parse_horizontal_list(true),
                 &[
                     HorizontalListElem::Char {
                         chr: 'a',
@@ -346,7 +347,7 @@ mod tests {
         with_parser(&[r"\setbox0=\hbox{a}%", r"\box0%"], |parser| {
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
 
-            let list = parser.parse_horizontal_list();
+            let list = parser.parse_horizontal_list(true);
 
             assert_eq!(list.len(), 1);
             if let HorizontalListElem::Box(ref tex_box) = list[0] {
@@ -371,6 +372,67 @@ mod tests {
                     font: "cmr10".to_string(),
                 },
             ],
+        );
+    }
+
+    #[test]
+    fn it_leaves_horizontal_mode_when_seeing_par_in_unrestricted_mode() {
+        // In unrestricted mode, \par ends the horizontal mode
+        assert_parses_to_with_restricted(
+            &[r"abc\par%"],
+            &[
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'b',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'c',
+                    font: "cmr10".to_string(),
+                },
+            ],
+            false,
+        );
+    }
+
+    #[test]
+    fn it_ignores_par_in_restricted_mode() {
+        // In restricted mode, \par does nothing
+        assert_parses_to_with_restricted(
+            &["a%", "", "b%"],
+            &[
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'b',
+                    font: "cmr10".to_string(),
+                },
+            ],
+            true,
+        );
+
+        assert_parses_to_with_restricted(
+            &[r"ab\par c%"],
+            &[
+                HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'b',
+                    font: "cmr10".to_string(),
+                },
+                HorizontalListElem::Char {
+                    chr: 'c',
+                    font: "cmr10".to_string(),
+                },
+            ],
+            true,
         );
     }
 }
