@@ -35,3 +35,9 @@ impl HorizontalListElem {
         }
     }
 }
+
+#[derive(Debug, PartialEq)]
+pub enum VerticalListElem {
+    Box(TeXBox),
+    VSkip(Glue),
+}

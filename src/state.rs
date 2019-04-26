@@ -14,7 +14,7 @@ use crate::token::Token;
 const ALL_PRIMITIVES: &[&str] = &[
     "iftrue", "iffalse", "fi", "else", "def", "let", "global", "count",
     "ifnum", "advance", "multiply", "divide", "number", "par", "hskip", "hbox",
-    "relax", "setbox", "wd", "ht", "dp", "box",
+    "relax", "setbox", "wd", "ht", "dp", "box", "vskip",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {
