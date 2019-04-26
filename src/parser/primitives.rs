@@ -165,6 +165,23 @@ impl<'a> Parser<'a> {
             _ => false,
         }
     }
+
+    /// Given a (maybe) token, returns the token that the token is potentially
+    /// renamed to. For instance, after
+    ///   \let\bgroup={
+    /// then
+    ///   parser.replace_renamed_token(
+    ///       Some(Token::ControlSequence("bgroup".to_string())))
+    /// will return
+    ///   Some(Token::Char('{', Category::BeginGroup))
+    /// This is explicitly not part of token expansion.
+    pub fn replace_renamed_token(
+        &mut self,
+        maybe_token: Option<Token>,
+    ) -> Option<Token> {
+        maybe_token
+            .map(|token| self.state.get_renamed_token(&token).unwrap_or(token))
+    }
 }
 
 #[cfg(test)]
@@ -321,6 +338,19 @@ mod tests {
     fn it_fails_parsing_missing_required_keywords() {
         with_parser(&[" blah"], |parser| {
             parser.parse_keyword_expanded("pt");
+        });
+    }
+
+    #[test]
+    fn it_fetches_renamed_tokens() {
+        with_parser(&[r"\let\bgroup={%", r"\bgroup"], |parser| {
+            parser.parse_assignment();
+
+            let unreplaced = parser.lex_unexpanded_token();
+            assert_eq!(
+                parser.replace_renamed_token(unreplaced),
+                Some(Token::Char('{', Category::BeginGroup))
+            );
         });
     }
 }

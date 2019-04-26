@@ -14,22 +14,6 @@ fn get_space_glue() -> Glue {
 }
 
 impl<'a> Parser<'a> {
-    fn replace_renamed_token(
-        &mut self,
-        maybe_token: Option<Token>,
-    ) -> Option<Token> {
-        match maybe_token {
-            None => None,
-            Some(ref token) => {
-                if let Some(renamed) = self.state.get_renamed_token(token) {
-                    Some(renamed)
-                } else {
-                    maybe_token
-                }
-            }
-        }
-    }
-
     fn parse_horizontal_list_elem(
         &mut self,
         group_level: &mut usize,
