@@ -32,7 +32,7 @@ fn set_glue(
 }
 
 impl<'a> Parser<'a> {
-    pub fn parse_horizontal_box(
+    fn parse_horizontal_box(
         &mut self,
         layout: &BoxLayout,
         restricted: bool,
@@ -102,6 +102,14 @@ impl<'a> Parser<'a> {
             list: list,
             glue_set_ratio: set_ratio,
         }
+    }
+
+    /// Provides an easy way for external consumers of boxes to parse a
+    /// specific type of horizontal box, so they don't have to be concerned
+    /// with BoxLayout or TeXBox vs HorizontalBox.
+    pub fn parse_unrestricted_horizontal_box(&mut self) -> TeXBox {
+        let hbox = self.parse_horizontal_box(&BoxLayout::NaturalWidth, false);
+        TeXBox::HorizontalBox(hbox)
     }
 
     fn parse_box_specification(&mut self) -> BoxLayout {

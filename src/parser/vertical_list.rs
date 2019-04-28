@@ -64,6 +64,18 @@ impl<'a> Parser<'a> {
                 if self.is_assignment_head() {
                     self.parse_assignment();
                     self.parse_vertical_list_elem(group_level, internal)
+                } else if self.is_next_expanded_token_in_set_of_primitives(&[
+                    "indent", "noindent",
+                ]) {
+                    // TODO(xymostech): Differentiate between \noindent and
+                    // \indent and add indentation for \indent.
+                    self.lex_expanded_token();
+                    // TODO(xymostech): This will eventually potentially
+                    // produce a series of boxes instead of just one, if there
+                    // are line breaks. Handle that.
+                    let tex_box = self.parse_unrestricted_horizontal_box();
+                    // TODO(xymostech): Add \parskip glue before the box.
+                    Some(VerticalListElem::Box(tex_box))
                 } else if self.is_box_head() {
                     let maybe_tex_box = self.parse_box();
                     if let Some(tex_box) = maybe_tex_box {
@@ -97,10 +109,8 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
-    use crate::boxes::{HorizontalBox, TeXBox};
     use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
     use crate::glue::Glue;
-    use crate::list::HorizontalListElem;
     use crate::testing::with_parser;
 
     fn assert_parses_to(lines: &[&str], expected_list: &[VerticalListElem]) {
@@ -273,15 +283,17 @@ mod tests {
     fn it_parses_box_elements() {
         with_parser(
             &[
-                r"\setbox0=\hbox{b}%",
+                r"\setbox0=\hbox{a}%",
+                r"\setbox1=\hbox{b}%",
+                r"\setbox2=\hbox{b}%",
                 r"\vskip 1pt%",
                 r"\hbox{a}%",
                 r"\vskip 2pt%",
-                r"\box0",
+                r"\box2",
             ],
             |parser| {
-                let metrics =
-                    parser.state.get_metrics_for_font("cmr10").unwrap();
+                parser.parse_assignment();
+                parser.parse_assignment();
 
                 assert_eq!(
                     parser.parse_vertical_list(true),
@@ -291,19 +303,7 @@ mod tests {
                             stretch: SpringDimen::Dimen(Dimen::zero()),
                             shrink: SpringDimen::Dimen(Dimen::zero()),
                         }),
-                        VerticalListElem::Box(TeXBox::HorizontalBox(
-                            HorizontalBox {
-                                width: metrics.get_width('a'),
-                                height: metrics.get_height('a'),
-                                depth: metrics.get_depth('a'),
-
-                                list: vec![HorizontalListElem::Char {
-                                    chr: 'a',
-                                    font: "cmr10".to_string(),
-                                }],
-                                glue_set_ratio: None,
-                            }
-                        )),
+                        VerticalListElem::Box(parser.state.get_box(0).unwrap()),
                         VerticalListElem::VSkip(Glue {
                             space: Dimen::from_unit(2.0, Unit::Point),
                             stretch: SpringDimen::Dimen(Dimen::zero()),
@@ -311,19 +311,47 @@ mod tests {
                         }),
                         // TODO(xymostech): Eventually, there will be interline
                         // glue here.
-                        VerticalListElem::Box(TeXBox::HorizontalBox(
-                            HorizontalBox {
-                                width: metrics.get_width('b'),
-                                height: metrics.get_height('b'),
-                                depth: metrics.get_depth('b'),
+                        VerticalListElem::Box(parser.state.get_box(1).unwrap()),
+                    ]
+                );
+            },
+        );
+    }
 
-                                list: vec![HorizontalListElem::Char {
-                                    chr: 'b',
-                                    font: "cmr10".to_string(),
-                                }],
-                                glue_set_ratio: None,
-                            }
-                        )),
+    #[test]
+    fn it_parses_hboxes_after_noindent() {
+        with_parser(
+            &[
+                r"\setbox0=\hbox{a}%",
+                r"\setbox1=\hbox{g}%",
+                r"\vskip 1pt%",
+                r"\noindent a\par%",
+                r"\vskip 2pt%",
+                r"\indent g\par%",
+            ],
+            |parser| {
+                parser.parse_assignment();
+                parser.parse_assignment();
+
+                assert_eq!(
+                    parser.parse_vertical_list(true),
+                    &[
+                        VerticalListElem::VSkip(Glue {
+                            space: Dimen::from_unit(1.0, Unit::Point),
+                            stretch: SpringDimen::Dimen(Dimen::zero()),
+                            shrink: SpringDimen::Dimen(Dimen::zero()),
+                        }),
+                        // TODO(xymostech): Eventually, there will be \parskip
+                        // glue here.
+                        VerticalListElem::Box(parser.state.get_box(0).unwrap()),
+                        VerticalListElem::VSkip(Glue {
+                            space: Dimen::from_unit(2.0, Unit::Point),
+                            stretch: SpringDimen::Dimen(Dimen::zero()),
+                            shrink: SpringDimen::Dimen(Dimen::zero()),
+                        }),
+                        // TODO(xymostech): Eventually, there will be \parskip
+                        // glue here.
+                        VerticalListElem::Box(parser.state.get_box(1).unwrap()),
                     ]
                 );
             },
