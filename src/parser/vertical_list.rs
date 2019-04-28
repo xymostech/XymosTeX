@@ -12,7 +12,13 @@ impl<'a> Parser<'a> {
         let expanded_token = self.peek_expanded_token();
         let expanded_renamed_token = self.replace_renamed_token(expanded_token);
         match expanded_renamed_token {
-            None => None,
+            None => {
+                if internal {
+                    None
+                } else {
+                    panic!(r"Emergency stop, EOF found before \end");
+                }
+            }
             Some(Token::Char(_, cat)) => match cat {
                 Category::Space => {
                     self.lex_expanded_token();
@@ -26,7 +32,11 @@ impl<'a> Parser<'a> {
                 }
                 Category::EndGroup => {
                     if *group_level == 0 {
-                        None
+                        if internal {
+                            None
+                        } else {
+                            panic!("Too many }'s!");
+                        }
                     } else {
                         self.lex_expanded_token();
                         *group_level -= 1;
@@ -202,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "You can't use \\end in internal vertical mode")]
+    #[should_panic(expected = r"You can't use \end in internal vertical mode")]
     fn it_should_fail_with_end_in_internal_vertical_mode() {
         assert_parses_to(&[r"\vskip 0pt\end%"], &[]);
     }
@@ -230,6 +240,22 @@ mod tests {
                 parser.lex_unexpanded_token(),
                 Some(Token::Char('a', Category::Letter))
             );
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Too many }'s")]
+    fn it_should_fail_with_too_many_end_groups() {
+        with_parser(&["{{}{{}}}}%"], |parser| {
+            parser.parse_vertical_list(false);
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = r"EOF found before \end")]
+    fn it_should_fail_with_no_end() {
+        with_parser(&[r"\vskip 0pt%"], |parser| {
+            parser.parse_vertical_list(false);
         });
     }
 }
