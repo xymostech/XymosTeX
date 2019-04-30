@@ -36,8 +36,9 @@ impl<'a> Parser<'a> {
         &mut self,
         layout: &BoxLayout,
         restricted: bool,
+        indent: bool,
     ) -> HorizontalBox {
-        let list = self.parse_horizontal_list(restricted);
+        let list = self.parse_horizontal_list(restricted, indent);
 
         let mut height = Dimen::zero();
         let mut depth = Dimen::zero();
@@ -107,8 +108,12 @@ impl<'a> Parser<'a> {
     /// Provides an easy way for external consumers of boxes to parse a
     /// specific type of horizontal box, so they don't have to be concerned
     /// with BoxLayout or TeXBox vs HorizontalBox.
-    pub fn parse_unrestricted_horizontal_box(&mut self) -> TeXBox {
-        let hbox = self.parse_horizontal_box(&BoxLayout::NaturalWidth, false);
+    pub fn parse_unrestricted_horizontal_box(
+        &mut self,
+        indent: bool,
+    ) -> TeXBox {
+        let hbox =
+            self.parse_horizontal_box(&BoxLayout::NaturalWidth, false, indent);
         TeXBox::HorizontalBox(hbox)
     }
 
@@ -143,7 +148,7 @@ impl<'a> Parser<'a> {
                 _ => panic!("Expected { when parsing box"),
             }
 
-            let hbox = self.parse_horizontal_box(&layout, true);
+            let hbox = self.parse_horizontal_box(&layout, true, false);
 
             // And there should always be a } after the horizontal list
             match self.lex_expanded_token() {
@@ -163,7 +168,8 @@ impl<'a> Parser<'a> {
     // Used for early testing, when we're not going to be inspecting a whole
     // output box.
     pub fn parse_horizontal_box_to_chars(&mut self) -> Vec<char> {
-        let hbox = self.parse_horizontal_box(&BoxLayout::NaturalWidth, true);
+        let hbox =
+            self.parse_horizontal_box(&BoxLayout::NaturalWidth, true, false);
         hbox.to_chars()
     }
 }
@@ -178,8 +184,11 @@ mod tests {
     #[test]
     fn it_parses_boxes_with_characters() {
         with_parser(&["gb%"], |parser| {
-            let hbox =
-                parser.parse_horizontal_box(&BoxLayout::NaturalWidth, true);
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::NaturalWidth,
+                true,
+                false,
+            );
 
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
 
@@ -195,8 +204,11 @@ mod tests {
     #[test]
     fn it_parses_boxes_with_glue() {
         with_parser(&["\\hskip 1pt \\hskip 2pt plus 1fil%"], |parser| {
-            let hbox =
-                parser.parse_horizontal_box(&BoxLayout::NaturalWidth, true);
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::NaturalWidth,
+                true,
+                false,
+            );
 
             assert_eq!(hbox.height, Dimen::zero());
             assert_eq!(hbox.depth, Dimen::zero());
@@ -207,8 +219,11 @@ mod tests {
     #[test]
     fn it_parses_boxes_with_glue_and_characters() {
         with_parser(&["b\\hskip 2pt g%"], |parser| {
-            let hbox =
-                parser.parse_horizontal_box(&BoxLayout::NaturalWidth, true);
+            let hbox = parser.parse_horizontal_box(
+                &BoxLayout::NaturalWidth,
+                true,
+                false,
+            );
 
             assert_eq!(hbox.list.len(), 3);
 
@@ -237,6 +252,7 @@ mod tests {
             let hbox = parser.parse_horizontal_box(
                 &BoxLayout::FixedWidth(fixed_width),
                 true,
+                false,
             );
 
             assert_eq!(hbox.width, fixed_width);
@@ -259,6 +275,7 @@ mod tests {
             let hbox = parser.parse_horizontal_box(
                 &BoxLayout::FixedWidth(fixed_width),
                 true,
+                false,
             );
 
             assert_eq!(hbox.width, fixed_width);
@@ -278,6 +295,7 @@ mod tests {
             let hbox = parser.parse_horizontal_box(
                 &BoxLayout::FixedWidth(fixed_width),
                 true,
+                false,
             );
 
             assert_eq!(hbox.width, fixed_width);
@@ -297,6 +315,7 @@ mod tests {
             let hbox = parser.parse_horizontal_box(
                 &BoxLayout::FixedWidth(fixed_width),
                 true,
+                false,
             );
 
             assert_eq!(hbox.width, fixed_width);
@@ -321,6 +340,7 @@ mod tests {
                 let hbox = parser.parse_horizontal_box(
                     &BoxLayout::FixedWidth(fixed_width),
                     true,
+                    false,
                 );
 
                 assert_eq!(hbox.width, fixed_width);
@@ -342,6 +362,7 @@ mod tests {
             let hbox = parser.parse_horizontal_box(
                 &BoxLayout::FixedWidth(fixed_width),
                 true,
+                false,
             );
 
             assert_eq!(hbox.width, fixed_width);
@@ -362,6 +383,7 @@ mod tests {
             let hbox = parser.parse_horizontal_box(
                 &BoxLayout::FixedWidth(fixed_width),
                 true,
+                false,
             );
 
             assert_eq!(hbox.width, fixed_width);
@@ -378,6 +400,7 @@ mod tests {
             let hbox = parser.parse_horizontal_box(
                 &BoxLayout::Spread(Dimen::from_unit(6.0, Unit::Point)),
                 true,
+                false,
             );
 
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
@@ -399,6 +422,7 @@ mod tests {
             let hbox = parser.parse_horizontal_box(
                 &BoxLayout::Spread(Dimen::from_unit(6.0, Unit::Point)),
                 true,
+                false,
             );
 
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
@@ -420,6 +444,7 @@ mod tests {
             let hbox = parser.parse_horizontal_box(
                 &BoxLayout::Spread(Dimen::from_unit(-1.0, Unit::Point)),
                 true,
+                false,
             );
 
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();

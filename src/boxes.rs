@@ -64,6 +64,17 @@ impl HorizontalBox {
             })
             .collect()
     }
+
+    /// Returns an empty, zero-size horizontal box.
+    pub fn empty() -> Self {
+        HorizontalBox {
+            height: Dimen::zero(),
+            depth: Dimen::zero(),
+            width: Dimen::zero(),
+            list: Vec::new(),
+            glue_set_ratio: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

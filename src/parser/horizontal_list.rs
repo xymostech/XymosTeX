@@ -1,3 +1,4 @@
+use crate::boxes::{HorizontalBox, TeXBox};
 use crate::category::Category;
 use crate::dimension::{Dimen, SpringDimen, Unit};
 use crate::glue::Glue;
@@ -101,8 +102,22 @@ impl<'a> Parser<'a> {
     pub fn parse_horizontal_list(
         &mut self,
         restricted: bool,
+        indent: bool,
     ) -> Vec<HorizontalListElem> {
         let mut result = Vec::new();
+
+        // Optionally add in indentation
+        // TODO(xymostech): If I think about adding more flags for deciding the
+        // "initial" state of the box, I need to think about whether this needs
+        // needs to be better exposed, or if flags are the appropriate way to
+        // control this.
+        if indent {
+            let mut hbox = HorizontalBox::empty();
+            // TODO(xymostech): This should be \parindent, not a fixed 20pt.
+            hbox.width = Dimen::from_unit(20.0, Unit::Point);
+            let tex_box = TeXBox::HorizontalBox(hbox);
+            result.push(HorizontalListElem::Box(tex_box));
+        }
 
         let mut group_level = 0;
         while let Some(elem) =
@@ -119,8 +134,7 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
-    use crate::boxes::{HorizontalBox, TeXBox};
-    use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
+    use crate::dimension::{FilDimen, FilKind};
     use crate::testing::with_parser;
 
     fn assert_parses_to_with_restricted(
@@ -129,7 +143,10 @@ mod tests {
         restricted: bool,
     ) {
         with_parser(lines, |parser| {
-            assert_eq!(parser.parse_horizontal_list(restricted), expected_toks);
+            assert_eq!(
+                parser.parse_horizontal_list(restricted, false),
+                expected_toks
+            );
         });
     }
 
@@ -241,7 +258,7 @@ mod tests {
     #[test]
     fn it_stops_parsing_at_mismatched_brace() {
         with_parser(&["a{b{c}d{e}f}g}%"], |parser| {
-            let hlist = parser.parse_horizontal_list(true);
+            let hlist = parser.parse_horizontal_list(true, false);
             assert_eq!(hlist.len(), 7);
             assert_eq!(
                 parser.lex_expanded_token(),
@@ -285,7 +302,7 @@ mod tests {
                 + Dimen::from_unit(2.0, Unit::Point);
 
             assert_eq!(
-                parser.parse_horizontal_list(true),
+                parser.parse_horizontal_list(true, false),
                 &[
                     HorizontalListElem::Char {
                         chr: 'a',
@@ -331,7 +348,7 @@ mod tests {
         with_parser(&[r"\setbox0=\hbox{a}%", r"\box0%"], |parser| {
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
 
-            let list = parser.parse_horizontal_list(true);
+            let list = parser.parse_horizontal_list(true, false);
 
             assert_eq!(list.len(), 1);
             if let HorizontalListElem::Box(ref tex_box) = list[0] {
@@ -418,5 +435,24 @@ mod tests {
             ],
             true,
         );
+    }
+
+    #[test]
+    fn it_adds_indentation() {
+        with_parser(&[r"\setbox0=\hbox{}%", r"\wd0=20pt%", "a%"], |parser| {
+            parser.parse_assignment();
+            parser.parse_assignment();
+
+            assert_eq!(
+                parser.parse_horizontal_list(false, true),
+                &[
+                    HorizontalListElem::Box(parser.state.get_box(0).unwrap()),
+                    HorizontalListElem::Char {
+                        chr: 'a',
+                        font: "cmr10".to_string(),
+                    },
+                ]
+            );
+        });
     }
 }
