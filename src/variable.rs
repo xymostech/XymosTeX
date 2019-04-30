@@ -33,13 +33,13 @@ impl DimenVariable {
     pub fn get(&self, state: &TeXState) -> Dimen {
         match self {
             DimenVariable::BoxWidth(index) => state
-                .with_box(*index, |tex_box| tex_box.mut_width().clone())
+                .with_box(*index, |tex_box| tex_box.width().clone())
                 .unwrap_or(Dimen::zero()),
             DimenVariable::BoxHeight(index) => state
-                .with_box(*index, |tex_box| tex_box.mut_height().clone())
+                .with_box(*index, |tex_box| tex_box.height().clone())
                 .unwrap_or(Dimen::zero()),
             DimenVariable::BoxDepth(index) => state
-                .with_box(*index, |tex_box| tex_box.mut_depth().clone())
+                .with_box(*index, |tex_box| tex_box.depth().clone())
                 .unwrap_or(Dimen::zero()),
         }
     }

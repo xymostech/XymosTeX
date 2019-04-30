@@ -6,7 +6,7 @@ use crate::token::Token;
 
 impl<'a> Parser<'a> {
     fn is_variable_assignment_head(&mut self) -> bool {
-        self.is_integer_variable_head()
+        self.is_integer_variable_head() || self.is_dimen_variable_head()
     }
 
     fn is_macro_assignment_head(&mut self) -> bool {
@@ -41,10 +41,19 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_variable_assignment(&mut self, global: bool) {
-        let variable = self.parse_integer_variable();
-        self.parse_equals_expanded();
-        let value = self.parse_number();
-        variable.set(self.state, global, value);
+        if self.is_integer_variable_head() {
+            let variable = self.parse_integer_variable();
+            self.parse_equals_expanded();
+            let value = self.parse_number();
+            variable.set(self.state, global, value);
+        } else if self.is_dimen_variable_head() {
+            let variable = self.parse_dimen_variable();
+            self.parse_equals_expanded();
+            let value = self.parse_dimen();
+            variable.set(self.state, global, value);
+        } else {
+            panic!("unimplemented");
+        }
     }
 
     // Parses a control sequence or special char token to use for \def or \let
@@ -177,6 +186,7 @@ mod tests {
     use super::*;
 
     use crate::category::Category;
+    use crate::dimension::{Dimen, Unit};
     use crate::makro::{Macro, MacroListElem};
     use crate::testing::with_parser;
 
@@ -416,5 +426,33 @@ mod tests {
 
             assert!(parser.state.get_box(123).is_some());
         });
+    }
+
+    #[test]
+    fn it_sets_box_dimens() {
+        with_parser(
+            &[r"\setbox0=\hbox{a}%", r"\wd0=2pt%", r"\ht0=3pt%"],
+            |parser| {
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert_eq!(
+                    parser.state.with_box(0, |tex_box| tex_box.width().clone()),
+                    Some(Dimen::from_unit(2.0, Unit::Point))
+                );
+                assert_eq!(
+                    parser
+                        .state
+                        .with_box(0, |tex_box| tex_box.height().clone()),
+                    Some(Dimen::from_unit(3.0, Unit::Point))
+                );
+            },
+        );
     }
 }
