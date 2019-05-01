@@ -4,6 +4,20 @@ use crate::parser::Parser;
 use crate::token::Token;
 
 impl<'a> Parser<'a> {
+    /// Handle generating an optionally indented horizontal mode box by
+    /// entering horizontal mode and parsing the box there.
+    fn handle_enter_horizontal_mode(
+        &mut self,
+        indent: bool,
+    ) -> VerticalListElem {
+        // TODO(xymostech): This will eventually potentially
+        // produce a series of boxes instead of just one, if there
+        // are line breaks. Handle that.
+        let tex_box = self.parse_unrestricted_horizontal_box(indent);
+        // TODO(xymostech): Add \parskip glue before the box.
+        VerticalListElem::Box(tex_box)
+    }
+
     fn parse_vertical_list_elem(
         &mut self,
         group_level: &mut usize,
@@ -20,6 +34,12 @@ impl<'a> Parser<'a> {
                 }
             }
             Some(Token::Char(_, cat)) => match cat {
+                Category::Letter => {
+                    Some(self.handle_enter_horizontal_mode(true))
+                }
+                Category::Other => {
+                    Some(self.handle_enter_horizontal_mode(true))
+                }
                 Category::Space => {
                     self.lex_expanded_token();
                     self.parse_vertical_list_elem(group_level, internal)
@@ -46,6 +66,11 @@ impl<'a> Parser<'a> {
                 }
                 _ => panic!("unimplemented"),
             },
+            Some(ref tok)
+                if self.state.is_token_equal_to_prim(tok, "hskip") =>
+            {
+                Some(self.handle_enter_horizontal_mode(true))
+            }
             Some(ref tok) if self.state.is_token_equal_to_prim(tok, "end") => {
                 if internal {
                     panic!(r"You can't use \end in internal vertical mode")
@@ -70,14 +95,7 @@ impl<'a> Parser<'a> {
                     let tok = self.lex_expanded_token().unwrap();
                     let indent =
                         self.state.is_token_equal_to_prim(&tok, "indent");
-
-                    // TODO(xymostech): This will eventually potentially
-                    // produce a series of boxes instead of just one, if there
-                    // are line breaks. Handle that.
-                    let tex_box =
-                        self.parse_unrestricted_horizontal_box(indent);
-                    // TODO(xymostech): Add \parskip glue before the box.
-                    Some(VerticalListElem::Box(tex_box))
+                    Some(self.handle_enter_horizontal_mode(indent))
                 } else if self.is_box_head() {
                     let maybe_tex_box = self.parse_box();
                     if let Some(tex_box) = maybe_tex_box {
@@ -398,6 +416,38 @@ mod tests {
                         // TODO(xymostech): Eventually, there will be \parskip
                         // glue here.
                         VerticalListElem::Box(parser.state.get_box(1).unwrap()),
+                    ]
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_enters_horizontal_mode_after_horizontal_material() {
+        with_parser(
+            &[
+                r"\setbox0=\hbox{}%",
+                r"\wd0=20pt%",
+                r"\setbox1=\hbox{\copy0 a}%",
+                r"\setbox2=\hbox{\copy0 @}%",
+                r"\setbox3=\hbox{\copy0 \hskip1pt}%",
+                r"a\par%",
+                r"@\par%",
+                r"\hskip 1pt\par%",
+            ],
+            |parser| {
+                parser.parse_assignment();
+                parser.parse_assignment();
+                parser.parse_assignment();
+                parser.parse_assignment();
+                parser.parse_assignment();
+
+                assert_eq!(
+                    parser.parse_vertical_list(true),
+                    &[
+                        VerticalListElem::Box(parser.state.get_box(1).unwrap()),
+                        VerticalListElem::Box(parser.state.get_box(2).unwrap()),
+                        VerticalListElem::Box(parser.state.get_box(3).unwrap()),
                     ]
                 );
             },
