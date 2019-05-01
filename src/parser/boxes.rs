@@ -133,7 +133,9 @@ impl<'a> Parser<'a> {
     }
 
     pub fn is_box_head(&mut self) -> bool {
-        self.is_next_expanded_token_in_set_of_primitives(&["hbox", "box"])
+        self.is_next_expanded_token_in_set_of_primitives(&[
+            "hbox", "box", "copy",
+        ])
     }
 
     pub fn parse_box(&mut self) -> Option<TeXBox> {
@@ -160,6 +162,9 @@ impl<'a> Parser<'a> {
         } else if self.state.is_token_equal_to_prim(&head, "box") {
             let box_index = self.parse_8bit_number();
             self.state.get_box(box_index)
+        } else if self.state.is_token_equal_to_prim(&head, "copy") {
+            let box_index = self.parse_8bit_number();
+            self.state.get_box_copy(box_index)
         } else {
             panic!("unimplemented");
         }
@@ -525,12 +530,26 @@ mod tests {
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
 
             assert!(parser.is_box_head());
-
             let parsed_box = parser.parse_box().unwrap();
             assert_eq!(parsed_box.width(), &metrics.get_width('a'));
 
             assert!(parser.is_box_head());
             assert_eq!(parser.parse_box(), None);
+        });
+    }
+
+    #[test]
+    fn it_parses_copied_boxes_from_box_registers() {
+        with_parser(&[r"\setbox0=\hbox{a}%", r"\copy0", r"\box0"], |parser| {
+            parser.parse_assignment();
+
+            assert!(parser.is_box_head());
+            let copied_box = parser.parse_box().unwrap();
+            assert_eq!(copied_box, parser.state.get_box_copy(0).unwrap());
+
+            assert!(parser.is_box_head());
+            let parsed_box = parser.parse_box().unwrap();
+            assert_eq!(parsed_box, copied_box);
         });
     }
 }

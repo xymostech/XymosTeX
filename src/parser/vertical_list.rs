@@ -366,18 +366,14 @@ mod tests {
             &[
                 r"\setbox2=\hbox{}%",
                 r"\wd2=20pt%",
-                r"\setbox0=\hbox{\box2 a}%",
-                r"\setbox2=\hbox{}%",
-                r"\wd2=20pt%",
-                r"\setbox1=\hbox{\box2 g}%",
+                r"\setbox0=\hbox{\copy2 a}%",
+                r"\setbox1=\hbox{\copy2 g}%",
                 r"\vskip 1pt%",
                 r"\indent a\par%",
                 r"\vskip 2pt%",
                 r"\indent g\par%",
             ],
             |parser| {
-                parser.parse_assignment();
-                parser.parse_assignment();
                 parser.parse_assignment();
                 parser.parse_assignment();
                 parser.parse_assignment();
