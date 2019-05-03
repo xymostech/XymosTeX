@@ -18,6 +18,22 @@ impl<'a> Parser<'a> {
         VerticalListElem::Box(tex_box)
     }
 
+    /// Checks if a token is the start of something that only is valid in
+    /// horizontal mode.
+    fn is_horizontal_mode_head(&self, tok: &Token) -> bool {
+        if let Token::Char(_, cat) = tok {
+            if *cat == Category::Letter || *cat == Category::Other {
+                return true;
+            }
+        }
+
+        if self.state.is_token_equal_to_prim(tok, "hskip") {
+            return true;
+        }
+
+        return false;
+    }
+
     fn parse_vertical_list_elem(
         &mut self,
         group_level: &mut usize,
@@ -33,13 +49,10 @@ impl<'a> Parser<'a> {
                     panic!(r"Emergency stop, EOF found before \end");
                 }
             }
+            Some(ref tok) if self.is_horizontal_mode_head(tok) => {
+                Some(self.handle_enter_horizontal_mode(true))
+            }
             Some(Token::Char(_, cat)) => match cat {
-                Category::Letter => {
-                    Some(self.handle_enter_horizontal_mode(true))
-                }
-                Category::Other => {
-                    Some(self.handle_enter_horizontal_mode(true))
-                }
                 Category::Space => {
                     self.lex_expanded_token();
                     self.parse_vertical_list_elem(group_level, internal)
@@ -66,11 +79,6 @@ impl<'a> Parser<'a> {
                 }
                 _ => panic!("unimplemented"),
             },
-            Some(ref tok)
-                if self.state.is_token_equal_to_prim(tok, "hskip") =>
-            {
-                Some(self.handle_enter_horizontal_mode(true))
-            }
             Some(ref tok) if self.state.is_token_equal_to_prim(tok, "end") => {
                 if internal {
                     panic!(r"You can't use \end in internal vertical mode")
