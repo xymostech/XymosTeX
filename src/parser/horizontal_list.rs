@@ -15,6 +15,12 @@ fn get_space_glue() -> Glue {
 }
 
 impl<'a> Parser<'a> {
+    /// Returns if the next token is the start of something that only makes
+    /// sense in vertical mode.
+    fn is_vertical_material_head(&mut self) -> bool {
+        self.is_next_expanded_token_in_set_of_primitives(&["vskip", "end"])
+    }
+
     fn parse_horizontal_list_elem(
         &mut self,
         group_level: &mut usize,
@@ -92,6 +98,14 @@ impl<'a> Parser<'a> {
                     } else {
                         self.parse_horizontal_list_elem(group_level, restricted)
                     }
+                } else if self.is_vertical_material_head() {
+                    // If we see vertical mode material, we add a \par token to
+                    // the input stream, continue and let that be parsed, after
+                    // which we'll see the vertical mode material again.
+                    self.add_upcoming_token(Token::ControlSequence(
+                        "par".to_string(),
+                    ));
+                    self.parse_horizontal_list_elem(group_level, restricted)
                 } else {
                     panic!("unimplemented!");
                 }
@@ -454,5 +468,47 @@ mod tests {
                 ]
             );
         });
+    }
+
+    #[test]
+    fn it_does_par_things_when_seeing_vertical_material() {
+        // \par is defined normally, so we just end horizontal mode
+        with_parser(&[r"a\end%"], |parser| {
+            assert_eq!(
+                parser.parse_horizontal_list(false, false),
+                &[HorizontalListElem::Char {
+                    chr: 'a',
+                    font: "cmr10".to_string(),
+                },]
+            );
+            assert_eq!(
+                parser.lex_unexpanded_token(),
+                Some(Token::ControlSequence("end".to_string()))
+            );
+        });
+
+        // \par is defined specially, so we see its definition
+        with_parser(
+            &[r"\let\endgraf=\par%", r"\def\par{b\endgraf}%", r"a\end%"],
+            |parser| {
+                assert_eq!(
+                    parser.parse_horizontal_list(false, false),
+                    &[
+                        HorizontalListElem::Char {
+                            chr: 'a',
+                            font: "cmr10".to_string(),
+                        },
+                        HorizontalListElem::Char {
+                            chr: 'b',
+                            font: "cmr10".to_string(),
+                        },
+                    ]
+                );
+                assert_eq!(
+                    parser.lex_unexpanded_token(),
+                    Some(Token::ControlSequence("end".to_string()))
+                );
+            },
+        );
     }
 }

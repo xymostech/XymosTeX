@@ -65,7 +65,14 @@ impl<'a> Parser<'a> {
     //    spaces> and we want to check if the next token is a space)
     //  * When we expand something, so we want the next lexed tokens to be the
     //    expanded result
-    fn add_upcoming_token(&mut self, token: Token) {
+    //  * When we're following the instructions to "insert the token <tok> into
+    //    the input", like we do when seeing vertical mode material in
+    //    horizontal mode.
+    //
+    // Note: Use this function sparingly outside of this file! For efficiency's
+    // sake, we should try to peek tokens instead of manually parsing and
+    // un-parsing them.
+    pub fn add_upcoming_token(&mut self, token: Token) {
         self.upcoming_tokens.push(token);
     }
 
