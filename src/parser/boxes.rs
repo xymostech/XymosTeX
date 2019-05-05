@@ -18,14 +18,21 @@ fn set_glue(
     stretch_available: &SpringDimen,
 ) -> GlueSetRatio {
     match stretch_available {
+        // If we have a finite amount of stretch/shrink available, then we set
+        // a finite glue ratio but have some limits on how much we can
+        // stretch/shrink
         SpringDimen::Dimen(stretch_dimen) => GlueSetRatio::from(
             GlueSetRatioKind::Finite,
             // TODO(xymostech): Ensure this isn't <-1.0
+            // TODO(xymostech): Handle stretch_dimen = 0
             stretch_needed / stretch_dimen,
         ),
 
+        // If there's an infinite amount of stretch/shrink available, then we
+        // can stretch/shrink as much as is needed with no limits.
         SpringDimen::FilDimen(stretch_fil_dimen) => GlueSetRatio::from(
             GlueSetRatioKind::from_fil_kind(&stretch_fil_dimen.0),
+            // TODO(xymostech): Handle stretch_fil_dimen = 0
             stretch_needed / stretch_fil_dimen,
         ),
     }
@@ -38,8 +45,11 @@ impl<'a> Parser<'a> {
         restricted: bool,
         indent: bool,
     ) -> HorizontalBox {
+        // Parse the actual list of elements
         let list = self.parse_horizontal_list(restricted, indent);
 
+        // Keep track of the max height/depth and the total amount of width of
+        // the elements in the list.
         let mut height = Dimen::zero();
         let mut depth = Dimen::zero();
         let mut width = Glue::zero();
@@ -48,50 +58,70 @@ impl<'a> Parser<'a> {
             let (elem_height, elem_depth, elem_width) =
                 elem.get_size(self.state);
 
+            // Height and depth are just the maximum of all of the elements.
             if elem_height > height {
                 height = elem_height;
             }
             if elem_depth > depth {
                 depth = elem_depth;
             }
+
+            // elem.get_size() returns a Glue for the width, so we just add up
+            // all of the glue widths that are in the list.
             width = width + elem_width;
         }
 
+        // Now, based on the layout of the box, we calculate the real width of
+        // the box and the glue set ratio.
         let (set_width, set_ratio) = match layout {
+            // If we just want the box at its natural width, we just return the
+            // "space" component of our width.
             &BoxLayout::NaturalWidth => (width.space, None),
+
             &BoxLayout::FixedWidth(final_width) => {
                 let natural_width = width.space;
 
+                // If the natural width of the box exactly equals the desired
+                // width, then we don't need a glue set. This is probably very
+                // unlikely to happen except in unique cases, like when the
+                // width is 0.
                 if final_width == natural_width {
                     (final_width, None)
                 } else {
+                    // If we need to stretch, calculate the amount we need to
+                    // stretch.
                     let stretch_needed = final_width - natural_width;
 
-                    if final_width > natural_width {
-                        (
-                            final_width,
-                            Some(set_glue(&stretch_needed, &width.stretch)),
-                        )
+                    // Figure out if we're stretching or shrinking
+                    let stretch_or_shrink = if final_width > natural_width {
+                        &width.stretch
                     } else {
-                        (
-                            final_width,
-                            Some(set_glue(&stretch_needed, &width.shrink)),
-                        )
-                    }
+                        &width.shrink
+                    };
+
+                    (
+                        // The resulting box width is exactly the fixed with
+                        // that was desired.
+                        final_width,
+                        Some(set_glue(&stretch_needed, stretch_or_shrink)),
+                    )
                 }
             }
             &BoxLayout::Spread(spread_needed) => {
-                if spread_needed > Dimen::zero() {
-                    (
-                        width.space + spread_needed,
-                        Some(set_glue(&spread_needed, &width.stretch)),
-                    )
+                // If we're spreading the box, we just need to figure out if
+                // we're stretching or shrinking, since we already know the
+                // amount of spread.
+                let stretch_or_shrink = if spread_needed > Dimen::zero() {
+                    &width.stretch
                 } else {
-                    (
-                        width.space + spread_needed,
-                        Some(set_glue(&spread_needed, &width.shrink)),
-                    )
-                }
+                    &width.shrink
+                };
+
+                (
+                    // The final width is the natural width + spread
+                    width.space + spread_needed,
+                    Some(set_glue(&spread_needed, stretch_or_shrink)),
+                )
             }
         };
 
