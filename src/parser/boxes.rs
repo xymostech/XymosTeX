@@ -1,4 +1,6 @@
-use crate::boxes::{GlueSetRatio, GlueSetRatioKind, HorizontalBox, TeXBox};
+use crate::boxes::{
+    GlueSetRatio, GlueSetRatioKind, HorizontalBox, TeXBox, VerticalBox,
+};
 use crate::category::Category;
 use crate::dimension::{Dimen, SpringDimen};
 use crate::glue::Glue;
@@ -145,6 +147,44 @@ impl<'a> Parser<'a> {
         let hbox =
             self.parse_horizontal_box(&BoxLayout::NaturalWidth, false, indent);
         TeXBox::HorizontalBox(hbox)
+    }
+
+    fn parse_vertical_box(&mut self, internal: bool) -> VerticalBox {
+        // Parse the actual list of elements
+        let list = self.parse_vertical_list(internal);
+
+        // Keep track of the total height of the elements
+        let mut height = Glue::zero();
+        // Keep track of the depth of the most recently seen element. This will
+        // end up 0 for all elements except for boxes
+        let mut prev_depth = Dimen::zero();
+        // Keep track of the maximum element width
+        let mut width = Dimen::zero();
+
+        for elem in &list {
+            let (elem_height, elem_depth, elem_width) = elem.get_size();
+
+            // Add up the height of the elements, plus the depths for all but
+            // the last element. get_size() returns a Glue for the height, but
+            // the depths are just dimens, so we convert it.
+            height = height + Glue::from_dimen(prev_depth) + elem_height;
+
+            // Keep track of the depth of the most recent element
+            prev_depth = elem_depth;
+
+            // Find the maximum width of all the elements
+            if elem_width > width {
+                width = elem_width;
+            }
+        }
+
+        VerticalBox {
+            height: height.space,
+            depth: prev_depth,
+            width: width,
+
+            list: list,
+        }
     }
 
     fn parse_box_specification(&mut self) -> BoxLayout {
@@ -580,6 +620,38 @@ mod tests {
             assert!(parser.is_box_head());
             let parsed_box = parser.parse_box().unwrap();
             assert_eq!(parsed_box, copied_box);
+        });
+    }
+
+    #[test]
+    fn it_parses_vertical_lists() {
+        with_parser(&[r"aby%", r"\vskip 2pt%", r"g%"], |parser| {
+            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+
+            let vbox = parser.parse_vertical_box(true);
+
+            // Sanity check the number of elements to make sure something
+            // didn't go horribly wrong.
+            assert_eq!(vbox.list.len(), 3);
+
+            // The height will be the height+depth of the first box + the 2pt
+            // glue + the height of the second box.
+            let expected_height = metrics.get_height('b')
+                + metrics.get_depth('y')
+                + Dimen::from_unit(2.0, Unit::Point)
+                + metrics.get_height('g');
+            assert_eq!(vbox.height, expected_height);
+
+            // The depth will just be the depth of the second box.
+            assert_eq!(vbox.depth, metrics.get_depth('g'));
+
+            // The width will be the width of the first box, which is indented
+            // and contains a, b, and y.
+            let expected_width = Dimen::from_unit(20.0, Unit::Point)
+                + metrics.get_width('a')
+                + metrics.get_width('b')
+                + metrics.get_width('y');
+            assert_eq!(vbox.width, expected_width);
         });
     }
 }

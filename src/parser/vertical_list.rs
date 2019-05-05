@@ -119,7 +119,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_vertical_list(&mut self, internal: bool) -> Vec<VerticalListElem> {
+    pub fn parse_vertical_list(
+        &mut self,
+        internal: bool,
+    ) -> Vec<VerticalListElem> {
         let mut result = Vec::new();
 
         let mut group_level = 0;

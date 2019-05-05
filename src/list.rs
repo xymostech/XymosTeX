@@ -41,3 +41,19 @@ pub enum VerticalListElem {
     Box(TeXBox),
     VSkip(Glue),
 }
+
+impl VerticalListElem {
+    pub fn get_size(&self) -> (Glue, Dimen, Dimen) {
+        match self {
+            VerticalListElem::Box(tex_box) => (
+                Glue::from_dimen(*tex_box.height()),
+                *tex_box.depth(),
+                *tex_box.width(),
+            ),
+
+            VerticalListElem::VSkip(glue) => {
+                (glue.clone(), Dimen::zero(), Dimen::zero())
+            }
+        }
+    }
+}

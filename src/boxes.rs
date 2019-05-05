@@ -1,5 +1,5 @@
 use crate::dimension::{Dimen, FilKind};
-use crate::list::HorizontalListElem;
+use crate::list::{HorizontalListElem, VerticalListElem};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum GlueSetRatioKind {
@@ -75,6 +75,14 @@ impl HorizontalBox {
             glue_set_ratio: None,
         }
     }
+}
+
+pub struct VerticalBox {
+    pub height: Dimen,
+    pub depth: Dimen,
+    pub width: Dimen,
+
+    pub list: Vec<VerticalListElem>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
