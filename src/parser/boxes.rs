@@ -157,7 +157,11 @@ impl<'a> Parser<'a> {
         TeXBox::HorizontalBox(hbox)
     }
 
-    fn parse_vertical_box(&mut self, internal: bool) -> VerticalBox {
+    fn parse_vertical_box(
+        &mut self,
+        layout: &BoxLayout,
+        internal: bool,
+    ) -> VerticalBox {
         // Parse the actual list of elements
         let list = self.parse_vertical_list(internal);
 
@@ -186,12 +190,16 @@ impl<'a> Parser<'a> {
             }
         }
 
+        // Figure out the true height and set ratio
+        let (set_height, glue_set) = get_set_dimen_and_ratio(height, layout);
+
         VerticalBox {
-            height: height.space,
+            height: set_height,
             depth: prev_depth,
             width: width,
 
             list: list,
+            glue_set_ratio: glue_set,
         }
     }
 
@@ -626,7 +634,7 @@ mod tests {
         with_parser(&[r"aby%", r"\vskip 2pt%", r"g%"], |parser| {
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
 
-            let vbox = parser.parse_vertical_box(true);
+            let vbox = parser.parse_vertical_box(&BoxLayout::Natural, true);
 
             // Sanity check the number of elements to make sure something
             // didn't go horribly wrong.
@@ -651,5 +659,47 @@ mod tests {
                 + metrics.get_width('y');
             assert_eq!(vbox.width, expected_width);
         });
+    }
+
+    #[test]
+    fn it_sets_fixed_glue_in_vertical_lists() {
+        // This example is taken from the TeXbook, exercise 12.12
+        with_parser(
+            &[
+                r"\setbox1=\hbox{}%",
+                r"\wd1=1pt \ht1=1pt \dp1=1pt%",
+                r"\setbox2=\hbox{}%",
+                r"\wd2=2pt \ht2=2pt \dp2=2pt%",
+                r"\vskip0pt plus1fil minus1fil%",
+                r"\box1%",
+                r"\vskip6pt minus3fil%",
+                r"\box2%",
+                r"\vskip0pt plus1fil minus1fil%",
+            ],
+            |parser| {
+                let vbox = parser.parse_vertical_box(
+                    &BoxLayout::Fixed(Dimen::from_unit(4.0, Unit::Point)),
+                    true,
+                );
+
+                // Sanity check the number of elements to make sure something
+                // didn't go horribly wrong.
+                assert_eq!(vbox.list.len(), 5);
+
+                // Since we specified a fixed layout, this is just the fixed amount
+                assert_eq!(vbox.height, Dimen::from_unit(4.0, Unit::Point));
+                // The last element is not a box, so the overall depth is 0
+                assert_eq!(vbox.depth, Dimen::zero());
+                // In the exercise, the first box is moved over, so this ends up
+                // being 1. Since we aren't moving it over, this is the max of the
+                // two boxes, which is 2.
+                assert_eq!(vbox.width, Dimen::from_unit(2.0, Unit::Point));
+                // The glue set ratio ends up being -8/5 pt/fil
+                assert_eq!(
+                    vbox.glue_set_ratio,
+                    Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -8.0 / 5.0))
+                );
+            },
+        );
     }
 }

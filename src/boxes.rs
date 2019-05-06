@@ -83,6 +83,8 @@ pub struct VerticalBox {
     pub width: Dimen,
 
     pub list: Vec<VerticalListElem>,
+    // For each glue, this says how much the glue should stretch/shrink by.
+    pub glue_set_ratio: Option<GlueSetRatio>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
