@@ -8,8 +8,8 @@ use crate::parser::Parser;
 use crate::token::Token;
 
 pub enum BoxLayout {
-    NaturalWidth,
-    FixedWidth(Dimen),
+    Natural,
+    Fixed(Dimen),
     Spread(Dimen),
 }
 
@@ -37,6 +37,65 @@ fn set_glue(
             // TODO(xymostech): Handle stretch_fil_dimen = 0
             stretch_needed / stretch_fil_dimen,
         ),
+    }
+}
+
+/// Based on the layout of a box and the stretchable dimension, return the
+/// resulting true dimension and the needed glue set ratio.
+fn get_set_dimen_and_ratio(
+    glue: Glue,
+    layout: &BoxLayout,
+) -> (Dimen, Option<GlueSetRatio>) {
+    match layout {
+        // If we just want the box at its natural dimension, we just return the
+        // "space" component of our dimension.
+        &BoxLayout::Natural => (glue.space, None),
+
+        &BoxLayout::Fixed(final_dimen) => {
+            let natural_dimen = glue.space;
+
+            // If the natural dimension of the box exactly equals the desired
+            // dimension, then we don't need a glue set. This is probably very
+            // unlikely to happen except in unique cases, like when the
+            // dimension is 0.
+            if final_dimen == natural_dimen {
+                (final_dimen, None)
+            } else {
+                // If we need to stretch, calculate the amount we need to
+                // stretch.
+                let stretch_needed = final_dimen - natural_dimen;
+
+                // Figure out if we're stretching or shrinking
+                let stretch_or_shrink = if final_dimen > natural_dimen {
+                    &glue.stretch
+                } else {
+                    &glue.shrink
+                };
+
+                (
+                    // The resulting box dimension is exactly the fixed
+                    // dimension that was desired.
+                    final_dimen,
+                    Some(set_glue(&stretch_needed, stretch_or_shrink)),
+                )
+            }
+        }
+        &BoxLayout::Spread(spread_needed) => {
+            // If we're spreading the box, we just need to figure out if
+            // we're stretching or shrinking, since we already know the
+            // amount of spread.
+            let stretch_or_shrink = if spread_needed > Dimen::zero() {
+                &glue.stretch
+            } else {
+                &glue.shrink
+            };
+
+            (
+                // The final dimension is the natural dimension + spread
+                glue.space + spread_needed,
+                Some(set_glue(&spread_needed, stretch_or_shrink)),
+            )
+        }
     }
 }
 
@@ -73,59 +132,8 @@ impl<'a> Parser<'a> {
             width = width + elem_width;
         }
 
-        // Now, based on the layout of the box, we calculate the real width of
-        // the box and the glue set ratio.
-        let (set_width, set_ratio) = match layout {
-            // If we just want the box at its natural width, we just return the
-            // "space" component of our width.
-            &BoxLayout::NaturalWidth => (width.space, None),
-
-            &BoxLayout::FixedWidth(final_width) => {
-                let natural_width = width.space;
-
-                // If the natural width of the box exactly equals the desired
-                // width, then we don't need a glue set. This is probably very
-                // unlikely to happen except in unique cases, like when the
-                // width is 0.
-                if final_width == natural_width {
-                    (final_width, None)
-                } else {
-                    // If we need to stretch, calculate the amount we need to
-                    // stretch.
-                    let stretch_needed = final_width - natural_width;
-
-                    // Figure out if we're stretching or shrinking
-                    let stretch_or_shrink = if final_width > natural_width {
-                        &width.stretch
-                    } else {
-                        &width.shrink
-                    };
-
-                    (
-                        // The resulting box width is exactly the fixed with
-                        // that was desired.
-                        final_width,
-                        Some(set_glue(&stretch_needed, stretch_or_shrink)),
-                    )
-                }
-            }
-            &BoxLayout::Spread(spread_needed) => {
-                // If we're spreading the box, we just need to figure out if
-                // we're stretching or shrinking, since we already know the
-                // amount of spread.
-                let stretch_or_shrink = if spread_needed > Dimen::zero() {
-                    &width.stretch
-                } else {
-                    &width.shrink
-                };
-
-                (
-                    // The final width is the natural width + spread
-                    width.space + spread_needed,
-                    Some(set_glue(&spread_needed, stretch_or_shrink)),
-                )
-            }
-        };
+        // Figure out the final width and glue set needed.
+        let (set_width, set_ratio) = get_set_dimen_and_ratio(width, layout);
 
         HorizontalBox {
             height: height,
@@ -145,7 +153,7 @@ impl<'a> Parser<'a> {
         indent: bool,
     ) -> TeXBox {
         let hbox =
-            self.parse_horizontal_box(&BoxLayout::NaturalWidth, false, indent);
+            self.parse_horizontal_box(&BoxLayout::Natural, false, indent);
         TeXBox::HorizontalBox(hbox)
     }
 
@@ -191,14 +199,14 @@ impl<'a> Parser<'a> {
         if self.parse_optional_keyword_expanded("to") {
             let dimen = self.parse_dimen();
             self.parse_filler_expanded();
-            BoxLayout::FixedWidth(dimen)
+            BoxLayout::Fixed(dimen)
         } else if self.parse_optional_keyword_expanded("spread") {
             let dimen = self.parse_dimen();
             self.parse_filler_expanded();
             BoxLayout::Spread(dimen)
         } else {
             self.parse_filler_expanded();
-            BoxLayout::NaturalWidth
+            BoxLayout::Natural
         }
     }
 
@@ -243,8 +251,7 @@ impl<'a> Parser<'a> {
     // Used for early testing, when we're not going to be inspecting a whole
     // output box.
     pub fn parse_horizontal_box_to_chars(&mut self) -> Vec<char> {
-        let hbox =
-            self.parse_horizontal_box(&BoxLayout::NaturalWidth, true, false);
+        let hbox = self.parse_horizontal_box(&BoxLayout::Natural, true, false);
         hbox.to_chars()
     }
 }
@@ -259,11 +266,8 @@ mod tests {
     #[test]
     fn it_parses_boxes_with_characters() {
         with_parser(&["gb%"], |parser| {
-            let hbox = parser.parse_horizontal_box(
-                &BoxLayout::NaturalWidth,
-                true,
-                false,
-            );
+            let hbox =
+                parser.parse_horizontal_box(&BoxLayout::Natural, true, false);
 
             let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
 
@@ -279,11 +283,8 @@ mod tests {
     #[test]
     fn it_parses_boxes_with_glue() {
         with_parser(&["\\hskip 1pt \\hskip 2pt plus 1fil%"], |parser| {
-            let hbox = parser.parse_horizontal_box(
-                &BoxLayout::NaturalWidth,
-                true,
-                false,
-            );
+            let hbox =
+                parser.parse_horizontal_box(&BoxLayout::Natural, true, false);
 
             assert_eq!(hbox.height, Dimen::zero());
             assert_eq!(hbox.depth, Dimen::zero());
@@ -294,11 +295,8 @@ mod tests {
     #[test]
     fn it_parses_boxes_with_glue_and_characters() {
         with_parser(&["b\\hskip 2pt g%"], |parser| {
-            let hbox = parser.parse_horizontal_box(
-                &BoxLayout::NaturalWidth,
-                true,
-                false,
-            );
+            let hbox =
+                parser.parse_horizontal_box(&BoxLayout::Natural, true, false);
 
             assert_eq!(hbox.list.len(), 3);
 
@@ -325,7 +323,7 @@ mod tests {
                 + Dimen::from_unit(5.0, Unit::Point);
 
             let hbox = parser.parse_horizontal_box(
-                &BoxLayout::FixedWidth(fixed_width),
+                &BoxLayout::Fixed(fixed_width),
                 true,
                 false,
             );
@@ -348,7 +346,7 @@ mod tests {
                 + Dimen::from_unit(5.0, Unit::Point);
 
             let hbox = parser.parse_horizontal_box(
-                &BoxLayout::FixedWidth(fixed_width),
+                &BoxLayout::Fixed(fixed_width),
                 true,
                 false,
             );
@@ -368,7 +366,7 @@ mod tests {
                 + Dimen::from_unit(5.0, Unit::Point);
 
             let hbox = parser.parse_horizontal_box(
-                &BoxLayout::FixedWidth(fixed_width),
+                &BoxLayout::Fixed(fixed_width),
                 true,
                 false,
             );
@@ -388,7 +386,7 @@ mod tests {
                 + Dimen::from_unit(5.0, Unit::Point);
 
             let hbox = parser.parse_horizontal_box(
-                &BoxLayout::FixedWidth(fixed_width),
+                &BoxLayout::Fixed(fixed_width),
                 true,
                 false,
             );
@@ -413,7 +411,7 @@ mod tests {
                     + Dimen::from_unit(6.0, Unit::Point);
 
                 let hbox = parser.parse_horizontal_box(
-                    &BoxLayout::FixedWidth(fixed_width),
+                    &BoxLayout::Fixed(fixed_width),
                     true,
                     false,
                 );
@@ -435,7 +433,7 @@ mod tests {
                 - Dimen::from_unit(1.0, Unit::Point);
 
             let hbox = parser.parse_horizontal_box(
-                &BoxLayout::FixedWidth(fixed_width),
+                &BoxLayout::Fixed(fixed_width),
                 true,
                 false,
             );
@@ -456,7 +454,7 @@ mod tests {
                 - Dimen::from_unit(4.0, Unit::Point);
 
             let hbox = parser.parse_horizontal_box(
-                &BoxLayout::FixedWidth(fixed_width),
+                &BoxLayout::Fixed(fixed_width),
                 true,
                 false,
             );
