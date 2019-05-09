@@ -4,8 +4,9 @@
 %
 \def\boxcontents{Aa\hskip 5pt plus2pt minus2ptGg\hskip 3pt plus1fil minus1ptZz}%
 \setbox1=\hbox{\boxcontents}%
-\number\wd1 \number\ht1 \number\dp1 \box1%
+\noindent\number\wd1 \number\ht1 \number\dp1 \box1%
 \setbox1=\hbox to50pt{\boxcontents}%
 \number\wd1 \box1%
 \setbox1=\hbox to42pt{\boxcontents}%
 \number\wd1 \box1%
+\end%

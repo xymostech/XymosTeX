@@ -258,9 +258,9 @@ impl<'a> Parser<'a> {
 
     // Used for early testing, when we're not going to be inspecting a whole
     // output box.
-    pub fn parse_horizontal_box_to_chars(&mut self) -> Vec<char> {
-        let hbox = self.parse_horizontal_box(&BoxLayout::Natural, true, false);
-        hbox.to_chars()
+    pub fn parse_vertical_box_to_chars(&mut self) -> Vec<char> {
+        let vbox = self.parse_vertical_box(&BoxLayout::Natural, false);
+        vbox.to_chars()
     }
 }
 
@@ -551,11 +551,13 @@ mod tests {
 
             assert!(parser.is_box_head());
             let hbox = parser.parse_box().unwrap();
-            let TeXBox::HorizontalBox(hbox) = hbox;
-
-            assert_eq!(hbox.list.len(), 3);
-            assert_eq!(hbox.glue_set_ratio, None);
-            assert_eq!(hbox.width, expected_width);
+            if let TeXBox::HorizontalBox(hbox) = hbox {
+                assert_eq!(hbox.list.len(), 3);
+                assert_eq!(hbox.glue_set_ratio, None);
+                assert_eq!(hbox.width, expected_width);
+            } else {
+                panic!("Found vbox!");
+            }
         });
     }
 
@@ -564,10 +566,12 @@ mod tests {
         with_parser(&["\\hbox to20pt{a\\hskip 0pt plus1filc}%"], |parser| {
             assert!(parser.is_box_head());
             let hbox = parser.parse_box().unwrap();
-            let TeXBox::HorizontalBox(hbox) = hbox;
-
-            assert_eq!(hbox.list.len(), 3);
-            assert_eq!(hbox.width, Dimen::from_unit(20.0, Unit::Point));
+            if let TeXBox::HorizontalBox(hbox) = hbox {
+                assert_eq!(hbox.list.len(), 3);
+                assert_eq!(hbox.width, Dimen::from_unit(20.0, Unit::Point));
+            } else {
+                panic!("Found vbox!");
+            }
         });
     }
 
@@ -581,19 +585,21 @@ mod tests {
 
             assert!(parser.is_box_head());
             let hbox = parser.parse_box().unwrap();
-            let TeXBox::HorizontalBox(hbox) = hbox;
-
-            assert_eq!(hbox.list.len(), 3);
-            assert_eq!(hbox.width, expected_width);
+            if let TeXBox::HorizontalBox(hbox) = hbox {
+                assert_eq!(hbox.list.len(), 3);
+                assert_eq!(hbox.width, expected_width);
+            } else {
+                panic!("Found vbox!");
+            }
         });
     }
 
     #[test]
     fn it_parses_chars_from_horizontal_boxes() {
-        with_parser(&["a {b }c%"], |parser| {
+        with_parser(&[r"a {b }c\end%"], |parser| {
             assert_eq!(
-                parser.parse_horizontal_box_to_chars(),
-                vec!['a', ' ', 'b', ' ', 'c']
+                parser.parse_vertical_box_to_chars(),
+                vec![' ', 'a', ' ', 'b', ' ', 'c', '\n']
             );
         });
     }

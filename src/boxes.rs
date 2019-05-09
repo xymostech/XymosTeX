@@ -55,6 +55,13 @@ pub struct HorizontalBox {
 
 impl HorizontalBox {
     pub fn to_chars(&self) -> Vec<char> {
+        // Since `to_chars()` is really just for early debugging, this is a
+        // special rule for adding a space when we encounter an 'indent' box,
+        // which is an empty box with positive width.
+        if self.list.len() == 0 && self.width > Dimen::zero() {
+            return vec![' '];
+        }
+
         self.list
             .iter()
             .flat_map(|elem| match elem {
@@ -77,6 +84,7 @@ impl HorizontalBox {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct VerticalBox {
     pub height: Dimen,
     pub depth: Dimen,
@@ -87,48 +95,81 @@ pub struct VerticalBox {
     pub glue_set_ratio: Option<GlueSetRatio>,
 }
 
+impl VerticalBox {
+    pub fn to_chars(&self) -> Vec<char> {
+        self.list
+            .iter()
+            // TODO(xymostech): Figure out a better way to insert a '\n' in
+            // between each element here.
+            .flat_map(|elem| match elem {
+                VerticalListElem::VSkip(_) => vec!['\n'],
+                VerticalListElem::Box(tex_box) => {
+                    let mut vec = tex_box.to_chars();
+                    vec.push('\n');
+                    vec
+                }
+            })
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum TeXBox {
     HorizontalBox(HorizontalBox),
+    VerticalBox(VerticalBox),
 }
 
 impl TeXBox {
     pub fn height(&self) -> &Dimen {
-        let TeXBox::HorizontalBox(hbox) = self;
-        &hbox.height
+        match self {
+            TeXBox::HorizontalBox(hbox) => &hbox.height,
+            TeXBox::VerticalBox(vbox) => &vbox.height,
+        }
     }
 
     pub fn width(&self) -> &Dimen {
-        let TeXBox::HorizontalBox(hbox) = self;
-        &hbox.width
+        match self {
+            TeXBox::HorizontalBox(hbox) => &hbox.width,
+            TeXBox::VerticalBox(vbox) => &vbox.width,
+        }
     }
 
     pub fn depth(&self) -> &Dimen {
-        let TeXBox::HorizontalBox(hbox) = self;
-        &hbox.depth
+        match self {
+            TeXBox::HorizontalBox(hbox) => &hbox.depth,
+            TeXBox::VerticalBox(vbox) => &vbox.depth,
+        }
     }
 
     pub fn mut_height(&mut self) -> &mut Dimen {
-        let TeXBox::HorizontalBox(hbox) = self;
-        &mut hbox.height
+        match self {
+            TeXBox::HorizontalBox(hbox) => &mut hbox.height,
+            TeXBox::VerticalBox(vbox) => &mut vbox.height,
+        }
     }
 
     pub fn mut_width(&mut self) -> &mut Dimen {
-        let TeXBox::HorizontalBox(hbox) = self;
-        &mut hbox.width
+        match self {
+            TeXBox::HorizontalBox(hbox) => &mut hbox.width,
+            TeXBox::VerticalBox(vbox) => &mut vbox.width,
+        }
     }
 
     pub fn mut_depth(&mut self) -> &mut Dimen {
-        let TeXBox::HorizontalBox(hbox) = self;
-        &mut hbox.depth
+        match self {
+            TeXBox::HorizontalBox(hbox) => &mut hbox.depth,
+            TeXBox::VerticalBox(vbox) => &mut vbox.depth,
+        }
     }
 
     // For early testing, we're not actually going to outputting a DVI file
     // with the correctly formatted text. So to test things, we'll just pull
     // out the contents of the box as a list of characters.
     pub fn to_chars(&self) -> Vec<char> {
-        let TeXBox::HorizontalBox(hbox) = self;
-        hbox.to_chars()
+        match self {
+            TeXBox::HorizontalBox(hbox) => hbox.to_chars(),
+            TeXBox::VerticalBox(vbox) => vbox.to_chars(),
+        }
     }
 }
 
@@ -140,7 +181,7 @@ mod tests {
 
     #[test]
     fn it_parses_to_chars() {
-        let test_box = TeXBox::HorizontalBox(HorizontalBox {
+        let inner_hbox = TeXBox::HorizontalBox(HorizontalBox {
             width: Dimen::zero(),
             height: Dimen::zero(),
             depth: Dimen::zero(),
@@ -175,6 +216,27 @@ mod tests {
             glue_set_ratio: None,
         });
 
-        assert_eq!(test_box.to_chars(), vec!['a', ' ', 'b', ' ', 'c']);
+        let test_box = TeXBox::VerticalBox(VerticalBox {
+            width: Dimen::zero(),
+            height: Dimen::zero(),
+            depth: Dimen::zero(),
+
+            list: vec![
+                VerticalListElem::Box(inner_hbox.clone()),
+                VerticalListElem::VSkip(Glue::from_dimen(Dimen::zero())),
+                VerticalListElem::Box(inner_hbox.clone()),
+            ],
+            glue_set_ratio: None,
+        });
+
+        #[rustfmt::skip]
+        assert_eq!(
+            test_box.to_chars(),
+            vec![
+                'a', ' ', 'b', ' ', 'c', '\n',
+                '\n',
+                'a', ' ', 'b', ' ', 'c', '\n',
+            ]
+        );
     }
 }

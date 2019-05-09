@@ -42,7 +42,7 @@ fn main() {
     // Parse a top-level horizontal list and print out the characters that we
     // got as a result.
     let result: String =
-        parser.parse_horizontal_box_to_chars().into_iter().collect();
+        parser.parse_vertical_box_to_chars().into_iter().collect();
 
     println!("{}", result);
 }
