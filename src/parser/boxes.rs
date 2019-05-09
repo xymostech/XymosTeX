@@ -220,7 +220,7 @@ impl<'a> Parser<'a> {
 
     pub fn is_box_head(&mut self) -> bool {
         self.is_next_expanded_token_in_set_of_primitives(&[
-            "hbox", "box", "copy",
+            "hbox", "vbox", "box", "copy",
         ])
     }
 
@@ -245,6 +245,24 @@ impl<'a> Parser<'a> {
             }
 
             Some(TeXBox::HorizontalBox(hbox))
+        } else if self.state.is_token_equal_to_prim(&head, "vbox") {
+            let layout = self.parse_box_specification();
+
+            // We expect a { after the box specification
+            match self.lex_expanded_token() {
+                Some(Token::Char(_, Category::BeginGroup)) => (),
+                _ => panic!("Expected { when parsing box"),
+            }
+
+            let vbox = self.parse_vertical_box(&layout, true);
+
+            // And there should always be a } after the horizontal list
+            match self.lex_expanded_token() {
+                Some(Token::Char(_, Category::EndGroup)) => (),
+                _ => panic!("Expected } when parsing box"),
+            }
+
+            Some(TeXBox::VerticalBox(vbox))
         } else if self.state.is_token_equal_to_prim(&head, "box") {
             let box_index = self.parse_8bit_number();
             self.state.get_box(box_index)
@@ -705,6 +723,26 @@ mod tests {
                     vbox.glue_set_ratio,
                     Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -8.0 / 5.0))
                 );
+            },
+        );
+    }
+
+    #[test]
+    fn it_parses_vbox() {
+        with_parser(
+            &[
+                r"\setbox0=\hbox{x}%",
+                r"\vbox to 20pt{\box0 a\vskip1pt plus1fil g}%",
+            ],
+            |parser| {
+                let metrics =
+                    parser.state.get_metrics_for_font("cmr10").unwrap();
+
+                parser.parse_assignment();
+                let vbox = parser.parse_box().unwrap();
+
+                assert_eq!(*vbox.height(), Dimen::from_unit(20.0, Unit::Point));
+                assert_eq!(*vbox.depth(), metrics.get_depth('g'));
             },
         );
     }
