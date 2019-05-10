@@ -102,7 +102,7 @@ impl VerticalBox {
             // TODO(xymostech): Figure out a better way to insert a '\n' in
             // between each element here.
             .flat_map(|elem| match elem {
-                VerticalListElem::VSkip(_) => vec!['\n'],
+                VerticalListElem::VSkip(_) => vec![],
                 VerticalListElem::Box(tex_box) => {
                     let mut vec = tex_box.to_chars();
                     vec.push('\n');
@@ -234,7 +234,6 @@ mod tests {
             test_box.to_chars(),
             vec![
                 'a', ' ', 'b', ' ', 'c', '\n',
-                '\n',
                 'a', ' ', 'b', ' ', 'c', '\n',
             ]
         );

@@ -28,7 +28,7 @@ Instead of producing simple textual output as a result of the parsing, in this s
 
 ## Stage 3: Vertical mode
 
-**Status**: In progress
+**Status**: Done!
 **Difficulty**: Medium
 **Condition for success**: correctly parsing, building, and measuring the vertical boxes from [commands that build vertical boxes and enter and leave vertical and horizontal mode using different techniques](examples/vertical.tex)
 

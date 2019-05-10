@@ -8,9 +8,9 @@ This project is an attempt to build an implementation of TeX in Rust. The overal
 
 ## Status
 
-Currently, rs-tex has reached the point where is it Turing complete (that is, it implements things like macro expansion, conditionals, assignments) and can generate very basic horizontal boxes.
+Currently, rs-tex has reached the point where is it Turing complete (that is, it implements things like macro expansion, conditionals, assignments) and can interpret very basic horizontal and vertical boxes
 
-The next body of work will involve building vertical boxes with horizontal mode material in them.
+The next body of work will be creating DVI output from the parsed vertical and horizontal boxes.
 
 ## Trying it
 

@@ -25,3 +25,48 @@ fn it_parses_horizontal_boxes() {
             "2877216447828127431Aa Gg Zz3276800Aa Gg Zz2752512Aa Gg Zz\n");
     });
 }
+
+/// This test ensures that we pass the stage #3 goals.
+#[test]
+fn it_parses_vertical_boxes() {
+    with_parser(
+        &[
+            r"a\par",
+            r"b\vskip1pt",
+            r"\indent c\par",
+            r"\noindent d\par",
+            r"\hbox{e}",
+            r"\setbox0=\vbox{",
+            r"    \indent f\par",
+            r"    g\vskip1pt",
+            r"    \indent h\par",
+            r"    \noindent i\par",
+            r"    \hbox{j}",
+            r"}",
+            r"\noindent \number\ht0 \number\dp0 \par",
+            r"\box0",
+            r"\end",
+        ],
+        |parser| {
+            let result: String =
+                parser.parse_vertical_box_to_chars().into_iter().collect();
+
+            assert_eq!(
+                result,
+                " a
+ b
+ c
+d
+e
+3666375127431
+ f
+ g
+ h
+i
+j
+
+"
+            );
+        },
+    );
+}
