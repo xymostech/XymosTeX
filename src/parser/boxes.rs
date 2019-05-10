@@ -662,14 +662,13 @@ mod tests {
 
             // Sanity check the number of elements to make sure something
             // didn't go horribly wrong.
-            assert_eq!(vbox.list.len(), 3);
+            assert_eq!(vbox.list.len(), 4);
 
-            // The height will be the height+depth of the first box + the 2pt
-            // glue + the height of the second box.
+            // The height will be the height of the first box + the 12pt of
+            // interline glue + the 2pt glue
             let expected_height = metrics.get_height('b')
-                + metrics.get_depth('y')
-                + Dimen::from_unit(2.0, Unit::Point)
-                + metrics.get_height('g');
+                + Dimen::from_unit(12.0, Unit::Point)
+                + Dimen::from_unit(2.0, Unit::Point);
             assert_eq!(vbox.height, expected_height);
 
             // The depth will just be the depth of the second box.
@@ -696,7 +695,9 @@ mod tests {
                 r"\wd2=2pt \ht2=2pt \dp2=2pt%",
                 r"\vskip0pt plus1fil minus1fil%",
                 r"\box1%",
-                r"\vskip6pt minus3fil%",
+                // This is added to add to account for the
+                // \baselineskip=9pt minus3fil
+                r"\vskip-3pt minus3fil%",
                 r"\box2%",
                 r"\vskip0pt plus1fil minus1fil%",
             ],
@@ -708,7 +709,7 @@ mod tests {
 
                 // Sanity check the number of elements to make sure something
                 // didn't go horribly wrong.
-                assert_eq!(vbox.list.len(), 5);
+                assert_eq!(vbox.list.len(), 6);
 
                 // Since we specified a fixed layout, this is just the fixed amount
                 assert_eq!(vbox.height, Dimen::from_unit(4.0, Unit::Point));

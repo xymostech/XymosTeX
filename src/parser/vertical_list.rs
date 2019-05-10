@@ -1,4 +1,6 @@
 use crate::category::Category;
+use crate::dimension::{Dimen, Unit};
+use crate::glue::Glue;
 use crate::list::VerticalListElem;
 use crate::parser::Parser;
 use crate::token::Token;
@@ -125,10 +127,46 @@ impl<'a> Parser<'a> {
     ) -> Vec<VerticalListElem> {
         let mut result = Vec::new();
 
+        // The depth of the most recent box.
+        // TODO(xymostech): Store this in the \prevdepth parameter
+        let mut prev_depth = Dimen::from_unit(-1000.0, Unit::Point);
+
+        // TODO(xymostech): Store these as \baselineskip, \lineskiplimit, and
+        // \lineskip parameters
+        let baselineskip =
+            Glue::from_dimen(Dimen::from_unit(12.0, Unit::Point));
+        let lineskiplimit = Dimen::from_unit(0.0, Unit::Point);
+        let lineskip = Glue::from_dimen(Dimen::from_unit(1.0, Unit::Point));
+
         let mut group_level = 0;
         while let Some(elem) =
             self.parse_vertical_list_elem(&mut group_level, internal)
         {
+            // Handle box elements specially so we can add interline glue
+            if let VerticalListElem::Box(ref tex_box) = elem {
+                // If prev_depth is -1000pt, don't add interline glue
+                if prev_depth != Dimen::from_unit(-1000.0, Unit::Point) {
+                    // Calculate how much interline glue we'd add if we just
+                    // take into account baselineskip - prev_depth - box.height
+                    let box_height = tex_box.height();
+                    let total_skip = baselineskip.clone()
+                        - Glue::from_dimen(*box_height + prev_depth);
+
+                    // If the interline glue would be less than lineskiplimit,
+                    // use lineskip instead.
+                    let interline_glue = if total_skip.space < lineskiplimit {
+                        lineskip.clone()
+                    } else {
+                        total_skip
+                    };
+
+                    result.push(VerticalListElem::VSkip(interline_glue));
+                }
+
+                // Keep track of the depth of the most recent box
+                prev_depth = tex_box.depth().clone();
+            }
+
             result.push(elem);
         }
 
@@ -140,8 +178,7 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
-    use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
-    use crate::glue::Glue;
+    use crate::dimension::{FilDimen, FilKind, SpringDimen};
     use crate::testing::with_parser;
 
     fn assert_parses_to(lines: &[&str], expected_list: &[VerticalListElem]) {
@@ -326,23 +363,27 @@ mod tests {
                 parser.parse_assignment();
                 parser.parse_assignment();
 
+                let box0 = parser.state.get_box(0).unwrap();
+                let box1 = parser.state.get_box(1).unwrap();
+
+                let interline_glue = Dimen::from_unit(12.0, Unit::Point)
+                    - *box0.depth()
+                    - *box1.height();
+
                 assert_eq!(
                     parser.parse_vertical_list(true),
                     &[
-                        VerticalListElem::VSkip(Glue {
-                            space: Dimen::from_unit(1.0, Unit::Point),
-                            stretch: SpringDimen::Dimen(Dimen::zero()),
-                            shrink: SpringDimen::Dimen(Dimen::zero()),
-                        }),
-                        VerticalListElem::Box(parser.state.get_box(0).unwrap()),
-                        VerticalListElem::VSkip(Glue {
-                            space: Dimen::from_unit(2.0, Unit::Point),
-                            stretch: SpringDimen::Dimen(Dimen::zero()),
-                            shrink: SpringDimen::Dimen(Dimen::zero()),
-                        }),
-                        // TODO(xymostech): Eventually, there will be interline
-                        // glue here.
-                        VerticalListElem::Box(parser.state.get_box(1).unwrap()),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(1.0, Unit::Point)
+                        )),
+                        VerticalListElem::Box(box0),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(2.0, Unit::Point)
+                        )),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            interline_glue
+                        )),
+                        VerticalListElem::Box(box1),
                     ]
                 );
             },
@@ -364,25 +405,27 @@ mod tests {
                 parser.parse_assignment();
                 parser.parse_assignment();
 
+                let box0 = parser.state.get_box(0).unwrap();
+                let box1 = parser.state.get_box(1).unwrap();
+
+                let interline_glue = Dimen::from_unit(12.0, Unit::Point)
+                    - *box0.depth()
+                    - *box1.height();
+
                 assert_eq!(
                     parser.parse_vertical_list(true),
                     &[
-                        VerticalListElem::VSkip(Glue {
-                            space: Dimen::from_unit(1.0, Unit::Point),
-                            stretch: SpringDimen::Dimen(Dimen::zero()),
-                            shrink: SpringDimen::Dimen(Dimen::zero()),
-                        }),
-                        // TODO(xymostech): Eventually, there will be \parskip
-                        // glue here.
-                        VerticalListElem::Box(parser.state.get_box(0).unwrap()),
-                        VerticalListElem::VSkip(Glue {
-                            space: Dimen::from_unit(2.0, Unit::Point),
-                            stretch: SpringDimen::Dimen(Dimen::zero()),
-                            shrink: SpringDimen::Dimen(Dimen::zero()),
-                        }),
-                        // TODO(xymostech): Eventually, there will be \parskip
-                        // glue here.
-                        VerticalListElem::Box(parser.state.get_box(1).unwrap()),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(1.0, Unit::Point)
+                        )),
+                        VerticalListElem::Box(box0),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(2.0, Unit::Point)
+                        )),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            interline_glue
+                        )),
+                        VerticalListElem::Box(box1),
                     ]
                 );
             },
@@ -408,25 +451,27 @@ mod tests {
                 parser.parse_assignment();
                 parser.parse_assignment();
 
+                let box0 = parser.state.get_box(0).unwrap();
+                let box1 = parser.state.get_box(1).unwrap();
+
+                let interline_glue = Dimen::from_unit(12.0, Unit::Point)
+                    - *box0.depth()
+                    - *box1.height();
+
                 assert_eq!(
                     parser.parse_vertical_list(true),
                     &[
-                        VerticalListElem::VSkip(Glue {
-                            space: Dimen::from_unit(1.0, Unit::Point),
-                            stretch: SpringDimen::Dimen(Dimen::zero()),
-                            shrink: SpringDimen::Dimen(Dimen::zero()),
-                        }),
-                        // TODO(xymostech): Eventually, there will be \parskip
-                        // glue here.
-                        VerticalListElem::Box(parser.state.get_box(0).unwrap()),
-                        VerticalListElem::VSkip(Glue {
-                            space: Dimen::from_unit(2.0, Unit::Point),
-                            stretch: SpringDimen::Dimen(Dimen::zero()),
-                            shrink: SpringDimen::Dimen(Dimen::zero()),
-                        }),
-                        // TODO(xymostech): Eventually, there will be \parskip
-                        // glue here.
-                        VerticalListElem::Box(parser.state.get_box(1).unwrap()),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(1.0, Unit::Point)
+                        )),
+                        VerticalListElem::Box(box0),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(2.0, Unit::Point)
+                        )),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            interline_glue
+                        )),
+                        VerticalListElem::Box(box1),
                     ]
                 );
             },
@@ -453,12 +498,75 @@ mod tests {
                 parser.parse_assignment();
                 parser.parse_assignment();
 
+                let box1 = parser.state.get_box(1).unwrap();
+                let box2 = parser.state.get_box(2).unwrap();
+                let box3 = parser.state.get_box(3).unwrap();
+
+                let interline_glue1 = Dimen::from_unit(12.0, Unit::Point)
+                    - *box1.depth()
+                    - *box2.height();
+                let interline_glue2 = Dimen::from_unit(12.0, Unit::Point)
+                    - *box2.depth()
+                    - *box3.height();
+
                 assert_eq!(
                     parser.parse_vertical_list(true),
                     &[
+                        VerticalListElem::Box(box1),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            interline_glue1
+                        )),
+                        VerticalListElem::Box(box2),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            interline_glue2
+                        )),
+                        VerticalListElem::Box(box3),
+                    ]
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_adds_interline_glue() {
+        with_parser(
+            &[
+                r"\setbox0=\hbox{}%",
+                r"\dp0=5pt%",
+                r"\setbox1=\hbox{}%",
+                r"\ht1=5pt%",
+                r"\dp1=8pt%",
+                r"\setbox2=\hbox{}%",
+                r"\ht2=5pt%",
+                r"\copy0%",
+                r"\copy1%",
+                r"\copy2%",
+            ],
+            |parser| {
+                parser.parse_assignment();
+                parser.parse_assignment();
+                parser.parse_assignment();
+                parser.parse_assignment();
+                parser.parse_assignment();
+                parser.parse_assignment();
+                parser.parse_assignment();
+
+                assert_eq!(
+                    parser.parse_vertical_list(true),
+                    &[
+                        VerticalListElem::Box(parser.state.get_box(0).unwrap()),
+                        // 12pt - 5pt - 5pt = 2pt of interline glue
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(2.0, Unit::Point)
+                        )),
                         VerticalListElem::Box(parser.state.get_box(1).unwrap()),
+                        // 12pt - 8pt - 5pt = -1pt
+                        // -1pt < 0pt (lineskiplimit), so we end up with
+                        // lineskip (1pt) interline glue
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(1.0, Unit::Point)
+                        )),
                         VerticalListElem::Box(parser.state.get_box(2).unwrap()),
-                        VerticalListElem::Box(parser.state.get_box(3).unwrap()),
                     ]
                 );
             },

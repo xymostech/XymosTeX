@@ -1,4 +1,4 @@
-use std::ops::Add;
+use std::ops::{Add, Sub};
 
 use crate::dimension::{Dimen, SpringDimen};
 
@@ -31,5 +31,15 @@ impl Add for Glue {
         self.stretch = self.stretch + other.stretch;
         self.shrink = self.shrink + other.shrink;
         self
+    }
+}
+
+impl Sub for Glue {
+    type Output = Glue;
+    fn sub(self, mut other: Glue) -> Glue {
+        other.space = other.space * -1;
+        other.stretch = other.stretch * -1;
+        other.shrink = other.shrink * -1;
+        self + other
     }
 }
