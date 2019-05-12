@@ -1,0 +1,38 @@
+% Expected output is dvitest.dvi
+\noindent ajwAJW
+
+\vskip -8pt
+%
+ajwAJW
+
+\vskip 8pt
+%
+\noindent ab cd\hskip 2pt ef \hskip-5pt gh \hskip3pt
+
+\vskip 8pt
+\vskip 8pt
+%
+a\hskip 2pt\hskip 2pt b\hskip 2pt c\hskip 2pt \hskip2pt d\hskip 2pt
+
+\setbox1=\vbox{\noindent d\vskip2pt \noindent e\vskip -10pt}
+\wd1=10pt
+\setbox2=\vbox{\noindent a\vskip2pt \noindent b\hbox{c\box1f}}
+\noindent\box2
+
+\setbox3=\hbox{ag}
+\wd3=-5pt
+\setbox4=\vbox{\noindent a}
+\wd4=10pt
+\ht4=-5pt
+\setbox5=\vbox{\noindent g}
+\wd5=10pt
+\ht5=0pt
+\dp5=-6pt
+a\copy3\copy3g\copy4\copy5w
+
+\copy3
+\copy3
+\copy4
+\copy5
+%
+\end

@@ -34,17 +34,21 @@ Instead of producing simple textual output as a result of the parsing, in this s
 
 At this point, I'll be able to start parsing from (internal) vertical mode, have that correctly call out to a (restricted) horizontal mode, and then return back to vertical mode to produce vertical boxes. This will add vertical glue as well.
 
-## Stage 4: Math Parsing
+## Stage 4: DVI Output
+
+**Status**: In Progress
+**Difficulty**: Medium
+**Condition for success**: generate a DVI from a [series of commands creating vertical and horizontal boxes with spacing and characters in them](examples/dvitest.tex) that is content-identical to [the DVI produced by TeX run on the same commands](examples/dvitest.dvi)
+
+For this stage, I shouldn't have to work on the parser, because the current parser should be able to interpret the example file into boxes already. Instead, I'll be taking those generated boxes and turning them into a proper DVI file that represents the contents of the boxes.
+
+Because the DVI file format isn't rigorous about how certain commands are used (like the orders of certain commands, several comments, which variables are used) and also because there are many different ways to produce the same output from a given box, I'll have to figure out a good way to ensure that the DVI that I produce is the same as the one that TeX produces, because I won't be able to simple byte-compare the DVI files.
+
+## Stage 5: Math Parsing
 
 **Status**: Not yet started
 **Difficulty**: Medium
 **Condition for success**: Be able to parse a complicated mathematical expression into a box
-
-## Stage 5: DVI Output
-
-**Status**: Not yet started
-**Difficulty**: Medium
-**Condition for success**: ???
 
 ## Stage 6: Paragraph & Line Breaking
 
