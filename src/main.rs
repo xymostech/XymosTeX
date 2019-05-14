@@ -4,6 +4,7 @@ extern crate lazy_static;
 mod boxes;
 mod category;
 mod dimension;
+mod dvi;
 mod glue;
 mod lexer;
 mod list;
