@@ -88,6 +88,11 @@ impl<'a> Parser<'a> {
                 self.lex_expanded_token();
                 None
             }
+            Some(ref tok) if self.state.is_token_equal_to_prim(tok, "par") => {
+                // \par is completely ignored
+                self.lex_expanded_token();
+                self.parse_vertical_list_elem(group_level, internal)
+            }
             Some(ref tok)
                 if self.state.is_token_equal_to_prim(tok, "vskip") =>
             {
@@ -571,5 +576,22 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn it_ignores_par() {
+        with_parser(&[r"\vskip1pt", r"", r"\vskip1pt%"], |parser| {
+            assert_eq!(
+                parser.parse_vertical_list(true),
+                &[
+                    VerticalListElem::VSkip(Glue::from_dimen(
+                        Dimen::from_unit(1.0, Unit::Point)
+                    )),
+                    VerticalListElem::VSkip(Glue::from_dimen(
+                        Dimen::from_unit(1.0, Unit::Point)
+                    )),
+                ]
+            );
+        });
     }
 }
