@@ -1,4 +1,4 @@
-# rs-tex [![Build Status](https://travis-ci.com/xymostech/rs-tex.svg?branch=master)](https://travis-ci.com/xymostech/rs-tex) [![Coverage Status](https://coveralls.io/repos/github/xymostech/rs-tex/badge.svg?branch=master)](https://coveralls.io/github/xymostech/rs-tex?branch=master)
+# XymosTeX [![Build Status](https://travis-ci.com/xymostech/XymosTeX.svg?branch=master)](https://travis-ci.com/xymostech/XymosTeX) [![Coverage Status](https://coveralls.io/repos/github/xymostech/XymosTeX/badge.svg?branch=master)](https://coveralls.io/github/xymostech/XymosTeX?branch=master)
 
 This project is an attempt to build an implementation of TeX in Rust. The overall goals of this project are:
 
@@ -8,24 +8,24 @@ This project is an attempt to build an implementation of TeX in Rust. The overal
 
 ## Status
 
-Currently, rs-tex has reached the point where is it Turing complete (that is, it implements things like macro expansion, conditionals, assignments) and can interpret very basic horizontal and vertical boxes
+Currently, XymosTeX has reached the point where is it Turing complete (that is, it implements things like macro expansion, conditionals, assignments) and can interpret very basic horizontal and vertical boxes
 
 The next body of work will be creating DVI output from the parsed vertical and horizontal boxes.
 
 ## Trying it
 
-Because rs-tex is under development, the best way to try it is to clone the repo and build it from in there.
+Because XymosTeX is under development, the best way to try it is to clone the repo and build it from in there.
 
 ```
-$ git clone https://github.com/xymostech/rs-tex.git
-$ cd rs-tex
+$ git clone https://github.com/xymostech/XymosTeX.git
+$ cd XymosTeX
 $ cargo run
 \def\hello #1{Hello, #1!}
 \hello{World}
  Hello World!
 ```
 
-The most fun and impressive thing that rs-tex can do is calculate primes for you:
+The most fun and impressive thing that XymosTeX can do is calculate primes for you:
 
 ```
 $ cargo run --release < examples/primes.tex
@@ -44,4 +44,4 @@ I'm not currently taking contributions for small changes towards the current goa
 
 ## License
 
-rs-tex is licensed under the [MIT License](LICENSE)
+XymosTeX is licensed under the [MIT License](LICENSE)
