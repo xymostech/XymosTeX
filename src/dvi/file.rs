@@ -91,7 +91,7 @@ pub enum DVICommand {
         font_name: String,
     },
     FntDef4 {
-        font_num: u32,
+        font_num: i32,
         checksum: u32,
         scale: u32,
         design_size: u32,

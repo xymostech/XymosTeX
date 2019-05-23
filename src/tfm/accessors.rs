@@ -40,6 +40,10 @@ impl TFMFile {
             Unit::Point,
         )
     }
+
+    pub fn get_checksum(&self) -> u32 {
+        self.header.checksum
+    }
 }
 
 #[cfg(test)]
