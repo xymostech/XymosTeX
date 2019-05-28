@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io;
 
+use crate::boxes::GlueSetRatio;
 use crate::dvi::DVICommand;
 use crate::list::HorizontalListElem;
 use crate::paths::get_path_to_font;
@@ -71,7 +72,11 @@ impl DVIFileWriter {
         }
     }
 
-    fn add_horizontal_list_elem(&mut self, elem: &HorizontalListElem) {
+    fn add_horizontal_list_elem(
+        &mut self,
+        elem: &HorizontalListElem,
+        glue_set_ratio: &Option<GlueSetRatio>,
+    ) {
         match elem {
             HorizontalListElem::Char { chr, font } => {
                 let command = if (*chr as u8) < 128 {
@@ -84,8 +89,15 @@ impl DVIFileWriter {
                 self.commands.push(command);
             }
 
-            HorizontalListElem::HSkip(_glue) => {
-                panic!("unimplemented");
+            HorizontalListElem::HSkip(glue) => {
+                let move_amount = if let Some(set_ratio) = glue_set_ratio {
+                    set_ratio.apply_to_glue(glue)
+                } else {
+                    glue.space
+                };
+
+                self.commands
+                    .push(DVICommand::Right4(move_amount.as_scaled_points()));
             }
 
             HorizontalListElem::Box(_tex_box) => {
@@ -99,17 +111,27 @@ impl DVIFileWriter {
 mod tests {
     use super::*;
 
+    use crate::boxes::GlueSetRatioKind;
+    use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
+    use crate::glue::Glue;
+
     #[test]
     fn it_generates_commands_for_chars() {
         let mut writer = DVIFileWriter::new();
-        writer.add_horizontal_list_elem(&HorizontalListElem::Char {
-            chr: 'a',
-            font: "cmr10".to_string(),
-        });
-        writer.add_horizontal_list_elem(&HorizontalListElem::Char {
-            chr: 200 as char,
-            font: "cmr10".to_string(),
-        });
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmr10".to_string(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 200 as char,
+                font: "cmr10".to_string(),
+            },
+            &None,
+        );
 
         // The commands start with a fnt_def4 and fnt4 command, then come the
         // chars.
@@ -124,38 +146,62 @@ mod tests {
     #[test]
     fn it_generates_fnt_commands() {
         let mut writer = DVIFileWriter::new();
-        writer.add_horizontal_list_elem(&HorizontalListElem::Char {
-            chr: 'a',
-            font: "cmr10".to_string(),
-        });
-        writer.add_horizontal_list_elem(&HorizontalListElem::Char {
-            chr: 'a',
-            font: "cmr10".to_string(),
-        });
-        writer.add_horizontal_list_elem(&HorizontalListElem::Char {
-            chr: 'a',
-            font: "cmr7".to_string(),
-        });
-        writer.add_horizontal_list_elem(&HorizontalListElem::Char {
-            chr: 'a',
-            font: "cmr7".to_string(),
-        });
-        writer.add_horizontal_list_elem(&HorizontalListElem::Char {
-            chr: 'a',
-            font: "cmr10".to_string(),
-        });
-        writer.add_horizontal_list_elem(&HorizontalListElem::Char {
-            chr: 'a',
-            font: "cmtt10".to_string(),
-        });
-        writer.add_horizontal_list_elem(&HorizontalListElem::Char {
-            chr: 'a',
-            font: "cmr7".to_string(),
-        });
-        writer.add_horizontal_list_elem(&HorizontalListElem::Char {
-            chr: 'a',
-            font: "cmr10".to_string(),
-        });
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmr10".to_string(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmr10".to_string(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmr7".to_string(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmr7".to_string(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmr10".to_string(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmtt10".to_string(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmr7".to_string(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmr10".to_string(),
+            },
+            &None,
+        );
 
         let cmr10_metrics = get_metrics_for_font("cmr10").unwrap();
         let cmr7_metrics = get_metrics_for_font("cmr7").unwrap();
@@ -205,6 +251,220 @@ mod tests {
                 DVICommand::SetCharN(97),
                 DVICommand::Fnt4(0),
                 DVICommand::SetCharN(97),
+            ]
+        );
+    }
+
+    #[test]
+    fn it_adds_hskips() {
+        let mut writer = DVIFileWriter::new();
+
+        // No stretch/shrink
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue::from_dimen(Dimen::from_unit(
+                2.0,
+                Unit::Point,
+            ))),
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue::from_dimen(Dimen::from_unit(
+                2.0,
+                Unit::Point,
+            ))),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 2.0)),
+        );
+
+        // Finite stretch
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 2.0)),
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -1.5)),
+        );
+
+        // Finite shrink
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(4.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
+            }),
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(4.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5)),
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(4.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -1.5)),
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(4.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+        );
+
+        // Infinite stretch
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::FilDimen(FilDimen::new(
+                    FilKind::Fil,
+                    3.0,
+                )),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::FilDimen(FilDimen::new(
+                    FilKind::Fil,
+                    3.0,
+                )),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 1.5)),
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::FilDimen(FilDimen::new(
+                    FilKind::Fil,
+                    3.0,
+                )),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::FilDimen(FilDimen::new(
+                    FilKind::Fil,
+                    3.0,
+                )),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fill, 1.5)),
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::FilDimen(FilDimen::new(
+                    FilKind::Fil,
+                    3.0,
+                )),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -0.5)),
+        );
+
+        // Infinite shrink
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(6.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
+            }),
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(6.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -1.5)),
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(6.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5)),
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(6.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fill, -1.5)),
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::HSkip(Glue {
+                space: Dimen::from_unit(6.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 1.5)),
+        );
+
+        assert_eq!(
+            &writer.commands,
+            &[
+                DVICommand::Right4(2 * 65536),
+                DVICommand::Right4(2 * 65536),
+                DVICommand::Right4(2 * 65536),
+                DVICommand::Right4(2 * 65536 + 3 * 3 * 65536 / 2),
+                DVICommand::Right4(2 * 65536),
+                DVICommand::Right4(2 * 65536),
+                DVICommand::Right4(4 * 65536),
+                DVICommand::Right4(4 * 65536 - 2 * 65536 / 2),
+                DVICommand::Right4(4 * 65536),
+                DVICommand::Right4(4 * 65536),
+                DVICommand::Right4(2 * 65536),
+                DVICommand::Right4(2 * 65536 + 3 * 3 * 65536 / 2),
+                DVICommand::Right4(2 * 65536),
+                DVICommand::Right4(2 * 65536),
+                DVICommand::Right4(2 * 65536),
+                DVICommand::Right4(6 * 65536),
+                DVICommand::Right4(6 * 65536 - 3 * 65536),
+                DVICommand::Right4(6 * 65536),
+                DVICommand::Right4(6 * 65536),
+                DVICommand::Right4(6 * 65536),
             ]
         );
     }

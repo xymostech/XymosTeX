@@ -1,4 +1,5 @@
-use crate::dimension::{Dimen, FilKind};
+use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen};
+use crate::glue::Glue;
 use crate::list::{HorizontalListElem, VerticalListElem};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -38,6 +39,41 @@ impl GlueSetRatio {
         GlueSetRatio {
             kind: kind,
             stretch: (ratio * 65536.0) as i32,
+        }
+    }
+
+    fn multiply_spring_dimen(&self, spring_dimen: &SpringDimen) -> Dimen {
+        match (&self.kind, spring_dimen) {
+            (&GlueSetRatioKind::Finite, SpringDimen::Dimen(dimen)) => {
+                *dimen * (self.stretch, 65536)
+            }
+            (
+                &GlueSetRatioKind::Fil,
+                SpringDimen::FilDimen(FilDimen(FilKind::Fil, fils)),
+            ) => Dimen::from_scaled_points(
+                ((*fils as i64) * (self.stretch as i64) / 65536) as i32,
+            ),
+            (
+                &GlueSetRatioKind::Fill,
+                SpringDimen::FilDimen(FilDimen(FilKind::Fill, fills)),
+            ) => Dimen::from_scaled_points(
+                ((*fills as i64) * (self.stretch as i64) / 65536) as i32,
+            ),
+            (
+                &GlueSetRatioKind::Filll,
+                SpringDimen::FilDimen(FilDimen(FilKind::Filll, fillls)),
+            ) => Dimen::from_scaled_points(
+                ((*fillls as i64) * (self.stretch as i64) / 65536) as i32,
+            ),
+            _ => Dimen::zero(),
+        }
+    }
+
+    pub fn apply_to_glue(&self, glue: &Glue) -> Dimen {
+        if self.stretch < 0 {
+            glue.space + self.multiply_spring_dimen(&glue.shrink)
+        } else {
+            glue.space + self.multiply_spring_dimen(&glue.stretch)
         }
     }
 }

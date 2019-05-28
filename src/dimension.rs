@@ -57,6 +57,10 @@ impl Dimen {
         Dimen((num * scale.0 / scale.1) as i32).validate()
     }
 
+    pub fn from_scaled_points(num: i32) -> Dimen {
+        Dimen(num).validate()
+    }
+
     // Given a Dimen and a unit to convert that to, returns the amount of that unit
     // that are in that Dimen.
     fn to_unit(&self, to_unit: Unit) -> f64 {
@@ -99,6 +103,17 @@ impl Mul<i32> for Dimen {
     }
 }
 
+// dimen * (a, b) is the same as dimen * a / b but does the multiplication as
+// i64s to prevent overflow without losing precision.
+impl Mul<(i32, i32)> for Dimen {
+    type Output = Dimen;
+
+    fn mul(self, other: (i32, i32)) -> Dimen {
+        let value = (self.0 as i64) * (other.0 as i64) / (other.1 as i64);
+        Dimen(value as i32).validate()
+    }
+}
+
 impl Div<i32> for Dimen {
     type Output = Dimen;
 
@@ -131,7 +146,7 @@ pub enum FilKind {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct FilDimen(pub FilKind, i32);
+pub struct FilDimen(pub FilKind, pub i32);
 
 impl FilDimen {
     pub fn new(kind: FilKind, value: f64) -> Self {
