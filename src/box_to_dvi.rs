@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::io;
 
 use crate::boxes::GlueSetRatio;
+use crate::boxes::{HorizontalBox, TeXBox};
 use crate::dvi::DVICommand;
 use crate::list::HorizontalListElem;
 use crate::paths::get_path_to_font;
@@ -72,6 +73,23 @@ impl DVIFileWriter {
         }
     }
 
+    fn add_box(&mut self, tex_box: &TeXBox) {
+        self.commands.push(DVICommand::Push);
+
+        match tex_box {
+            TeXBox::HorizontalBox(hbox) => {
+                for elem in &hbox.list {
+                    self.add_horizontal_list_elem(&elem, &hbox.glue_set_ratio);
+                }
+            }
+            TeXBox::VerticalBox(_) => {
+                panic!("unimplemented");
+            }
+        }
+
+        self.commands.push(DVICommand::Pop);
+    }
+
     fn add_horizontal_list_elem(
         &mut self,
         elem: &HorizontalListElem,
@@ -100,8 +118,11 @@ impl DVIFileWriter {
                     .push(DVICommand::Right4(move_amount.as_scaled_points()));
             }
 
-            HorizontalListElem::Box(_tex_box) => {
-                panic!("unimplemented");
+            HorizontalListElem::Box(tex_box) => {
+                self.add_box(tex_box);
+                self.commands.push(DVICommand::Right4(
+                    tex_box.width().as_scaled_points(),
+                ));
             }
         }
     }
@@ -466,6 +487,75 @@ mod tests {
                 DVICommand::Right4(6 * 65536),
                 DVICommand::Right4(6 * 65536),
             ]
+        );
+    }
+
+    #[derive(Debug)]
+    enum MaybeEquals<T> {
+        Equals(T),
+        Anything,
+    }
+
+    fn assert_matches<T: std::fmt::Debug + std::cmp::PartialEq>(
+        reals: &[T],
+        matches: &[MaybeEquals<T>],
+    ) {
+        if reals.len() != matches.len() {
+            panic!("{:?} doesn't have the same length as {:?}", reals, matches);
+        }
+
+        for (i, (real, matcher)) in reals.iter().zip(matches.iter()).enumerate()
+        {
+            match matcher {
+                MaybeEquals::Equals(m) => {
+                    if real != m {
+                        panic!("{:?} doesn't match {:?}: element {} is different: {:?} vs {:?}", reals, matches, i, real, m);
+                    }
+                }
+                MaybeEquals::Anything => (),
+            }
+        }
+    }
+
+    #[test]
+    fn it_adds_basic_boxes() {
+        let mut writer = DVIFileWriter::new();
+
+        let metrics = get_metrics_for_font("cmr10").unwrap();
+
+        let box1 = TeXBox::HorizontalBox(HorizontalBox {
+            height: metrics.get_width('a'),
+            depth: metrics.get_depth('a'),
+            width: metrics.get_width('a'),
+
+            list: vec![HorizontalListElem::Char {
+                chr: 'a',
+                font: "cmr10".to_string(),
+            }],
+            glue_set_ratio: None,
+        });
+
+        writer.add_box(&box1.clone());
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Box(box1.clone()),
+            &None,
+        );
+
+        assert_matches(
+            &writer.commands,
+            &[
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Anything,
+                MaybeEquals::Anything,
+                MaybeEquals::Equals(DVICommand::SetCharN(97)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(97)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Right4(
+                    metrics.get_width('a').as_scaled_points(),
+                )),
+            ],
         );
     }
 }
