@@ -4,7 +4,7 @@ use std::io;
 use crate::boxes::GlueSetRatio;
 use crate::boxes::{HorizontalBox, TeXBox};
 use crate::dvi::DVICommand;
-use crate::list::HorizontalListElem;
+use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::paths::get_path_to_font;
 use crate::tfm::TFMFile;
 
@@ -88,6 +88,29 @@ impl DVIFileWriter {
         }
 
         self.commands.push(DVICommand::Pop);
+    }
+
+    fn add_vertical_list_elem(
+        &mut self,
+        elem: &VerticalListElem,
+        glue_set_ratio: &Option<GlueSetRatio>,
+    ) {
+        match elem {
+            VerticalListElem::VSkip(glue) => {
+                let move_amount = if let Some(set_ratio) = glue_set_ratio {
+                    set_ratio.apply_to_glue(glue)
+                } else {
+                    glue.space
+                };
+
+                self.commands
+                    .push(DVICommand::Down4(move_amount.as_scaled_points()));
+            }
+
+            VerticalListElem::Box(_) => {
+                panic!("unimplemented");
+            }
+        }
     }
 
     fn add_horizontal_list_elem(
@@ -556,6 +579,220 @@ mod tests {
                     metrics.get_width('a').as_scaled_points(),
                 )),
             ],
+        );
+    }
+
+    #[test]
+    fn it_adds_vskips() {
+        let mut writer = DVIFileWriter::new();
+
+        // No stretch/shrink
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue::from_dimen(Dimen::from_unit(
+                2.0,
+                Unit::Point,
+            ))),
+            &None,
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue::from_dimen(Dimen::from_unit(
+                2.0,
+                Unit::Point,
+            ))),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 2.0)),
+        );
+
+        // Finite stretch
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &None,
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 2.0)),
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -1.5)),
+        );
+
+        // Finite shrink
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(4.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
+            }),
+            &None,
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(4.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5)),
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(4.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -1.5)),
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(4.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+        );
+
+        // Infinite stretch
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::FilDimen(FilDimen::new(
+                    FilKind::Fil,
+                    3.0,
+                )),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &None,
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::FilDimen(FilDimen::new(
+                    FilKind::Fil,
+                    3.0,
+                )),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 1.5)),
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::FilDimen(FilDimen::new(
+                    FilKind::Fil,
+                    3.0,
+                )),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::FilDimen(FilDimen::new(
+                    FilKind::Fil,
+                    3.0,
+                )),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fill, 1.5)),
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(2.0, Unit::Point),
+                stretch: SpringDimen::FilDimen(FilDimen::new(
+                    FilKind::Fil,
+                    3.0,
+                )),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -0.5)),
+        );
+
+        // Infinite shrink
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(6.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
+            }),
+            &None,
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(6.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -1.5)),
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(6.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5)),
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(6.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fill, -1.5)),
+        );
+        writer.add_vertical_list_elem(
+            &VerticalListElem::VSkip(Glue {
+                space: Dimen::from_unit(6.0, Unit::Point),
+                stretch: SpringDimen::Dimen(Dimen::zero()),
+                shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
+            }),
+            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 1.5)),
+        );
+
+        assert_eq!(
+            &writer.commands,
+            &[
+                DVICommand::Down4(2 * 65536),
+                DVICommand::Down4(2 * 65536),
+                DVICommand::Down4(2 * 65536),
+                DVICommand::Down4(2 * 65536 + 3 * 3 * 65536 / 2),
+                DVICommand::Down4(2 * 65536),
+                DVICommand::Down4(2 * 65536),
+                DVICommand::Down4(4 * 65536),
+                DVICommand::Down4(4 * 65536 - 2 * 65536 / 2),
+                DVICommand::Down4(4 * 65536),
+                DVICommand::Down4(4 * 65536),
+                DVICommand::Down4(2 * 65536),
+                DVICommand::Down4(2 * 65536 + 3 * 3 * 65536 / 2),
+                DVICommand::Down4(2 * 65536),
+                DVICommand::Down4(2 * 65536),
+                DVICommand::Down4(2 * 65536),
+                DVICommand::Down4(6 * 65536),
+                DVICommand::Down4(6 * 65536 - 3 * 65536),
+                DVICommand::Down4(6 * 65536),
+                DVICommand::Down4(6 * 65536),
+                DVICommand::Down4(6 * 65536),
+            ]
         );
     }
 }
