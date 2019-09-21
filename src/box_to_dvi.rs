@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io;
 
 use crate::boxes::GlueSetRatio;
-use crate::boxes::{HorizontalBox, TeXBox};
+use crate::boxes::TeXBox;
 use crate::dvi::DVICommand;
 use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::paths::get_path_to_font;
@@ -82,8 +82,10 @@ impl DVIFileWriter {
                     self.add_horizontal_list_elem(&elem, &hbox.glue_set_ratio);
                 }
             }
-            TeXBox::VerticalBox(_) => {
-                panic!("unimplemented");
+            TeXBox::VerticalBox(vbox) => {
+                for elem in &vbox.list {
+                    self.add_vertical_list_elem(&elem, &vbox.glue_set_ratio);
+                }
             }
         }
 
@@ -107,8 +109,12 @@ impl DVIFileWriter {
                     .push(DVICommand::Down4(move_amount.as_scaled_points()));
             }
 
-            VerticalListElem::Box(_) => {
-                panic!("unimplemented");
+            VerticalListElem::Box(tex_box) => {
+                self.add_box(tex_box);
+                self.commands.push(DVICommand::Down4(
+                    tex_box.height().as_scaled_points()
+                        + tex_box.depth().as_scaled_points(),
+                ));
             }
         }
     }
@@ -155,7 +161,7 @@ impl DVIFileWriter {
 mod tests {
     use super::*;
 
-    use crate::boxes::GlueSetRatioKind;
+    use crate::boxes::{GlueSetRatioKind, HorizontalBox, VerticalBox};
     use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
     use crate::glue::Glue;
 
@@ -541,7 +547,7 @@ mod tests {
     }
 
     #[test]
-    fn it_adds_basic_boxes() {
+    fn it_adds_basic_horizontal_boxes() {
         let mut writer = DVIFileWriter::new();
 
         let metrics = get_metrics_for_font("cmr10").unwrap();
@@ -793,6 +799,80 @@ mod tests {
                 DVICommand::Down4(6 * 65536),
                 DVICommand::Down4(6 * 65536),
             ]
+        );
+    }
+
+    #[test]
+    fn it_adds_basic_vertical_boxes() {
+        let mut writer = DVIFileWriter::new();
+
+        let metrics = get_metrics_for_font("cmr10").unwrap();
+
+        let hbox = TeXBox::HorizontalBox(HorizontalBox {
+            height: metrics.get_width('g'),
+            depth: metrics.get_depth('g'),
+            width: metrics.get_width('g'),
+
+            list: vec![HorizontalListElem::Char {
+                chr: 'g',
+                font: "cmr10".to_string(),
+            }],
+            glue_set_ratio: None,
+        });
+
+        let vbox = TeXBox::VerticalBox(VerticalBox {
+            height: *hbox.height(),
+            depth: *hbox.depth() + Dimen::from_unit(2.0, Unit::Point),
+            width: *hbox.width(),
+
+            list: vec![
+                VerticalListElem::Box(hbox.clone()),
+                VerticalListElem::VSkip(Glue {
+                    space: Dimen::from_unit(2.0, Unit::Point),
+                    stretch: SpringDimen::Dimen(Dimen::zero()),
+                    shrink: SpringDimen::Dimen(Dimen::zero()),
+                }),
+            ],
+            glue_set_ratio: None,
+        });
+
+        writer.add_box(&vbox.clone());
+        writer.add_vertical_list_elem(
+            &VerticalListElem::Box(vbox.clone()),
+            &None,
+        );
+
+        assert_matches(
+            &writer.commands,
+            &[
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Anything,
+                MaybeEquals::Anything,
+                MaybeEquals::Equals(DVICommand::SetCharN(103)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    hbox.height().as_scaled_points()
+                        + hbox.depth().as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Down4(131072)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(103)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    hbox.height().as_scaled_points()
+                        + hbox.depth().as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Down4(131072)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    hbox.height().as_scaled_points()
+                        + hbox.depth().as_scaled_points()
+                        + 131072,
+                )),
+            ],
         );
     }
 }
