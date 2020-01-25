@@ -11,6 +11,7 @@ use crate::tfm::TFMFile;
 struct DVIFileWriter {
     commands: Vec<DVICommand>,
     stack_depth: usize,
+    last_page_start: i32,
     curr_font_num: i32,
     font_nums: HashMap<String, i32>,
     next_font_num: i32,
@@ -30,6 +31,7 @@ impl DVIFileWriter {
         DVIFileWriter {
             commands: Vec::new(),
             stack_depth: 0,
+            last_page_start: -1,
             curr_font_num: -1,
             font_nums: HashMap::new(),
             next_font_num: 0,
@@ -154,6 +156,24 @@ impl DVIFileWriter {
                 ));
             }
         }
+    }
+
+    fn add_page(&mut self, page: &TeXBox, cs: [i32; 10]) {
+        let old_last_page_start = self.last_page_start;
+        self.last_page_start = self
+            .commands
+            .iter()
+            .map(|command| command.byte_size())
+            .sum::<usize>() as i32;
+        self.commands.push(DVICommand::Bop {
+            cs: cs,
+            pointer: old_last_page_start,
+        });
+
+        self.curr_font_num = -1;
+        self.add_box(page);
+
+        self.commands.push(DVICommand::Eop);
     }
 }
 
@@ -530,7 +550,13 @@ mod tests {
         matches: &[MaybeEquals<T>],
     ) {
         if reals.len() != matches.len() {
-            panic!("{:?} doesn't have the same length as {:?}", reals, matches);
+            panic!(
+                "{:?} doesn't have the same length as {:?} ({:?} vs {:?})",
+                reals,
+                matches,
+                reals.len(),
+                matches.len()
+            );
         }
 
         for (i, (real, matcher)) in reals.iter().zip(matches.iter()).enumerate()
@@ -809,7 +835,7 @@ mod tests {
         let metrics = get_metrics_for_font("cmr10").unwrap();
 
         let hbox = TeXBox::HorizontalBox(HorizontalBox {
-            height: metrics.get_width('g'),
+            height: metrics.get_height('g'),
             depth: metrics.get_depth('g'),
             width: metrics.get_width('g'),
 
@@ -872,6 +898,93 @@ mod tests {
                         + hbox.depth().as_scaled_points()
                         + 131072,
                 )),
+            ],
+        );
+    }
+
+    use crate::testing::with_parser;
+
+    #[test]
+    fn it_adds_pages() {
+        let mut writer = DVIFileWriter::new();
+
+        let metrics = get_metrics_for_font("cmr10").unwrap();
+
+        with_parser(
+            &[
+                r"\vbox{\noindent g\vskip 0pt\noindent a}%",
+                r"\vbox{\noindent q}%",
+                r"\vbox{\noindent a}%",
+            ],
+            |parser| {
+                let page1 = parser.parse_box().unwrap();
+                let page2 = parser.parse_box().unwrap();
+                let page3 = parser.parse_box().unwrap();
+
+                writer.add_page(&page1, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+                writer.add_page(&page2, [2, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+                writer.add_page(&page3, [3, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+            },
+        );
+
+        assert_matches(
+            &writer.commands,
+            &[
+                MaybeEquals::Equals(DVICommand::Bop {
+                    cs: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    pointer: -1,
+                }),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Anything,
+                MaybeEquals::Anything,
+                MaybeEquals::Equals(DVICommand::SetCharN('g' as u8)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    metrics.get_height('g').as_scaled_points()
+                        + metrics.get_depth('g').as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Down4(0)),
+                MaybeEquals::Equals(DVICommand::Down4(376833)), // FIXME
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN('a' as u8)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    metrics.get_height('a').as_scaled_points()
+                        + metrics.get_depth('a').as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Eop),
+                MaybeEquals::Equals(DVICommand::Bop {
+                    cs: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    pointer: 0,
+                }),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Anything,
+                MaybeEquals::Equals(DVICommand::SetCharN('q' as u8)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    metrics.get_height('q').as_scaled_points()
+                        + metrics.get_depth('q').as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Eop),
+                MaybeEquals::Equals(DVICommand::Bop {
+                    cs: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    pointer: 103,
+                }),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Anything,
+                MaybeEquals::Equals(DVICommand::SetCharN('a' as u8)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    metrics.get_height('a').as_scaled_points()
+                        + metrics.get_depth('a').as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Eop),
             ],
         );
     }
