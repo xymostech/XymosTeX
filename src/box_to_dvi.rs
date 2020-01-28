@@ -189,7 +189,12 @@ impl DVIFileWriter {
             .sum::<usize>()
     }
 
-    fn add_page(&mut self, page: &TeXBox, cs: [i32; 10]) {
+    fn add_page(
+        &mut self,
+        elems: &[VerticalListElem],
+        glue_set_ratio: &Option<GlueSetRatio>,
+        cs: [i32; 10],
+    ) {
         self.num_pages += 1;
 
         let old_last_page_start = self.last_page_start;
@@ -200,7 +205,9 @@ impl DVIFileWriter {
         });
 
         self.curr_font_num = -1;
-        self.add_box(page);
+        for elem in elems {
+            self.add_vertical_list_elem(elem, glue_set_ratio);
+        }
 
         self.commands.push(DVICommand::Eop);
     }
@@ -996,9 +1003,35 @@ mod tests {
                 let page2 = parser.parse_box().unwrap();
                 let page3 = parser.parse_box().unwrap();
 
-                writer.add_page(&page1, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-                writer.add_page(&page2, [2, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-                writer.add_page(&page3, [3, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+                if let TeXBox::VerticalBox(vbox1) = page1 {
+                    writer.add_page(
+                        &vbox1.list,
+                        &vbox1.glue_set_ratio,
+                        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    );
+                } else {
+                    panic!("page1 wasn't a vertical box: {:?}", page1);
+                }
+
+                if let TeXBox::VerticalBox(vbox2) = page2 {
+                    writer.add_page(
+                        &vbox2.list,
+                        &vbox2.glue_set_ratio,
+                        [2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    );
+                } else {
+                    panic!("page2 wasn't a vertical box: {:?}", page2);
+                }
+
+                if let TeXBox::VerticalBox(vbox3) = page3 {
+                    writer.add_page(
+                        &vbox3.list,
+                        &vbox3.glue_set_ratio,
+                        [3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    );
+                } else {
+                    panic!("page3 wasn't a vertical box: {:?}", page3);
+                }
             },
         );
 
@@ -1009,7 +1042,6 @@ mod tests {
                     cs: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                     pointer: -1,
                 }),
-                MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
                 MaybeEquals::Anything,
@@ -1028,13 +1060,11 @@ mod tests {
                     metrics.get_height('a').as_scaled_points()
                         + metrics.get_depth('a').as_scaled_points(),
                 )),
-                MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Eop),
                 MaybeEquals::Equals(DVICommand::Bop {
                     cs: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                     pointer: 0,
                 }),
-                MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
                 MaybeEquals::Equals(DVICommand::SetCharN('q' as u8)),
@@ -1043,13 +1073,11 @@ mod tests {
                     metrics.get_height('q').as_scaled_points()
                         + metrics.get_depth('q').as_scaled_points(),
                 )),
-                MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Eop),
                 MaybeEquals::Equals(DVICommand::Bop {
                     cs: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                    pointer: 103,
+                    pointer: 101,
                 }),
-                MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
                 MaybeEquals::Equals(DVICommand::SetCharN('a' as u8)),
@@ -1058,7 +1086,6 @@ mod tests {
                     metrics.get_height('a').as_scaled_points()
                         + metrics.get_depth('a').as_scaled_points(),
                 )),
-                MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Eop),
             ],
         );
@@ -1078,7 +1105,15 @@ mod tests {
 
         with_parser(&[r"\vbox{\noindent a}%"], |parser| {
             let page1 = parser.parse_box().unwrap();
-            writer.add_page(&page1, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+            if let TeXBox::VerticalBox(vbox1) = page1 {
+                writer.add_page(
+                    &vbox1.list,
+                    &vbox1.glue_set_ratio,
+                    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                );
+            } else {
+                panic!("page isn't a vertical box: {:?}", page1);
+            }
         });
 
         writer.end();
@@ -1102,7 +1137,6 @@ mod tests {
                     pointer: -1,
                 }),
                 MaybeEquals::Equals(DVICommand::Push),
-                MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
                 MaybeEquals::Anything,
                 MaybeEquals::Equals(DVICommand::SetCharN('a' as u8)),
@@ -1111,7 +1145,6 @@ mod tests {
                     metrics.get_height('a').as_scaled_points()
                         + metrics.get_depth('a').as_scaled_points(),
                 )),
-                MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Eop),
                 MaybeEquals::Equals(DVICommand::Post {
                     pointer: 28,
@@ -1120,14 +1153,14 @@ mod tests {
                     mag: 1000,
                     max_page_height: 43725786,
                     max_page_width: 30785863,
-                    max_stack_depth: 2,
+                    max_stack_depth: 1,
                     num_pages: 1,
                 }),
                 MaybeEquals::Anything,
                 MaybeEquals::Equals(DVICommand::PostPost {
-                    post_pointer: 113,
+                    post_pointer: 111,
                     format: 2,
-                    tail: 4,
+                    tail: 6,
                 }),
             ],
         );
@@ -1135,8 +1168,8 @@ mod tests {
         // The total size of the file should be a multiple of 4
         assert_eq!(writer.total_byte_size() % 4, 0);
 
-        let first_font_def = &writer.commands[4];
-        let last_font_def = &writer.commands[12];
+        let first_font_def = &writer.commands[3];
+        let last_font_def = &writer.commands[10];
 
         // The font defs in the post should match the defs in the pages
         assert_eq!(first_font_def, last_font_def);
@@ -1150,12 +1183,9 @@ mod tests {
 
         writer.start((25400000, 473628672), 1000, vec![]);
 
-        with_parser(&[r"\vbox{}%"], |parser| {
-            let page1 = parser.parse_box().unwrap();
-            writer.add_page(&page1, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-            writer.add_page(&page1, [2, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-            writer.add_page(&page1, [3, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-        });
+        writer.add_page(&[], &None, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        writer.add_page(&[], &None, [2, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        writer.add_page(&[], &None, [3, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
         writer.end();
 
@@ -1173,37 +1203,31 @@ mod tests {
                     cs: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                     pointer: -1,
                 }),
-                MaybeEquals::Equals(DVICommand::Push),
-                MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Eop),
                 MaybeEquals::Equals(DVICommand::Bop {
                     cs: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                     pointer: 15,
                 }),
-                MaybeEquals::Equals(DVICommand::Push),
-                MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Eop),
                 MaybeEquals::Equals(DVICommand::Bop {
                     cs: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                    pointer: 63,
+                    pointer: 61,
                 }),
-                MaybeEquals::Equals(DVICommand::Push),
-                MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Eop),
                 MaybeEquals::Equals(DVICommand::Post {
-                    pointer: 111,
+                    pointer: 107,
                     num: 25400000,
                     den: 473628672,
                     mag: 1000,
                     max_page_height: 43725786,
                     max_page_width: 30785863,
-                    max_stack_depth: 1,
+                    max_stack_depth: 0,
                     num_pages: 3,
                 }),
                 MaybeEquals::Equals(DVICommand::PostPost {
-                    post_pointer: 159,
+                    post_pointer: 153,
                     format: 2,
-                    tail: 6,
+                    tail: 4,
                 }),
             ],
         );
