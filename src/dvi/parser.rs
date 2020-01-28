@@ -68,6 +68,13 @@ impl DVICommand {
                 let b = reader.read_3_bytes_signed()?;
                 Ok(Some(DVICommand::W3(b)))
             }
+            // x0
+            152 => Ok(Some(DVICommand::X0)),
+            // x3
+            155 => {
+                let b = reader.read_3_bytes_signed()?;
+                Ok(Some(DVICommand::X3(b)))
+            }
             // down2
             158 => {
                 let a = reader.read_2_bytes_signed()?;
