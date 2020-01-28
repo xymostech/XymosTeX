@@ -10,11 +10,16 @@ use crate::tfm::TFMFile;
 
 struct DVIFileWriter {
     commands: Vec<DVICommand>,
-    stack_depth: usize,
     last_page_start: i32,
     curr_font_num: i32,
     font_nums: HashMap<String, i32>,
     next_font_num: i32,
+    num: u32,
+    den: u32,
+    mag: u32,
+    num_pages: u16,
+    max_stack_depth: u16,
+    curr_stack_depth: u16,
 }
 
 fn get_metrics_for_font(font: &str) -> io::Result<TFMFile> {
@@ -30,21 +35,25 @@ impl DVIFileWriter {
     fn new() -> Self {
         DVIFileWriter {
             commands: Vec::new(),
-            stack_depth: 0,
             last_page_start: -1,
             curr_font_num: -1,
             font_nums: HashMap::new(),
             next_font_num: 0,
+            num: 0,
+            den: 0,
+            mag: 0,
+            num_pages: 0,
+            max_stack_depth: 0,
+            curr_stack_depth: 0,
         }
     }
 
-    fn add_font_def(&mut self, font: &str) -> i32 {
-        let font_num = self.next_font_num;
-        self.next_font_num = self.next_font_num + 1;
-
-        let metrics = get_metrics_for_font(font)
-            .expect(&format!("Error loading font metrics for {}", font));
-
+    fn add_font_def_with_metrics(
+        &mut self,
+        font: &str,
+        metrics: &TFMFile,
+        font_num: i32,
+    ) {
         self.commands.push(DVICommand::FntDef4 {
             font_num: font_num,
             checksum: metrics.get_checksum(),
@@ -57,6 +66,16 @@ impl DVIFileWriter {
             length: font.len() as u8,
             font_name: font.to_string(),
         });
+    }
+
+    fn add_font_def(&mut self, font: &str) -> i32 {
+        let font_num = self.next_font_num;
+        self.next_font_num = self.next_font_num + 1;
+
+        let metrics = get_metrics_for_font(font)
+            .expect(&format!("Error loading font metrics for {}", font));
+
+        self.add_font_def_with_metrics(font, &metrics, font_num);
         self.font_nums.insert(font.to_string(), font_num);
 
         font_num
@@ -77,6 +96,10 @@ impl DVIFileWriter {
 
     fn add_box(&mut self, tex_box: &TeXBox) {
         self.commands.push(DVICommand::Push);
+        self.curr_stack_depth += 1;
+        if self.curr_stack_depth > self.max_stack_depth {
+            self.max_stack_depth = self.curr_stack_depth;
+        }
 
         match tex_box {
             TeXBox::HorizontalBox(hbox) => {
@@ -92,6 +115,7 @@ impl DVIFileWriter {
         }
 
         self.commands.push(DVICommand::Pop);
+        self.curr_stack_depth -= 1;
     }
 
     fn add_vertical_list_elem(
@@ -158,13 +182,18 @@ impl DVIFileWriter {
         }
     }
 
-    fn add_page(&mut self, page: &TeXBox, cs: [i32; 10]) {
-        let old_last_page_start = self.last_page_start;
-        self.last_page_start = self
-            .commands
+    fn total_byte_size(&self) -> usize {
+        self.commands
             .iter()
             .map(|command| command.byte_size())
-            .sum::<usize>() as i32;
+            .sum::<usize>()
+    }
+
+    fn add_page(&mut self, page: &TeXBox, cs: [i32; 10]) {
+        self.num_pages += 1;
+
+        let old_last_page_start = self.last_page_start;
+        self.last_page_start = self.total_byte_size() as i32;
         self.commands.push(DVICommand::Bop {
             cs: cs,
             pointer: old_last_page_start,
@@ -174,6 +203,52 @@ impl DVIFileWriter {
         self.add_box(page);
 
         self.commands.push(DVICommand::Eop);
+    }
+
+    fn start(&mut self, unit_frac: (u32, u32), mag: u32, comment: Vec<u8>) {
+        let (num, den) = unit_frac;
+
+        self.num = num;
+        self.den = den;
+        self.mag = mag;
+
+        self.commands.push(DVICommand::Pre {
+            format: 2,
+            num: num,
+            den: den,
+            mag: mag,
+            comment: comment,
+        });
+    }
+
+    fn end(&mut self) {
+        let post_pointer = self.total_byte_size();
+
+        self.commands.push(DVICommand::Post {
+            pointer: self.last_page_start as u32,
+            num: self.num,
+            den: self.den,
+            mag: self.mag,
+            max_page_height: 43725786, // TODO(fixme)
+            max_page_width: 30785863,  // TODO(fixme)
+            max_stack_depth: self.max_stack_depth,
+            num_pages: self.num_pages,
+        });
+
+        for (font, font_num) in std::mem::take(&mut self.font_nums) {
+            let metrics = get_metrics_for_font(&font)
+                .expect(&format!("Error loading font metrics for {}", font));
+
+            self.add_font_def_with_metrics(&font, &metrics, font_num);
+        }
+
+        let total_size = self.total_byte_size();
+
+        self.commands.push(DVICommand::PostPost {
+            post_pointer: post_pointer as u32,
+            format: 2,
+            tail: 4 + ((total_size + 6) % 4) as u8,
+        });
     }
 }
 
@@ -985,6 +1060,151 @@ mod tests {
                 )),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Eop),
+            ],
+        );
+    }
+
+    #[test]
+    fn it_adds_basic_pre_and_post() {
+        let mut writer = DVIFileWriter::new();
+
+        let metrics = get_metrics_for_font("cmr10").unwrap();
+
+        writer.start(
+            (25400000, 473628672),
+            1000,
+            "hello, world!".as_bytes().to_vec(),
+        );
+
+        with_parser(&[r"\vbox{\noindent a}%"], |parser| {
+            let page1 = parser.parse_box().unwrap();
+            writer.add_page(&page1, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        });
+
+        writer.end();
+
+        assert_matches(
+            &writer.commands,
+            &[
+                MaybeEquals::Equals(DVICommand::Pre {
+                    format: 2,
+                    num: 25400000,
+                    den: 473628672,
+                    mag: 1000,
+                    comment: vec![
+                        'h' as u8, 'e' as u8, 'l' as u8, 'l' as u8, 'o' as u8,
+                        ',' as u8, ' ' as u8, 'w' as u8, 'o' as u8, 'r' as u8,
+                        'l' as u8, 'd' as u8, '!' as u8,
+                    ],
+                }),
+                MaybeEquals::Equals(DVICommand::Bop {
+                    cs: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    pointer: -1,
+                }),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Anything,
+                MaybeEquals::Anything,
+                MaybeEquals::Equals(DVICommand::SetCharN('a' as u8)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    metrics.get_height('a').as_scaled_points()
+                        + metrics.get_depth('a').as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Eop),
+                MaybeEquals::Equals(DVICommand::Post {
+                    pointer: 28,
+                    num: 25400000,
+                    den: 473628672,
+                    mag: 1000,
+                    max_page_height: 43725786,
+                    max_page_width: 30785863,
+                    max_stack_depth: 2,
+                    num_pages: 1,
+                }),
+                MaybeEquals::Anything,
+                MaybeEquals::Equals(DVICommand::PostPost {
+                    post_pointer: 113,
+                    format: 2,
+                    tail: 4,
+                }),
+            ],
+        );
+
+        // The total size of the file should be a multiple of 4
+        assert_eq!(writer.total_byte_size() % 4, 0);
+
+        let first_font_def = &writer.commands[4];
+        let last_font_def = &writer.commands[12];
+
+        // The font defs in the post should match the defs in the pages
+        assert_eq!(first_font_def, last_font_def);
+    }
+
+    #[test]
+    fn it_calculates_num_pages_correctly() {
+        let mut writer = DVIFileWriter::new();
+
+        let metrics = get_metrics_for_font("cmr10").unwrap();
+
+        writer.start((25400000, 473628672), 1000, vec![]);
+
+        with_parser(&[r"\vbox{}%"], |parser| {
+            let page1 = parser.parse_box().unwrap();
+            writer.add_page(&page1, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+            writer.add_page(&page1, [2, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+            writer.add_page(&page1, [3, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        });
+
+        writer.end();
+
+        assert_matches(
+            &writer.commands,
+            &[
+                MaybeEquals::Equals(DVICommand::Pre {
+                    format: 2,
+                    num: 25400000,
+                    den: 473628672,
+                    mag: 1000,
+                    comment: vec![],
+                }),
+                MaybeEquals::Equals(DVICommand::Bop {
+                    cs: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    pointer: -1,
+                }),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Eop),
+                MaybeEquals::Equals(DVICommand::Bop {
+                    cs: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    pointer: 15,
+                }),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Eop),
+                MaybeEquals::Equals(DVICommand::Bop {
+                    cs: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    pointer: 63,
+                }),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Eop),
+                MaybeEquals::Equals(DVICommand::Post {
+                    pointer: 111,
+                    num: 25400000,
+                    den: 473628672,
+                    mag: 1000,
+                    max_page_height: 43725786,
+                    max_page_width: 30785863,
+                    max_stack_depth: 1,
+                    num_pages: 3,
+                }),
+                MaybeEquals::Equals(DVICommand::PostPost {
+                    post_pointer: 159,
+                    format: 2,
+                    tail: 6,
+                }),
             ],
         );
     }
