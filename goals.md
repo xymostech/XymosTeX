@@ -1,6 +1,6 @@
-# Goals of Rs-TeX
+# Goals of XymosTeX
 
-The overall goal of Rs-TeX is to be a complete implementation of TeX. What does that mean? [According to Knuth](http://texdoc.net/texmf-dist/doc/generic/knuth/tex/tripman.pdf), a requirement is that it correctly translates trip.tex, a "torture test" for TeX. So, I will use that as our criterion for being correct and complete.
+The overall goal of XymosTeX is to be a complete implementation of TeX. What does that mean? [According to Knuth](http://texdoc.net/texmf-dist/doc/generic/knuth/tex/tripman.pdf), a requirement is that it correctly translates trip.tex, a "torture test" for TeX. So, I will use that as our criterion for being correct and complete.
 
 The other goal is orthogonal to the actual completeness or correctness of the implementation is the main reason that I'm going to the trouble of reimplementing TeX at all. Instaed of trying to add additional functionality to the actual rendering side of TeX, my goal is to add a more reasonable debugging/tracing facility for TeX. The original reasoning for attempting the wild goal of reimplementing TeX was as an aide for implementing features in [KaTeX](https://github.com/KaTeX/KaTeX), the web LaTeX math renderer. With plain TeX, it is very difficult to decipher what many of the more complicated LaTeX math macros (`\begin{align}` and friends being the most useful). With a reasonable debugging/tracing interface, it would be much easier to understand how these complicated macros work.
 
