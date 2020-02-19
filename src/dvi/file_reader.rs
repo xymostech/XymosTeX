@@ -132,6 +132,7 @@ mod tests {
             0x00, 0x00, 0x01,
             0x7f, 0xff, 0xff,
             0x80, 0x00, 0x00,
+            0xff, 0x00, 0x00,
             0xff, 0xff, 0xff,
 
             0x00, 0x00, 0x00, 0x01,
@@ -153,6 +154,7 @@ mod tests {
         assert_eq!(reader.read_3_bytes_signed().unwrap(), 1);
         assert_eq!(reader.read_3_bytes_signed().unwrap(), 8388607);
         assert_eq!(reader.read_3_bytes_signed().unwrap(), -8388608);
+        assert_eq!(reader.read_3_bytes_signed().unwrap(), -65536);
         assert_eq!(reader.read_3_bytes_signed().unwrap(), -1);
 
         assert_eq!(reader.read_4_bytes_signed().unwrap(), 1);
