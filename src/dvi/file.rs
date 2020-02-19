@@ -1,5 +1,5 @@
 #[allow(dead_code)] // TODO(xymostech): remove this once all of these are used
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum DVICommand {
     SetCharN(u8),
     Set1(u8),

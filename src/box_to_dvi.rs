@@ -3,7 +3,7 @@ use std::io;
 
 use crate::boxes::GlueSetRatio;
 use crate::boxes::TeXBox;
-use crate::dvi::DVICommand;
+use crate::dvi::{DVICommand, DVIFile};
 use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::paths::get_path_to_font;
 use crate::tfm::TFMFile;
@@ -256,6 +256,12 @@ impl DVIFileWriter {
             format: 2,
             tail: 4 + ((total_size + 6) % 4) as u8,
         });
+    }
+
+    fn to_file(&self) -> DVIFile {
+        DVIFile {
+            commands: self.commands.clone(),
+        }
     }
 }
 
@@ -1226,6 +1232,52 @@ mod tests {
                 }),
                 MaybeEquals::Equals(DVICommand::PostPost {
                     post_pointer: 153,
+                    format: 2,
+                    tail: 4,
+                }),
+            ],
+        );
+    }
+
+    #[test]
+    fn it_converts_to_a_file() {
+        let mut writer = DVIFileWriter::new();
+
+        writer.start((25400000, 473628672), 1000, vec![]);
+
+        writer.add_page(&[], &None, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+        writer.end();
+
+        let file = writer.to_file();
+
+        assert_matches(
+            &file.commands,
+            &[
+                MaybeEquals::Equals(DVICommand::Pre {
+                    format: 2,
+                    num: 25400000,
+                    den: 473628672,
+                    mag: 1000,
+                    comment: vec![],
+                }),
+                MaybeEquals::Equals(DVICommand::Bop {
+                    cs: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    pointer: -1,
+                }),
+                MaybeEquals::Equals(DVICommand::Eop),
+                MaybeEquals::Equals(DVICommand::Post {
+                    pointer: 15,
+                    num: 25400000,
+                    den: 473628672,
+                    mag: 1000,
+                    max_page_height: 43725786,
+                    max_page_width: 30785863,
+                    max_stack_depth: 0,
+                    num_pages: 1,
+                }),
+                MaybeEquals::Equals(DVICommand::PostPost {
+                    post_pointer: 61,
                     format: 2,
                     tail: 4,
                 }),
