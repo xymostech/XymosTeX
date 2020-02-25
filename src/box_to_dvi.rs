@@ -1185,8 +1185,6 @@ mod tests {
     fn it_calculates_num_pages_correctly() {
         let mut writer = DVIFileWriter::new();
 
-        let metrics = get_metrics_for_font("cmr10").unwrap();
-
         writer.start((25400000, 473628672), 1000, vec![]);
 
         writer.add_page(&[], &None, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
