@@ -99,6 +99,11 @@ impl DVICommand {
             }
             // fnt_num_n
             n if n >= 171 && n <= 234 => Ok(Some(DVICommand::FntNumN(n - 171))),
+            // fnt4
+            238 => {
+                let k = reader.read_4_bytes_signed()?;
+                Ok(Some(DVICommand::Fnt4(k)))
+            }
             // fnt_def1
             243 => {
                 let k = reader.read_1_byte_unsigned()?;
@@ -109,6 +114,25 @@ impl DVICommand {
                 let l = reader.read_1_byte_unsigned()?;
                 let n = reader.read_string((a + l) as usize)?;
                 Ok(Some(DVICommand::FntDef1 {
+                    font_num: k,
+                    checksum: c,
+                    scale: s,
+                    design_size: d,
+                    area: a,
+                    length: l,
+                    font_name: n,
+                }))
+            }
+            // fnt_def4
+            246 => {
+                let k = reader.read_4_bytes_signed()?;
+                let c = reader.read_4_bytes_unsigned()?;
+                let s = reader.read_4_bytes_unsigned()?;
+                let d = reader.read_4_bytes_unsigned()?;
+                let a = reader.read_1_byte_unsigned()?;
+                let l = reader.read_1_byte_unsigned()?;
+                let n = reader.read_string((a + l) as usize)?;
+                Ok(Some(DVICommand::FntDef4 {
                     font_num: k,
                     checksum: c,
                     scale: s,

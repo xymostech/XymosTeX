@@ -274,11 +274,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Used for early testing, when we're not going to be inspecting a whole
-    // output box.
-    pub fn parse_vertical_box_to_chars(&mut self) -> Vec<char> {
-        let vbox = self.parse_vertical_box(&BoxLayout::Natural, false);
-        vbox.to_chars()
+    // Used for early testing, when we want to output test the output of
+    // parsing an entire box.
+    pub fn parse_outer_vertical_box(&mut self) -> VerticalBox {
+        self.parse_vertical_box(&BoxLayout::Natural, false)
     }
 }
 
@@ -609,16 +608,6 @@ mod tests {
             } else {
                 panic!("Found vbox!");
             }
-        });
-    }
-
-    #[test]
-    fn it_parses_chars_from_horizontal_boxes() {
-        with_parser(&[r"a {b }c\end%"], |parser| {
-            assert_eq!(
-                parser.parse_vertical_box_to_chars(),
-                vec![' ', 'a', ' ', 'b', ' ', 'c', '\n']
-            );
         });
     }
 

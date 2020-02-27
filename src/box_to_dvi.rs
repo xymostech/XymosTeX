@@ -8,7 +8,7 @@ use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::paths::get_path_to_font;
 use crate::tfm::TFMFile;
 
-struct DVIFileWriter {
+pub struct DVIFileWriter {
     commands: Vec<DVICommand>,
     last_page_start: i32,
     curr_font_num: i32,
@@ -32,7 +32,7 @@ fn get_metrics_for_font(font: &str) -> io::Result<TFMFile> {
 }
 
 impl DVIFileWriter {
-    fn new() -> Self {
+    pub fn new() -> Self {
         DVIFileWriter {
             commands: Vec::new(),
             last_page_start: -1,
@@ -189,7 +189,7 @@ impl DVIFileWriter {
             .sum::<usize>()
     }
 
-    fn add_page(
+    pub fn add_page(
         &mut self,
         elems: &[VerticalListElem],
         glue_set_ratio: &Option<GlueSetRatio>,
@@ -212,7 +212,7 @@ impl DVIFileWriter {
         self.commands.push(DVICommand::Eop);
     }
 
-    fn start(&mut self, unit_frac: (u32, u32), mag: u32, comment: Vec<u8>) {
+    pub fn start(&mut self, unit_frac: (u32, u32), mag: u32, comment: Vec<u8>) {
         let (num, den) = unit_frac;
 
         self.num = num;
@@ -228,7 +228,7 @@ impl DVIFileWriter {
         });
     }
 
-    fn end(&mut self) {
+    pub fn end(&mut self) {
         let post_pointer = self.total_byte_size();
 
         self.commands.push(DVICommand::Post {
@@ -258,7 +258,7 @@ impl DVIFileWriter {
         });
     }
 
-    fn to_file(&self) -> DVIFile {
+    pub fn to_file(&self) -> DVIFile {
         DVIFile {
             commands: self.commands.clone(),
         }

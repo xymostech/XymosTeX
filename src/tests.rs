@@ -17,8 +17,11 @@ fn it_parses_horizontal_boxes() {
             r"\end",
         ],
         |parser| {
-            let result: String =
-                parser.parse_vertical_box_to_chars().into_iter().collect();
+            let result: String = parser
+                .parse_outer_vertical_box()
+                .to_chars()
+                .into_iter()
+                .collect();
 
             assert_eq!(
                 result,
@@ -53,8 +56,11 @@ fn it_parses_vertical_boxes() {
             r"\end",
         ],
         |parser| {
-            let result: String =
-                parser.parse_vertical_box_to_chars().into_iter().collect();
+            let result: String = parser
+                .parse_outer_vertical_box()
+                .to_chars()
+                .into_iter()
+                .collect();
 
             assert_eq!(
                 result,

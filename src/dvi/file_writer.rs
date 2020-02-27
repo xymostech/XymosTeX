@@ -121,6 +121,10 @@ impl DVICommand {
                 writer.write_3_bytes_signed(*a)
             }
             DVICommand::FntNumN(n) => writer.write_1_byte_unsigned(n + 171),
+            DVICommand::Fnt4(n) => {
+                writer.write_1_byte_unsigned(238)?;
+                writer.write_4_bytes_signed(*n)
+            }
             DVICommand::FntDef1 {
                 font_num,
                 checksum,
@@ -132,6 +136,24 @@ impl DVICommand {
             } => {
                 writer.write_1_byte_unsigned(243)?;
                 writer.write_1_byte_unsigned(*font_num)?;
+                writer.write_4_bytes_unsigned(*checksum)?;
+                writer.write_4_bytes_unsigned(*scale)?;
+                writer.write_4_bytes_unsigned(*design_size)?;
+                writer.write_1_byte_unsigned(*area)?;
+                writer.write_1_byte_unsigned(*length)?;
+                writer.write_string(&font_name, (area + length) as usize)
+            }
+            DVICommand::FntDef4 {
+                font_num,
+                checksum,
+                scale,
+                design_size,
+                area,
+                length,
+                font_name,
+            } => {
+                writer.write_1_byte_unsigned(246)?;
+                writer.write_4_bytes_signed(*font_num)?;
                 writer.write_4_bytes_unsigned(*checksum)?;
                 writer.write_4_bytes_unsigned(*scale)?;
                 writer.write_4_bytes_unsigned(*design_size)?;
