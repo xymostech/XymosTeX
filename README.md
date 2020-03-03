@@ -8,13 +8,15 @@ This project is an attempt to build an implementation of TeX in Rust. The overal
 
 ## Status
 
-Currently, XymosTeX has reached the point where is it Turing complete (that is, it implements things like macro expansion, conditionals, assignments) and can interpret very basic horizontal and vertical boxes
+Currently, XymosTeX has reached the point where is it Turing complete (that is, it implements things like macro expansion, conditionals, assignments), can interpret basic horizontal and vertical boxes, and can generate a DVI file with the result.
 
-The next body of work will be creating DVI output from the parsed vertical and horizontal boxes.
+The next body of work will be parsing math expressions, performing paragraph breaking, and performing page breaking.
 
 ## Trying it
 
 Because XymosTeX is under development, the best way to try it is to clone the repo and build it from in there.
+
+XymosTeX produces [DVI files](https://en.wikipedia.org/wiki/Device_independent_file_format) as output, so something like dvipdf from another TeX system is needed to actually view the result.
 
 ```
 $ git clone https://github.com/xymostech/XymosTeX.git
@@ -22,25 +24,27 @@ $ cd XymosTeX
 $ cargo run
 \def\hello #1{Hello, #1!}
 \hello{World}
- Hello World!
+\end
+$ dvipdf texput.dvi
+$ open texput.pdf
 ```
+
+![Image of Hello World!](readme-images/hello-world.png)
+
 
 The most fun and impressive thing that XymosTeX can do is calculate primes for you:
 
 ```
 $ cargo run --release < examples/primes.tex
-2, 3, 5, 7, 11, 13, 17, 19, 23, and 29
+$ dvipdf texput.dvi
+$ open texput.pdf
 ```
+
+![Image of the first 10 primes](readme-images/primes.png)
 
 ## Contributing
 
-I'm not currently taking contributions for small changes towards the current goals, but if you have a large area of TeX that you're interested in trying to tackle then I'd love to hear from you! Some examples of "large areas":
-
-* Line breaking/page breaking
-* Hyphenation
-* Math layout
-* Error recovery
-* DVI output
+I'm not currently taking feature contributions to XymosTeX since the goal is really for me to learn how TeX works for myself. However, since I am a Rust newbie, I am welcome to feedback about my Rust style and any suggestions about how to improve the code or repo structure.
 
 ## License
 
