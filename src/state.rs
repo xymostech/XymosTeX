@@ -157,8 +157,9 @@ impl TeXStateInner {
         {
             // If to_token already has a definition, we use that for the value
             // we're setting.
+            let cloned_token = token_definition.clone();
             self.token_definition_map
-                .insert(set_token.clone(), token_definition.clone());
+                .insert(set_token.clone(), cloned_token);
         } else if let Token::Char(_, cat) = to_token {
             if cat != &Category::Active {
                 // Otherwise, if to_token is a char token with a non-active
