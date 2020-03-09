@@ -57,6 +57,6 @@ fn main() -> io::Result<()> {
 
     let file = file_writer.to_file();
 
-    let mut output = fs::File::create("texput.dvi")?;
+    let output = fs::File::create("texput.dvi")?;
     file.write_to(output)
 }
