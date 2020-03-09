@@ -259,7 +259,7 @@ impl DVIFileWriter {
         self.commands.push(DVICommand::PostPost {
             post_pointer: post_pointer as u32,
             format: 2,
-            tail: 4 + ((total_size + 6) % 4) as u8,
+            tail: 7 - ((total_size + 6 - 1) % 4) as u8,
         });
     }
 
@@ -1196,13 +1196,13 @@ mod tests {
                 MaybeEquals::Equals(DVICommand::PostPost {
                     post_pointer: 116,
                     format: 2,
-                    tail: 7,
+                    tail: 5,
                 }),
             ],
         );
 
         // The total size of the file should be a multiple of 4
-        // assert_eq!(writer.total_byte_size() % 4, 0);
+        assert_eq!(writer.total_byte_size() % 4, 0);
 
         let first_font_def = &writer.commands[4];
         let last_font_def = &writer.commands[11];
@@ -1388,5 +1388,78 @@ mod tests {
                 MaybeEquals::Equals(DVICommand::Pop),
             ],
         );
+    }
+
+    #[test]
+    fn it_calculates_post_post_correctly() {
+        let mut writer = DVIFileWriter::new();
+        writer.start((25400000, 473628672), 1000, vec![]);
+        writer.add_page(&[], &None, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        writer.end();
+
+        assert_eq!(
+            &writer.commands[writer.commands.len() - 1],
+            &DVICommand::PostPost {
+                post_pointer: 61,
+                format: 2,
+                tail: 4,
+            }
+        );
+
+        assert_eq!(writer.total_byte_size() % 4, 0);
+
+        let mut writer = DVIFileWriter::new();
+        writer.start((25400000, 473628672), 1000, vec![]);
+        writer.add_page(&[], &None, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        writer.commands.push(DVICommand::Nop);
+        writer.end();
+
+        assert_eq!(
+            &writer.commands[writer.commands.len() - 1],
+            &DVICommand::PostPost {
+                post_pointer: 62,
+                format: 2,
+                tail: 7,
+            }
+        );
+
+        assert_eq!(writer.total_byte_size() % 4, 0);
+
+        let mut writer = DVIFileWriter::new();
+        writer.start((25400000, 473628672), 1000, vec![]);
+        writer.add_page(&[], &None, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        writer.commands.push(DVICommand::Nop);
+        writer.commands.push(DVICommand::Nop);
+        writer.end();
+
+        assert_eq!(
+            &writer.commands[writer.commands.len() - 1],
+            &DVICommand::PostPost {
+                post_pointer: 63,
+                format: 2,
+                tail: 6,
+            }
+        );
+
+        assert_eq!(writer.total_byte_size() % 4, 0);
+
+        let mut writer = DVIFileWriter::new();
+        writer.start((25400000, 473628672), 1000, vec![]);
+        writer.add_page(&[], &None, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        writer.commands.push(DVICommand::Nop);
+        writer.commands.push(DVICommand::Nop);
+        writer.commands.push(DVICommand::Nop);
+        writer.end();
+
+        assert_eq!(
+            &writer.commands[writer.commands.len() - 1],
+            &DVICommand::PostPost {
+                post_pointer: 64,
+                format: 2,
+                tail: 5,
+            }
+        );
+
+        assert_eq!(writer.total_byte_size() % 4, 0);
     }
 }
