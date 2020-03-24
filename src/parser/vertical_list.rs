@@ -136,12 +136,13 @@ impl<'a> Parser<'a> {
         // TODO(xymostech): Store this in the \prevdepth parameter
         let mut prev_depth = Dimen::from_unit(-1000.0, Unit::Point);
 
-        // TODO(xymostech): Store these as \baselineskip, \lineskiplimit, and
-        // \lineskip parameters
+        // TODO(xymostech): Store these as \baselineskip, \lineskiplimit,
+        // \lineskip, and \topskip parameters
         let baselineskip =
             Glue::from_dimen(Dimen::from_unit(12.0, Unit::Point));
         let lineskiplimit = Dimen::from_unit(0.0, Unit::Point);
         let lineskip = Glue::from_dimen(Dimen::from_unit(1.0, Unit::Point));
+        let topskip = Glue::from_dimen(Dimen::from_unit(10.0, Unit::Point));
 
         let mut group_level = 0;
         while let Some(elem) =
@@ -149,6 +150,19 @@ impl<'a> Parser<'a> {
         {
             // Handle box elements specially so we can add interline glue
             if let VerticalListElem::Box(ref tex_box) = elem {
+                // HACK(xymostech): \topskip should be handled in the outer
+                // place where we build pages, but we're doing it here since
+                // that doesn't exist yet.
+                if !internal && result.len() == 0 {
+                    let box_height = tex_box.height();
+                    let total_skip =
+                        topskip.clone() - Glue::from_dimen(*box_height);
+
+                    if total_skip.space > Dimen::zero() {
+                        result.push(VerticalListElem::VSkip(total_skip));
+                    }
+                }
+
                 // If prev_depth is -1000pt, don't add interline glue
                 if prev_depth != Dimen::from_unit(-1000.0, Unit::Point) {
                     // Calculate how much interline glue we'd add if we just
@@ -172,7 +186,18 @@ impl<'a> Parser<'a> {
                 prev_depth = tex_box.depth().clone();
             }
 
-            result.push(elem);
+            if !internal {
+                if let VerticalListElem::VSkip(_) = elem {
+                    // Glue disappears at a page break.
+                    if result.len() != 0 {
+                        result.push(elem);
+                    }
+                } else {
+                    result.push(elem);
+                }
+            } else {
+                result.push(elem);
+            }
         }
 
         result
@@ -183,12 +208,22 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
+    use crate::boxes::{GlueSetRatio, GlueSetRatioKind, TeXBox, VerticalBox};
     use crate::dimension::{FilDimen, FilKind, SpringDimen};
     use crate::testing::with_parser;
 
     fn assert_parses_to(lines: &[&str], expected_list: &[VerticalListElem]) {
         with_parser(lines, |parser| {
             assert_eq!(parser.parse_vertical_list(true), expected_list);
+        });
+    }
+
+    fn assert_parses_to_non_internal(
+        lines: &[&str],
+        expected_list: &[VerticalListElem],
+    ) {
+        with_parser(lines, |parser| {
+            assert_eq!(parser.parse_vertical_list(false), expected_list);
         });
     }
 
@@ -311,29 +346,90 @@ mod tests {
     }
 
     #[test]
+    fn it_skips_glue_at_the_beginning_of_non_internal_vertical_mode() {
+        assert_parses_to_non_internal(&[r"\vskip 0pt\vskip 1pt\end%"], &[]);
+    }
+
+    #[test]
     fn it_ends_non_internal_vertical_mode() {
-        with_parser(&[r"\vskip 0pt\vskip 1pt\end a%"], |parser| {
-            assert_eq!(
-                parser.parse_vertical_list(false),
-                &[
-                    VerticalListElem::VSkip(Glue {
-                        space: Dimen::from_unit(0.0, Unit::Point),
-                        stretch: SpringDimen::Dimen(Dimen::zero()),
-                        shrink: SpringDimen::Dimen(Dimen::zero()),
-                    }),
-                    VerticalListElem::VSkip(Glue {
-                        space: Dimen::from_unit(1.0, Unit::Point),
-                        stretch: SpringDimen::Dimen(Dimen::zero()),
-                        shrink: SpringDimen::Dimen(Dimen::zero()),
-                    }),
-                ]
-            );
+        with_parser(&[r"\hbox{}\end a%"], |parser| {
+            let list = parser.parse_vertical_list(false);
+            // \topskip + \hbox{}
+            assert_eq!(list.len(), 2);
 
             assert_eq!(
                 parser.lex_unexpanded_token(),
                 Some(Token::Char('a', Category::Letter))
             );
         });
+    }
+
+    #[test]
+    fn it_adds_topskip() {
+        assert_parses_to_non_internal(
+            &[r"\vbox{}\end%"],
+            &[
+                VerticalListElem::VSkip(Glue::from_dimen(Dimen::from_unit(
+                    10.0,
+                    Unit::Point,
+                ))),
+                VerticalListElem::Box(TeXBox::VerticalBox(VerticalBox {
+                    height: Dimen::zero(),
+                    depth: Dimen::zero(),
+                    width: Dimen::zero(),
+                    list: vec![],
+                    glue_set_ratio: None,
+                })),
+            ],
+        );
+
+        assert_parses_to_non_internal(
+            &[r"\vbox to5pt{\vskip 0pt plus1pt}\end%"],
+            &[
+                VerticalListElem::VSkip(Glue::from_dimen(Dimen::from_unit(
+                    5.0,
+                    Unit::Point,
+                ))),
+                VerticalListElem::Box(TeXBox::VerticalBox(VerticalBox {
+                    height: Dimen::from_unit(5.0, Unit::Point),
+                    depth: Dimen::zero(),
+                    width: Dimen::zero(),
+                    list: vec![VerticalListElem::VSkip(Glue {
+                        space: Dimen::zero(),
+                        stretch: SpringDimen::Dimen(Dimen::from_unit(
+                            1.0,
+                            Unit::Point,
+                        )),
+                        shrink: SpringDimen::Dimen(Dimen::zero()),
+                    })],
+                    glue_set_ratio: Some(GlueSetRatio::from(
+                        GlueSetRatioKind::Finite,
+                        5.0,
+                    )),
+                })),
+            ],
+        );
+
+        assert_parses_to_non_internal(
+            &[r"\vbox to15pt{\vskip 0pt plus1pt}\end%"],
+            &[VerticalListElem::Box(TeXBox::VerticalBox(VerticalBox {
+                height: Dimen::from_unit(15.0, Unit::Point),
+                depth: Dimen::zero(),
+                width: Dimen::zero(),
+                list: vec![VerticalListElem::VSkip(Glue {
+                    space: Dimen::zero(),
+                    stretch: SpringDimen::Dimen(Dimen::from_unit(
+                        1.0,
+                        Unit::Point,
+                    )),
+                    shrink: SpringDimen::Dimen(Dimen::zero()),
+                })],
+                glue_set_ratio: Some(GlueSetRatio::from(
+                    GlueSetRatioKind::Finite,
+                    15.0,
+                )),
+            }))],
+        );
     }
 
     #[test]
