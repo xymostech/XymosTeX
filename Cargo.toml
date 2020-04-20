@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "print_dvi"
 path = "src/print_dvi.rs"
 
+[[bin]]
+name = "interpret"
+path = "src/interpret.rs"
+
 [dependencies]
 kpathsea = "0.2.2"
 lazy_static = "1.3.0"

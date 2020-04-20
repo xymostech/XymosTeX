@@ -6,7 +6,7 @@ mod dvi;
 mod paths;
 mod tfm;
 
-use dvi::DVIFile;
+use dvi::{interpret_dvi_file, DVIFile};
 use std::env;
 use std::fs;
 use std::io;
@@ -21,8 +21,13 @@ fn main() -> io::Result<()> {
     let filename = args.pop().unwrap();
     let file = fs::File::open(filename)?;
     let dvi = DVIFile::new(file)?;
-    for command in dvi.commands {
-        println!("{:?}", command);
+
+    let pages = interpret_dvi_file(dvi);
+    for page in pages {
+        for (k, v) in page.iter() {
+            println!("{:?} {:?}", k, v);
+        }
     }
+
     Ok(())
 }
