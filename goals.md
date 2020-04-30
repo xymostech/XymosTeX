@@ -36,7 +36,7 @@ At this point, I'll be able to start parsing from (internal) vertical mode, have
 
 ## Stage 4: DVI Output
 
-**Status**: In Progress
+**Status**: Done!
 **Difficulty**: Medium
 **Condition for success**: generate a DVI from a [series of commands creating vertical and horizontal boxes with spacing and characters in them](examples/dvitest.tex) that is content-identical to [the DVI produced by TeX run on the same commands](examples/dvitest.dvi)
 

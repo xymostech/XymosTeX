@@ -1,5 +1,8 @@
-/// Integration tests to ensure that high-level expectations hold
+use crate::box_to_dvi::DVIFileWriter;
+use crate::dvi::{interpret_dvi_file, DVIFile};
 use crate::testing::with_parser;
+/// Integration tests to ensure that high-level expectations hold
+use std::fs::File;
 
 /// This test ensures that we pass the stage #2 goals.
 #[test]
@@ -80,4 +83,34 @@ j
             );
         },
     );
+}
+
+/// This test ensure that we pass the stage #4 goals.
+#[test]
+fn it_matches_real_tex_output() {
+    let dvitest_contents = include_str!("../examples/dvitest.tex");
+    let lines = dvitest_contents.split('\n').collect::<Vec<&str>>();
+
+    let mut file_writer = DVIFileWriter::new();
+    file_writer.start(
+        (25400000, 473628672),
+        1000,
+        "Made by XymosTeX".as_bytes().to_vec(),
+    );
+
+    with_parser(&lines[..], |parser| {
+        let page = parser.parse_outer_vertical_box();
+        file_writer.add_page(&page.list, &None, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    });
+
+    file_writer.end();
+
+    let test_file = file_writer.to_file();
+    let test_pages = interpret_dvi_file(test_file);
+
+    let real_dvi: &[u8] = include_bytes!("../examples/dvitest.dvi");
+    let real_file = DVIFile::new(real_dvi).unwrap();
+    let real_pages = interpret_dvi_file(real_file);
+
+    assert_eq!(test_pages, real_pages);
 }
