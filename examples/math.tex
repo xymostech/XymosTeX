@@ -1,0 +1,22 @@
+% plain text next to math
+\noindent a$x^2_2$b
+
+% all of the different modes
+\noindent $a^{a^{a^a_a}_{a^a_a}}_{a^{a^a_a}_{a^a_a}}$
+
+% all style changes, and big operators in different styles
+\mathchardef\sum="1350
+\noindent $\displaystyle\sum\textstyle\sum\scriptstyle\sum\scriptscriptstyle\sum$
+
+% basic generalized fractions in different styles
+\noindent ${\displaystyle a \atop b}{\textstyle a \atop b}{\scriptstyle a \atop b}{\scriptscriptstyle a \atop b}{\displaystyle {a \atop b} \atop c}$
+
+% One of each of the easy kinds of atoms
+\mathcode`\+="202B
+\mathcode`\:="303A
+\mathcode`\(="4028
+\mathcode`\)="5029
+\mathcode`\,="613B
+\noindent $(a+b:1,0)$
+
+\end

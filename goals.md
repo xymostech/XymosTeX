@@ -46,9 +46,11 @@ Because the DVI file format isn't rigorous about how certain commands are used (
 
 ## Stage 5: Math Parsing
 
-**Status**: Not yet started
+**Status**: In Progress
 **Difficulty**: Medium
-**Condition for success**: Be able to parse a complicated mathematical expression into a box
+**Condition for success**: generate a DVI from [a TeX file with basic a complicated math expressions](examples/math.tex) that is content-identical to [the DVI produced by TeX run on the same file](examples/math.dvi).
+
+For this stage, I will be working on both parsing and interpreting of math basic math expressions. For parsing, I will need to handle parsing the math expressions into a math list, which has some oddities like `\atop` and `^`/`_` which will hopefully ensure that the parsing works. Then, I will need to run the routine for turning a math list into a horizontal list. Once that is done, I will be able to use the existing horizontal list infrastructure to fully typeset and output the math into a DVI file.
 
 ## Stage 6: Paragraph & Line Breaking
 
