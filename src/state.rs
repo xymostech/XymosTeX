@@ -5,6 +5,7 @@ use std::rc::Rc;
 use crate::boxes::TeXBox;
 use crate::category::Category;
 use crate::makro::Macro;
+use crate::math_code::MathCode;
 use crate::paths::get_path_to_font;
 use crate::tfm::TFMFile;
 use crate::token::Token;
@@ -40,6 +41,10 @@ pub struct TeXStateInner {
     // A map individual characters to the category that that it is associated
     // with. Set and retrieved with \catcode, used in the lexer.
     category_map: HashMap<char, Category>,
+
+    // A map of individual characters to the math code that it is associated
+    // with. Set and retrieved with \mathcode, only used in math mode.
+    math_code_map: HashMap<char, MathCode>,
 
     // There are several ways to redefine what a given token means, with \def,
     // \let, \chardef, etc. This map contains the definition of each redefined
@@ -97,6 +102,18 @@ impl TeXStateInner {
         initial_categories.insert('#', Category::Parameter);
         initial_categories.insert('$', Category::MathShift);
 
+        let mut initial_math_codes = HashMap::new();
+        for i in 0..255 {
+            let ch = (i as u8) as char;
+            if ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') {
+                initial_math_codes
+                    .insert(ch, MathCode::from_number(0x7100 + i));
+            } else if '0' <= ch && ch <= '9' {
+                initial_math_codes
+                    .insert(ch, MathCode::from_number(0x7000 + i));
+            }
+        }
+
         let mut token_definitions = HashMap::new();
 
         for primitive in ALL_PRIMITIVES {
@@ -108,6 +125,7 @@ impl TeXStateInner {
 
         TeXStateInner {
             category_map: initial_categories,
+            math_code_map: initial_math_codes,
             token_definition_map: token_definitions,
             count_registers: [0; 256],
             box_registers: HashMap::new(),
@@ -125,6 +143,17 @@ impl TeXStateInner {
 
     fn set_category(&mut self, ch: char, cat: Category) {
         self.category_map.insert(ch, cat);
+    }
+
+    fn get_math_code(&self, ch: char) -> MathCode {
+        match self.math_code_map.get(&ch) {
+            Some(mathcode) => mathcode.clone(),
+            None => MathCode::from_number(ch as u32),
+        }
+    }
+
+    fn set_math_code(&mut self, ch: char, mathcode: &MathCode) {
+        self.math_code_map.insert(ch, mathcode.clone());
     }
 
     fn get_macro(&self, token: &Token) -> Option<Rc<Macro>> {
@@ -307,6 +336,8 @@ impl TeXStateStack {
 
     generate_inner_func!(fn get_category(ch: char) -> Category);
     generate_inner_global_func!(fn set_category(global: bool, ch: char, cat: Category));
+    generate_inner_func!(fn get_math_code(ch: char) -> MathCode);
+    generate_inner_global_func!(fn set_math_code(global: bool, ch: char, mathcode: &MathCode));
     generate_inner_func!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
     generate_inner_global_func!(fn set_macro(global: bool, token: &Token, makro: &Rc<Macro>));
     generate_inner_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
@@ -404,6 +435,8 @@ impl TeXState {
 
     generate_stack_func!(fn get_category(ch: char) -> Category);
     generate_stack_func!(fn set_category(global: bool, ch: char, cat: Category));
+    generate_stack_func!(fn get_math_code(ch: char) -> MathCode);
+    generate_stack_func!(fn set_math_code(global: bool, ch: char, mathcode: &MathCode));
     generate_stack_func!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
     generate_stack_func!(fn set_macro(global: bool, token: &Token, makro: &Rc<Macro>));
     generate_stack_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
@@ -672,5 +705,23 @@ mod tests {
         // We mutated the box
         let mut final_box = state.get_box(0).unwrap();
         assert_eq!(*final_box.mut_depth(), Dimen::from_unit(4.0, Unit::Point));
+    }
+
+    #[test]
+    fn it_sets_math_codes_initially() {
+        let state = TeXState::new();
+
+        assert_eq!(state.get_math_code('a'), MathCode::from_number(0x7161));
+        assert_eq!(state.get_math_code('Z'), MathCode::from_number(0x715A));
+        assert_eq!(state.get_math_code('0'), MathCode::from_number(0x7030));
+        assert_eq!(state.get_math_code('('), MathCode::from_number(0x0028));
+    }
+
+    #[test]
+    fn it_gets_and_sets_math_codes_correctly() {
+        let mut state = TeXState::new();
+
+        state.set_math_code(false, '(', &MathCode::from_number(0x4028));
+        assert_eq!(state.get_math_code('('), MathCode::from_number(0x4028));
     }
 }

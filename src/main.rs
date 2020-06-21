@@ -10,6 +10,7 @@ mod glue;
 mod lexer;
 mod list;
 mod makro;
+mod math_code;
 mod parser;
 mod paths;
 mod state;
