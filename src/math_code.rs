@@ -1,5 +1,5 @@
 #[derive(Clone, Debug, PartialEq)]
-enum MathClass {
+pub enum MathClass {
     Ordinary = 0,
     LargeOperator = 1,
     BinaryOperation = 2,
@@ -29,9 +29,9 @@ impl MathClass {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct MathCode {
-    class: MathClass,
-    family: u8,
-    position: u8,
+    pub class: MathClass,
+    pub family: u8,
+    pub position: u8,
 }
 
 impl MathCode {
