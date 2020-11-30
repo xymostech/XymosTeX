@@ -9,14 +9,13 @@ pub struct DVIFileReader<T: io::Read> {
 // Generate a generic read_<n>_bytes_<signed/unsigned> function using
 // <type>::from_be_bytes.
 macro_rules! generate_int_reader_func {
-    (fn $func_name:ident() -> $return_type:ident, $size:expr) =>
-    {
+    (fn $func_name:ident() -> $return_type:ident, $size:expr) => {
         pub fn $func_name(&mut self) -> io::Result<$return_type> {
             let mut buf = [0; $size];
             self.reader.read_exact(&mut buf)?;
             Ok($return_type::from_be_bytes(buf))
         }
-    }
+    };
 }
 
 impl<T: io::Read> DVIFileReader<T> {
