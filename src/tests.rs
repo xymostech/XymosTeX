@@ -1,8 +1,7 @@
+/// Integration tests to ensure that high-level expectations hold
 use crate::box_to_dvi::DVIFileWriter;
 use crate::dvi::{interpret_dvi_file, DVIFile};
 use crate::testing::with_parser;
-/// Integration tests to ensure that high-level expectations hold
-use std::fs::File;
 
 /// This test ensures that we pass the stage #2 goals.
 #[test]

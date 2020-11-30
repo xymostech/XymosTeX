@@ -719,7 +719,7 @@ mod tests {
 
     #[test]
     fn it_gets_and_sets_math_codes_correctly() {
-        let mut state = TeXState::new();
+        let state = TeXState::new();
 
         state.set_math_code(false, '(', &MathCode::from_number(0x4028));
         assert_eq!(state.get_math_code('('), MathCode::from_number(0x4028));

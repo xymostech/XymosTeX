@@ -1,6 +1,8 @@
 use crate::category::Category;
 use crate::math_code::MathCode;
-use crate::math_list::{MathAtom, MathList, MathListElem};
+use crate::math_list::{
+    MathAtom, MathField, MathList, MathListElem, MathSymbol,
+};
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -38,20 +40,52 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_math_group(&mut self) -> MathList {
+        let begin_group = self.lex_expanded_token();
+        match begin_group {
+            Some(Token::Char(_, Category::BeginGroup)) => (),
+            tok => panic!("Invalid start of math group: {:?}", tok),
+        }
+
+        let math_list = self.parse_math_list();
+
+        let end_group = self.lex_expanded_token();
+        match end_group {
+            Some(Token::Char(_, Category::EndGroup)) => (),
+            tok => panic!("Math group didn't end with an EndGroup: {:?}", tok),
+        }
+
+        math_list
+    }
+
+    fn parse_math_field(&mut self) -> MathField {
+        self.parse_filler_expanded();
+
+        if self.is_math_symbol_head() {
+            let math_code = self.parse_math_symbol();
+
+            MathField::Symbol(MathSymbol::from_math_code(&math_code))
+        } else {
+            MathField::MathList(self.parse_math_group())
+        }
+    }
+
     fn parse_math_list(&mut self) -> MathList {
         let mut current_list = Vec::new();
 
         loop {
-            if self.peek_expanded_token() == None {
-                break;
-            } else if self.is_math_symbol_head() {
+            if self.is_math_symbol_head() {
                 let math_code = self.parse_math_symbol();
 
                 current_list.push(MathListElem::Atom(
-                    MathAtom::from_math_code(math_code),
+                    MathAtom::from_math_code(&math_code),
                 ));
             } else {
-                panic!("unimplemented");
+                match self.peek_expanded_token() {
+                    Some(Token::Char(_, Category::EndGroup)) => break,
+                    None => break,
+                    _ => panic!("unimplemented"),
+                }
             }
         }
 
@@ -101,12 +135,94 @@ mod tests {
                 parser.parse_math_list(),
                 vec![
                     MathListElem::Atom(MathAtom::from_math_code(
-                        MathCode::from_number(0x7161)
+                        &MathCode::from_number(0x7161)
                     )),
                     MathListElem::Atom(MathAtom::from_math_code(
-                        MathCode::from_number(0x002a)
+                        &MathCode::from_number(0x002a)
                     )),
                 ]
+            );
+        });
+    }
+
+    #[test]
+    fn it_parses_basic_math_groups() {
+        with_parser(&[r"{a}%"], |parser| {
+            assert_eq!(
+                parser.parse_math_group(),
+                vec![MathListElem::Atom(MathAtom::from_math_code(
+                    &MathCode::from_number(0x7161)
+                )),],
+            );
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid start of math group")]
+    fn it_fails_parsing_math_groups_not_starting_with_begin_group() {
+        with_parser(&[r"a%"], |parser| {
+            parser.parse_math_group();
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Math group didn't end with an EndGroup")]
+    fn it_fails_parsing_math_groups_not_ending_with_end_group() {
+        with_parser(&[r"{a%"], |parser| {
+            parser.parse_math_group();
+        });
+    }
+
+    #[test]
+    fn it_parses_symbols_as_math_fields() {
+        with_parser(&[r"a2%"], |parser| {
+            assert_eq!(
+                parser.parse_math_field(),
+                MathField::Symbol(MathSymbol::from_math_code(
+                    &MathCode::from_number(0x7161)
+                ))
+            );
+            assert_eq!(
+                parser.parse_math_field(),
+                MathField::Symbol(MathSymbol::from_math_code(
+                    &MathCode::from_number(0x7032)
+                ))
+            );
+        })
+    }
+
+    #[test]
+    fn it_parses_groups_as_math_fields() {
+        with_parser(&[r"{ab}{}%"], |parser| {
+            assert_eq!(
+                parser.parse_math_field(),
+                MathField::MathList(vec![
+                    MathListElem::Atom(MathAtom::from_math_code(
+                        &MathCode::from_number(0x7161)
+                    )),
+                    MathListElem::Atom(MathAtom::from_math_code(
+                        &MathCode::from_number(0x7162)
+                    )),
+                ],)
+            );
+            assert_eq!(parser.parse_math_field(), MathField::MathList(vec![],));
+        });
+    }
+
+    #[test]
+    fn it_ignores_filler_before_math_fields() {
+        with_parser(&[r"  a   {a}%"], |parser| {
+            assert_eq!(
+                parser.parse_math_field(),
+                MathField::Symbol(MathSymbol::from_math_code(
+                    &MathCode::from_number(0x7161)
+                ))
+            );
+            assert_eq!(
+                parser.parse_math_field(),
+                MathField::MathList(vec![MathListElem::Atom(
+                    MathAtom::from_math_code(&MathCode::from_number(0x7161))
+                ),],)
             );
         });
     }
