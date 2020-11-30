@@ -1,7 +1,7 @@
 use crate::category::Category;
 use crate::math_code::MathCode;
 use crate::math_list::{
-    MathAtom, MathField, MathList, MathListElem, MathSymbol,
+    MathAtom, MathField, MathList, MathListElem, MathStyle, MathSymbol,
 };
 use crate::parser::Parser;
 use crate::token::Token;
@@ -70,6 +70,25 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn is_math_superscript_head(&mut self) -> bool {
+        let expanded_token = self.peek_expanded_token();
+        match self.replace_renamed_token(expanded_token) {
+            Some(Token::Char(_, Category::Superscript)) => true,
+            _ => false,
+        }
+    }
+
+    fn parse_math_superscript(&mut self, atom: MathAtom) -> MathAtom {
+        self.lex_expanded_token();
+
+        if atom.has_superscript() {
+            panic!("Double superscript");
+        }
+
+        let superscript = self.parse_math_field();
+        atom.with_superscript(superscript)
+    }
+
     fn parse_math_list(&mut self) -> MathList {
         let mut current_list = Vec::new();
 
@@ -79,6 +98,19 @@ impl<'a> Parser<'a> {
 
                 current_list.push(MathListElem::Atom(
                     MathAtom::from_math_code(&math_code),
+                ));
+            } else if self.is_math_superscript_head() {
+                let last_atom = match current_list.pop() {
+                    Some(MathListElem::Atom(atom)) => atom,
+                    Some(other_elem) => {
+                        current_list.push(other_elem);
+                        MathAtom::empty_ord()
+                    }
+                    None => MathAtom::empty_ord(),
+                };
+
+                current_list.push(MathListElem::Atom(
+                    self.parse_math_superscript(last_atom),
                 ));
             } else {
                 match self.peek_expanded_token() {
@@ -223,6 +255,83 @@ mod tests {
                 MathField::MathList(vec![MathListElem::Atom(
                     MathAtom::from_math_code(&MathCode::from_number(0x7161))
                 ),],)
+            );
+        });
+    }
+
+    #[test]
+    fn it_parses_superscripts() {
+        let a_code = MathCode::from_number(0x7161);
+        let b_code = MathCode::from_number(0x7162);
+
+        with_parser(&[r"a^a%", r"a^{ab}%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![
+                    MathListElem::Atom(
+                        MathAtom::from_math_code(&a_code).with_superscript(
+                            MathField::Symbol(MathSymbol::from_math_code(
+                                &a_code
+                            ))
+                        )
+                    ),
+                    MathListElem::Atom(
+                        MathAtom::from_math_code(&a_code).with_superscript(
+                            MathField::MathList(vec![
+                                MathListElem::Atom(MathAtom::from_math_code(
+                                    &a_code
+                                )),
+                                MathListElem::Atom(MathAtom::from_math_code(
+                                    &b_code
+                                )),
+                            ])
+                        )
+                    )
+                ],
+            );
+        });
+    }
+
+    #[test]
+    fn it_parses_superscripts_at_beginning_of_lists() {
+        let a_code = MathCode::from_number(0x7161);
+
+        with_parser(&[r"^a%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![MathListElem::Atom(
+                    MathAtom::empty_ord().with_superscript(MathField::Symbol(
+                        MathSymbol::from_math_code(&a_code)
+                    ))
+                ),],
+            );
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Double superscript")]
+    fn it_fails_on_multiple_superscripts() {
+        with_parser(&[r"a^a^a%"], |parser| {
+            parser.parse_math_list();
+        });
+    }
+
+    #[test]
+    // \displaystyle isn't parsed yet so this test won't work, but we want to
+    // test this case in the future so ignore this test for now.
+    #[ignore]
+    fn it_parses_superscripts_after_non_atoms() {
+        let a_code = MathCode::from_number(0x7161);
+
+        with_parser(&[r"\displaystyle ^{a}%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![
+                    MathListElem::StyleChange(MathStyle::DisplayStyle),
+                    MathListElem::Atom(MathAtom::empty_ord().with_superscript(
+                        MathField::Symbol(MathSymbol::from_math_code(&a_code))
+                    )),
+                ],
             );
         });
     }

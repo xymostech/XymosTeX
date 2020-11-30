@@ -75,6 +75,15 @@ pub struct MathAtom {
 }
 
 impl MathAtom {
+    pub fn empty_ord() -> MathAtom {
+        MathAtom {
+            kind: AtomKind::Ord,
+            nucleus: None,
+            superscript: None,
+            subscript: None,
+        }
+    }
+
     pub fn from_math_code(math_code: &MathCode) -> MathAtom {
         let symbol = MathSymbol::from_math_code(math_code);
 
@@ -84,6 +93,15 @@ impl MathAtom {
             superscript: None,
             subscript: None,
         }
+    }
+
+    pub fn with_superscript(mut self, superscript: MathField) -> MathAtom {
+        self.superscript = Some(superscript);
+        self
+    }
+
+    pub fn has_superscript(&self) -> bool {
+        self.superscript.is_some()
     }
 }
 
