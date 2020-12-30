@@ -149,6 +149,7 @@ mod tests {
     use super::*;
 
     use crate::dimension::{FilDimen, FilKind};
+    use crate::math_code::MathCode;
     use crate::testing::with_parser;
 
     fn assert_parses_to_with_restricted(
@@ -510,5 +511,20 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "unimplemented")]
+    fn it_fails_parsing_mathchardefs() {
+        with_parser(&[r"\hello%", r"\hello%"], |parser| {
+            let tok = parser.lex_unexpanded_token().unwrap();
+            parser.state.set_math_chardef(
+                false,
+                &tok,
+                &MathCode::from_number(0x7161),
+            );
+
+            parser.parse_horizontal_list(false, false);
+        });
     }
 }

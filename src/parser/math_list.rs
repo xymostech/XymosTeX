@@ -28,13 +28,42 @@ impl<'a> Parser<'a> {
         self.state.get_math_code(ch)
     }
 
+    fn is_math_character_head(&mut self) -> bool {
+        let expanded_token = self.peek_expanded_token();
+        if let Some(expanded_renamed_token) =
+            self.replace_renamed_token(expanded_token)
+        {
+            self.state
+                .get_math_chardef(&expanded_renamed_token)
+                .is_some()
+        } else {
+            false
+        }
+    }
+
+    fn parse_math_character_to_math_code(&mut self) -> MathCode {
+        let expanded_token = self.lex_expanded_token();
+        let expanded_renamed_token =
+            self.replace_renamed_token(expanded_token).unwrap();
+
+        if let Some(math_code) =
+            self.state.get_math_chardef(&expanded_renamed_token)
+        {
+            math_code
+        } else {
+            panic!("Invalid math chardef token: {:?}", expanded_renamed_token);
+        }
+    }
+
     fn is_math_symbol_head(&mut self) -> bool {
-        self.is_character_head()
+        self.is_character_head() || self.is_math_character_head()
     }
 
     fn parse_math_symbol(&mut self) -> MathCode {
         if self.is_character_head() {
             self.parse_character_to_math_code()
+        } else if self.is_math_character_head() {
+            self.parse_math_character_to_math_code()
         } else {
             panic!("Unimplemented");
         }
@@ -409,6 +438,27 @@ mod tests {
     fn it_fails_on_multiple_subscripts_after_superscript() {
         with_parser(&[r"a_a^a_a%"], |parser| {
             parser.parse_math_list();
+        });
+    }
+
+    #[test]
+    fn it_parses_mathchardefs() {
+        let a_code = MathCode::from_number(0x7161);
+        let b_code = MathCode::from_number(0x7162);
+        let c_code = MathCode::from_number(0x7163);
+
+        with_parser(&[r"\hello%", r"a\hello b%"], |parser| {
+            let tok = parser.lex_unexpanded_token().unwrap();
+            parser.state.set_math_chardef(false, &tok, &c_code);
+
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![
+                    MathListElem::Atom(MathAtom::from_math_code(&a_code)),
+                    MathListElem::Atom(MathAtom::from_math_code(&c_code)),
+                    MathListElem::Atom(MathAtom::from_math_code(&b_code)),
+                ],
+            );
         });
     }
 

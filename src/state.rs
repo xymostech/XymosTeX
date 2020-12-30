@@ -32,6 +32,7 @@ fn is_primitive(maybe_prim: &str) -> bool {
 enum TokenDefinition {
     Macro(Rc<Macro>),
     Token(Token),
+    MathCode(MathCode),
     Primitive(&'static str),
 }
 
@@ -155,6 +156,23 @@ impl TeXStateInner {
 
     fn set_math_code(&mut self, ch: char, mathcode: &MathCode) {
         self.math_code_map.insert(ch, mathcode.clone());
+    }
+
+    fn get_math_chardef(&self, token: &Token) -> Option<MathCode> {
+        if let Some(TokenDefinition::MathCode(math_code)) =
+            self.token_definition_map.get(token)
+        {
+            Some(math_code.clone())
+        } else {
+            None
+        }
+    }
+
+    fn set_math_chardef(&mut self, token: &Token, math_code: &MathCode) {
+        self.token_definition_map.insert(
+            token.clone(),
+            TokenDefinition::MathCode(math_code.clone()),
+        );
     }
 
     fn get_macro(&self, token: &Token) -> Option<Rc<Macro>> {
@@ -339,6 +357,8 @@ impl TeXStateStack {
     generate_inner_global_func!(fn set_category(global: bool, ch: char, cat: Category));
     generate_inner_func!(fn get_math_code(ch: char) -> MathCode);
     generate_inner_global_func!(fn set_math_code(global: bool, ch: char, mathcode: &MathCode));
+    generate_inner_func!(fn get_math_chardef(token: &Token) -> Option<MathCode>);
+    generate_inner_global_func!(fn set_math_chardef(global: bool, token: &Token, mathcode: &MathCode));
     generate_inner_func!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
     generate_inner_global_func!(fn set_macro(global: bool, token: &Token, makro: &Rc<Macro>));
     generate_inner_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
@@ -438,6 +458,8 @@ impl TeXState {
     generate_stack_func!(fn set_category(global: bool, ch: char, cat: Category));
     generate_stack_func!(fn get_math_code(ch: char) -> MathCode);
     generate_stack_func!(fn set_math_code(global: bool, ch: char, mathcode: &MathCode));
+    generate_stack_func!(fn get_math_chardef(token: &Token) -> Option<MathCode>);
+    generate_stack_func!(fn set_math_chardef(global: bool, token: &Token, mathcode: &MathCode));
     generate_stack_func!(fn get_macro(token: &Token) -> Option<Rc<Macro>>);
     generate_stack_func!(fn set_macro(global: bool, token: &Token, makro: &Rc<Macro>));
     generate_stack_func!(fn get_renamed_token(token: &Token) -> Option<Token>);
@@ -724,5 +746,21 @@ mod tests {
 
         state.set_math_code(false, '(', &MathCode::from_number(0x4028));
         assert_eq!(state.get_math_code('('), MathCode::from_number(0x4028));
+    }
+
+    #[test]
+    fn it_gets_and_sets_math_chardefs_correctly() {
+        let state = TeXState::new();
+
+        state.set_math_chardef(
+            false,
+            &Token::ControlSequence("hello".to_string()),
+            &MathCode::from_number(0x7161),
+        );
+        assert_eq!(
+            state
+                .get_math_chardef(&Token::ControlSequence("hello".to_string())),
+            Some(MathCode::from_number(0x7161))
+        );
     }
 }
