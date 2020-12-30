@@ -95,8 +95,9 @@ impl TeXStateInner {
         initial_categories.insert(' ', Category::Space);
 
         // TODO(emily): These aren't actually set by default, they are set
-        // after initialization in init.tex. Remove them once we can run that!
+        // after initialization in plain.tex. Remove them once we can run that!
         initial_categories.insert('^', Category::Superscript);
+        initial_categories.insert('_', Category::Subscript);
         initial_categories.insert('{', Category::BeginGroup);
         initial_categories.insert('}', Category::EndGroup);
         initial_categories.insert('#', Category::Parameter);

@@ -103,6 +103,15 @@ impl MathAtom {
     pub fn has_superscript(&self) -> bool {
         self.superscript.is_some()
     }
+
+    pub fn with_subscript(mut self, subscript: MathField) -> MathAtom {
+        self.subscript = Some(subscript);
+        self
+    }
+
+    pub fn has_subscript(&self) -> bool {
+        self.subscript.is_some()
+    }
 }
 
 #[allow(dead_code)]

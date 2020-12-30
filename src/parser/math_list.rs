@@ -89,6 +89,25 @@ impl<'a> Parser<'a> {
         atom.with_superscript(superscript)
     }
 
+    fn is_math_subscript_head(&mut self) -> bool {
+        let expanded_token = self.peek_expanded_token();
+        match self.replace_renamed_token(expanded_token) {
+            Some(Token::Char(_, Category::Subscript)) => true,
+            _ => false,
+        }
+    }
+
+    fn parse_math_subscript(&mut self, atom: MathAtom) -> MathAtom {
+        self.lex_expanded_token();
+
+        if atom.has_subscript() {
+            panic!("Double subscript");
+        }
+
+        let subscript = self.parse_math_field();
+        atom.with_subscript(subscript)
+    }
+
     fn parse_math_list(&mut self) -> MathList {
         let mut current_list = Vec::new();
 
@@ -99,7 +118,11 @@ impl<'a> Parser<'a> {
                 current_list.push(MathListElem::Atom(
                     MathAtom::from_math_code(&math_code),
                 ));
-            } else if self.is_math_superscript_head() {
+            } else if self.is_math_superscript_head()
+                || self.is_math_subscript_head()
+            {
+                let is_superscript = self.is_math_superscript_head();
+
                 let last_atom = match current_list.pop() {
                     Some(MathListElem::Atom(atom)) => atom,
                     Some(other_elem) => {
@@ -109,9 +132,11 @@ impl<'a> Parser<'a> {
                     None => MathAtom::empty_ord(),
                 };
 
-                current_list.push(MathListElem::Atom(
-                    self.parse_math_superscript(last_atom),
-                ));
+                current_list.push(MathListElem::Atom(if is_superscript {
+                    self.parse_math_superscript(last_atom)
+                } else {
+                    self.parse_math_subscript(last_atom)
+                }));
             } else {
                 match self.peek_expanded_token() {
                     Some(Token::Char(_, Category::EndGroup)) => break,
@@ -312,6 +337,77 @@ mod tests {
     #[should_panic(expected = "Double superscript")]
     fn it_fails_on_multiple_superscripts() {
         with_parser(&[r"a^a^a%"], |parser| {
+            parser.parse_math_list();
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Double superscript")]
+    fn it_fails_on_multiple_superscripts_after_subscript() {
+        with_parser(&[r"a^a_a^a%"], |parser| {
+            parser.parse_math_list();
+        });
+    }
+
+    #[test]
+    fn it_parses_subscripts() {
+        let a_code = MathCode::from_number(0x7161);
+        let b_code = MathCode::from_number(0x7162);
+
+        with_parser(&[r"a_a%", r"a_{ab}%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![
+                    MathListElem::Atom(
+                        MathAtom::from_math_code(&a_code).with_subscript(
+                            MathField::Symbol(MathSymbol::from_math_code(
+                                &a_code
+                            ))
+                        )
+                    ),
+                    MathListElem::Atom(
+                        MathAtom::from_math_code(&a_code).with_subscript(
+                            MathField::MathList(vec![
+                                MathListElem::Atom(MathAtom::from_math_code(
+                                    &a_code
+                                )),
+                                MathListElem::Atom(MathAtom::from_math_code(
+                                    &b_code
+                                )),
+                            ])
+                        )
+                    )
+                ],
+            );
+        });
+    }
+
+    #[test]
+    fn it_parses_subscripts_at_beginning_of_lists() {
+        let a_code = MathCode::from_number(0x7161);
+
+        with_parser(&[r"_a%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![MathListElem::Atom(MathAtom::empty_ord().with_subscript(
+                    MathField::Symbol(MathSymbol::from_math_code(&a_code))
+                )),],
+            );
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Double subscript")]
+    fn it_fails_on_multiple_subscripts() {
+        with_parser(&[r"a_a_a%"], |parser| {
+            parser.parse_math_list();
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Double subscript")]
+    fn it_fails_on_multiple_subscripts_after_superscript() {
+        with_parser(&[r"a_a^a_a%"], |parser| {
             parser.parse_math_list();
         });
     }
