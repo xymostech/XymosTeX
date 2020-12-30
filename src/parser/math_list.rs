@@ -166,6 +166,8 @@ impl<'a> Parser<'a> {
                 } else {
                     self.parse_math_subscript(last_atom)
                 }));
+            } else if self.is_assignment_head() {
+                self.parse_assignment();
             } else {
                 match self.peek_expanded_token() {
                     Some(Token::Char(_, Category::EndGroup)) => break,
@@ -458,6 +460,37 @@ mod tests {
                     MathListElem::Atom(MathAtom::from_math_code(&c_code)),
                     MathListElem::Atom(MathAtom::from_math_code(&b_code)),
                 ],
+            );
+        });
+    }
+
+    #[test]
+    fn it_parses_assignments_in_math_mode() {
+        let a_code = MathCode::from_number(0x7161);
+        let b_code = MathCode::from_number(0x7162);
+        let c_code = MathCode::from_number(0x7163);
+
+        with_parser(&[r"a\def\x #1{a#1b}%", r"b\x c%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![
+                    MathListElem::Atom(MathAtom::from_math_code(&a_code)),
+                    MathListElem::Atom(MathAtom::from_math_code(&b_code)),
+                    MathListElem::Atom(MathAtom::from_math_code(&a_code)),
+                    MathListElem::Atom(MathAtom::from_math_code(&c_code)),
+                    MathListElem::Atom(MathAtom::from_math_code(&b_code)),
+                ]
+            );
+        });
+
+        with_parser(&[r"a\def\x{b}_\x%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![MathListElem::Atom(
+                    MathAtom::from_math_code(&a_code).with_subscript(
+                        MathField::Symbol(MathSymbol::from_math_code(&b_code))
+                    )
+                ),]
             );
         });
     }
