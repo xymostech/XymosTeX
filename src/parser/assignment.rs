@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::category::Category;
+use crate::math_code::MathCode;
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -23,11 +24,16 @@ impl<'a> Parser<'a> {
         ])
     }
 
+    fn is_shorthand_definition_head(&mut self) -> bool {
+        self.is_next_expanded_token_in_set_of_primitives(&["mathchardef"])
+    }
+
     fn is_simple_assignment_head(&mut self) -> bool {
         self.is_let_assignment_head()
             || self.is_variable_assignment_head()
             || self.is_arithmetic_head()
             || self.is_box_assignment_head()
+            || self.is_shorthand_definition_head()
     }
 
     fn is_assignment_prefix(&mut self) -> bool {
@@ -143,6 +149,24 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_shorthand_definition(&mut self, global: bool) {
+        let tok = self.lex_expanded_token().unwrap();
+
+        if self.state.is_token_equal_to_prim(&tok, "mathchardef") {
+            let control_sequence = self.parse_unexpanded_control_sequence();
+            self.parse_equals_expanded();
+            let code_value = self.parse_15bit_number();
+
+            self.state.set_math_chardef(
+                global,
+                &control_sequence,
+                &MathCode::from_number(code_value as u32),
+            );
+        } else {
+            panic!("unimplemented!");
+        }
+    }
+
     fn parse_simple_assignment(&mut self, global: bool) {
         if self.is_variable_assignment_head() {
             self.parse_variable_assignment(global)
@@ -152,6 +176,8 @@ impl<'a> Parser<'a> {
             self.parse_arithmetic(global)
         } else if self.is_box_assignment_head() {
             self.parse_box_assignment(global)
+        } else if self.is_shorthand_definition_head() {
+            self.parse_shorthand_definition(global)
         } else {
             panic!("unimplemented");
         }
@@ -451,6 +477,47 @@ mod tests {
                         .state
                         .with_box(0, |tex_box| tex_box.height().clone()),
                     Some(Dimen::from_unit(3.0, Unit::Point))
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_sets_mathchardefs() {
+        with_parser(
+            &[
+                "\\mathchardef\\x\"7161%",
+                r"\mathchardef\y=1234%",
+                r"\def\a{=}\mathchardef\z\a7161%",
+                r"\x\y\z%",
+            ],
+            |parser| {
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                let x = parser.parse_unexpanded_control_sequence();
+                let y = parser.parse_unexpanded_control_sequence();
+                let z = parser.parse_unexpanded_control_sequence();
+
+                assert_eq!(
+                    parser.state.get_math_chardef(&x),
+                    Some(MathCode::from_number(0x7161))
+                );
+                assert_eq!(
+                    parser.state.get_math_chardef(&y),
+                    Some(MathCode::from_number(1234))
+                );
+                assert_eq!(
+                    parser.state.get_math_chardef(&z),
+                    Some(MathCode::from_number(7161))
                 );
             },
         );

@@ -9,15 +9,33 @@ pub fn is_token_digit(token: &Token) -> bool {
     }
 }
 
+pub fn is_token_hex_digit(token: &Token) -> bool {
+    match token {
+        Token::Char(ch, Category::Other) => {
+            (*ch >= '0' && *ch <= '9') || (*ch >= 'A' && *ch <= 'F')
+        }
+        Token::Char(ch, Category::Letter) => *ch >= 'A' && *ch <= 'F',
+        _ => false,
+    }
+}
+
 pub fn token_digit_value(token: &Token) -> u8 {
     if let Token::Char(ch, Category::Other) = token {
         if *ch >= '0' && *ch <= '9' {
             (*ch as u8) - ('0' as u8)
+        } else if *ch >= 'A' && *ch <= 'F' {
+            (*ch as u8) - ('A' as u8) + 10
         } else {
-            unreachable!();
+            panic!("Invalid token digit: {}", ch);
+        }
+    } else if let Token::Char(ch, Category::Letter) = token {
+        if *ch >= 'A' && *ch <= 'F' {
+            (*ch as u8) - ('A' as u8) + 10
+        } else {
+            panic!("Invalid token digit: {}", ch);
         }
     } else {
-        unreachable!();
+        panic!("Invalid token digit: {:?}", token);
     }
 }
 
@@ -53,6 +71,42 @@ impl<'a> Parser<'a> {
         value
     }
 
+    fn is_hexadecimal_constant_head(&mut self) -> bool {
+        match self.peek_expanded_token() {
+            Some(token) => token == Token::Char('"', Category::Other),
+            _ => false,
+        }
+    }
+
+    fn parse_hexadecimal_constant(&mut self) -> u32 {
+        let quote = self.lex_expanded_token().unwrap();
+        if quote != Token::Char('"', Category::Other) {
+            panic!("Invalid hexadecimal number start");
+        }
+
+        let mut value: u32 = match self.peek_expanded_token() {
+            Some(ref token) if is_token_hex_digit(token) => {
+                self.lex_expanded_token();
+                token_digit_value(token) as u32
+            }
+            _ => panic!("Invalid hexadecimal number start"),
+        };
+
+        loop {
+            match self.peek_expanded_token() {
+                Some(ref token) if is_token_hex_digit(token) => {
+                    self.lex_expanded_token();
+                    value = 16 * value + token_digit_value(token) as u32;
+                }
+                _ => break,
+            }
+        }
+
+        self.parse_optional_space_expanded();
+
+        value
+    }
+
     pub fn is_internal_integer_head(&mut self) -> bool {
         self.is_integer_variable_head()
     }
@@ -67,7 +121,9 @@ impl<'a> Parser<'a> {
     }
 
     fn is_normal_integer_head(&mut self) -> bool {
-        self.is_internal_integer_head() || self.is_integer_constant_head()
+        self.is_internal_integer_head()
+            || self.is_integer_constant_head()
+            || self.is_hexadecimal_constant_head()
     }
 
     fn parse_normal_integer(&mut self) -> i32 {
@@ -75,6 +131,8 @@ impl<'a> Parser<'a> {
             self.parse_internal_integer()
         } else if self.is_integer_constant_head() {
             self.parse_integer_constant() as i32
+        } else if self.is_hexadecimal_constant_head() {
+            self.parse_hexadecimal_constant() as i32
         } else {
             panic!("unimplemented");
         }
@@ -131,6 +189,14 @@ impl<'a> Parser<'a> {
         number as u8
     }
 
+    pub fn parse_15bit_number(&mut self) -> u16 {
+        let number = self.parse_number();
+        if number < 0 || number > 32767 {
+            panic!("Invalid 15-bit number: {}", number);
+        }
+        number as u16
+    }
+
     pub fn parse_number(&mut self) -> i32 {
         let sign = self.parse_optional_signs();
         let value = self.parse_unsigned_number();
@@ -172,6 +238,16 @@ mod tests {
         with_parser(&["-\\count10%"], |parser| {
             parser.state.set_count(false, 10, 1234);
             assert_eq!(parser.parse_number(), -1234);
+        });
+    }
+
+    #[test]
+    fn it_parses_hexadecimal_numbers() {
+        with_parser(&["\"0", "\"1289", "\"ABEF", "\"F0F"], |parser| {
+            assert_eq!(parser.parse_number(), 0x0);
+            assert_eq!(parser.parse_number(), 0x1289);
+            assert_eq!(parser.parse_number(), 0xABEF);
+            assert_eq!(parser.parse_number(), 0xF0F);
         });
     }
 
