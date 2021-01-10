@@ -107,6 +107,38 @@ impl<'a> Parser<'a> {
         value
     }
 
+    fn is_character_number_constant_head(&mut self) -> bool {
+        match self.peek_expanded_token() {
+            Some(token) => token == Token::Char('`', Category::Other),
+            _ => false,
+        }
+    }
+
+    fn parse_character_number_constant(&mut self) -> u32 {
+        let backtick = self.lex_expanded_token().unwrap();
+        if backtick != Token::Char('`', Category::Other) {
+            panic!("Invalid character number constant start");
+        }
+
+        let char_value = match self.lex_unexpanded_token() {
+            Some(Token::Char(ch, _)) => ch,
+            Some(Token::ControlSequence(cs)) => {
+                if cs.len() == 1 {
+                    cs.chars().next().unwrap()
+                } else {
+                    panic!(
+                        "Invalid control sequence in character number constant"
+                    );
+                }
+            }
+            _ => panic!("Invalid char token in character number constant"),
+        };
+
+        self.parse_optional_space_expanded();
+
+        char_value as u32
+    }
+
     pub fn is_internal_integer_head(&mut self) -> bool {
         self.is_integer_variable_head()
     }
@@ -124,6 +156,7 @@ impl<'a> Parser<'a> {
         self.is_internal_integer_head()
             || self.is_integer_constant_head()
             || self.is_hexadecimal_constant_head()
+            || self.is_character_number_constant_head()
     }
 
     fn parse_normal_integer(&mut self) -> i32 {
@@ -133,6 +166,8 @@ impl<'a> Parser<'a> {
             self.parse_integer_constant() as i32
         } else if self.is_hexadecimal_constant_head() {
             self.parse_hexadecimal_constant() as i32
+        } else if self.is_character_number_constant_head() {
+            self.parse_character_number_constant() as i32
         } else {
             panic!("unimplemented");
         }
@@ -206,6 +241,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::category::Category;
     use crate::testing::with_parser;
 
     #[test]
@@ -243,11 +279,24 @@ mod tests {
 
     #[test]
     fn it_parses_hexadecimal_numbers() {
-        with_parser(&["\"0", "\"1289", "\"ABEF", "\"F0F"], |parser| {
+        with_parser(&[r#""0"#, r#""1289"#, r#""ABEF"#, r#""F0F"#], |parser| {
             assert_eq!(parser.parse_number(), 0x0);
             assert_eq!(parser.parse_number(), 0x1289);
             assert_eq!(parser.parse_number(), 0xABEF);
             assert_eq!(parser.parse_number(), 0xF0F);
+        });
+    }
+
+    #[test]
+    fn it_parses_character_number_constants() {
+        with_parser(&[r"`A%", r"`z%", r"`\a%", r"`\%%", r"`!%"], |parser| {
+            parser.state.set_category(false, '!', Category::Active);
+
+            assert_eq!(parser.parse_number(), 65);
+            assert_eq!(parser.parse_number(), 122);
+            assert_eq!(parser.parse_number(), 97);
+            assert_eq!(parser.parse_number(), 37);
+            assert_eq!(parser.parse_number(), 33);
         });
     }
 

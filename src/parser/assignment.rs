@@ -28,12 +28,17 @@ impl<'a> Parser<'a> {
         self.is_next_expanded_token_in_set_of_primitives(&["mathchardef"])
     }
 
+    fn is_code_assignment_head(&mut self) -> bool {
+        self.is_next_expanded_token_in_set_of_primitives(&["mathcode"])
+    }
+
     fn is_simple_assignment_head(&mut self) -> bool {
         self.is_let_assignment_head()
             || self.is_variable_assignment_head()
             || self.is_arithmetic_head()
             || self.is_box_assignment_head()
             || self.is_shorthand_definition_head()
+            || self.is_code_assignment_head()
     }
 
     fn is_assignment_prefix(&mut self) -> bool {
@@ -167,6 +172,24 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_code_assignment(&mut self, global: bool) {
+        let tok = self.lex_expanded_token().unwrap();
+
+        if self.state.is_token_equal_to_prim(&tok, "mathcode") {
+            let num = self.parse_8bit_number();
+            self.parse_equals_expanded();
+            let code_value = self.parse_number();
+
+            self.state.set_math_code(
+                global,
+                num as char,
+                &MathCode::from_number(code_value as u32),
+            );
+        } else {
+            panic!("unimplemented");
+        }
+    }
+
     fn parse_simple_assignment(&mut self, global: bool) {
         if self.is_variable_assignment_head() {
             self.parse_variable_assignment(global)
@@ -178,6 +201,8 @@ impl<'a> Parser<'a> {
             self.parse_box_assignment(global)
         } else if self.is_shorthand_definition_head() {
             self.parse_shorthand_definition(global)
+        } else if self.is_code_assignment_head() {
+            self.parse_code_assignment(global)
         } else {
             panic!("unimplemented");
         }
@@ -486,7 +511,7 @@ mod tests {
     fn it_sets_mathchardefs() {
         with_parser(
             &[
-                "\\mathchardef\\x\"7161%",
+                r#"\mathchardef\x"7161%"#,
                 r"\mathchardef\y=1234%",
                 r"\def\a{=}\mathchardef\z\a7161%",
                 r"\x\y\z%",
@@ -518,6 +543,29 @@ mod tests {
                 assert_eq!(
                     parser.state.get_math_chardef(&z),
                     Some(MathCode::from_number(7161))
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_sets_mathcodes() {
+        with_parser(
+            &[r#"\mathcode`*="2203%"#, r#"\mathcode`<="313C%"#],
+            |parser| {
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert_eq!(
+                    parser.state.get_math_code('*'),
+                    MathCode::from_number(0x2203)
+                );
+                assert_eq!(
+                    parser.state.get_math_code('<'),
+                    MathCode::from_number(0x313C)
                 );
             },
         );
