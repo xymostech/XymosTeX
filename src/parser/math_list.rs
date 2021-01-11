@@ -76,7 +76,11 @@ impl<'a> Parser<'a> {
             tok => panic!("Invalid start of math group: {:?}", tok),
         }
 
+        self.state.push_state();
+
         let math_list = self.parse_math_list();
+
+        self.state.pop_state();
 
         let end_group = self.lex_expanded_token();
         match end_group {
@@ -258,6 +262,15 @@ mod tests {
     fn it_fails_parsing_math_groups_not_ending_with_end_group() {
         with_parser(&[r"{a%"], |parser| {
             parser.parse_math_group();
+        });
+    }
+
+    #[test]
+    fn it_scopes_assignments_in_math_fields() {
+        with_parser(&[r"\count 0=1%", r"a^{\count 0=2}%"], |parser| {
+            parser.parse_math_list();
+
+            assert_eq!(parser.state.get_count(0), 1);
         });
     }
 
