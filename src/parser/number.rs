@@ -301,6 +301,16 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(
+        expected = "Invalid control sequence in character number constant"
+    )]
+    fn it_fails_when_parsing_invalid_control_sequence_character_numbers() {
+        with_parser(&[r"`\abc%"], |parser| {
+            parser.parse_number();
+        });
+    }
+
+    #[test]
     fn it_parses_coerced_dimens() {
         with_parser(&[r"\setbox0=\hbox{g}%", r"\wd0%", r"-\ht0%"], |parser| {
             parser.parse_assignment();
