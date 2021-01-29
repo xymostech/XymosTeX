@@ -2,7 +2,7 @@ use crate::boxes::TeXBox;
 use crate::dimension::Dimen;
 use crate::math_code::{MathClass, MathCode};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Hash, Eq, Copy)]
 pub enum AtomKind {
     Ord,   // 0
     Op,    // 1

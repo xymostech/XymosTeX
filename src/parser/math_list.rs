@@ -1,5 +1,7 @@
 use crate::boxes::{HorizontalBox, TeXBox};
 use crate::category::Category;
+use crate::dimension::{Dimen, SpringDimen, Unit};
+use crate::glue::Glue;
 use crate::list::HorizontalListElem;
 use crate::math_code::MathCode;
 use crate::math_list::{
@@ -9,6 +11,100 @@ use crate::math_list::{
 use crate::parser::boxes::BoxLayout;
 use crate::parser::Parser;
 use crate::token::Token;
+use std::collections::HashMap;
+
+#[derive(Clone)]
+enum InterAtomSpacing {
+    None,
+    ThinSkip,
+    ThinSkipNonScript,
+    MediumSkipNonScript,
+    ThickSkipNonScript,
+}
+
+lazy_static! {
+    static ref INTER_ATOM_SPACING: HashMap<(AtomKind, AtomKind), InterAtomSpacing> = [
+        // 0 1 (2) (3) 0 0 0 (1)
+        ((AtomKind::Ord, AtomKind::Ord), InterAtomSpacing::None),
+        ((AtomKind::Ord, AtomKind::Op), InterAtomSpacing::ThinSkip),
+        ((AtomKind::Ord, AtomKind::Bin), InterAtomSpacing::MediumSkipNonScript),
+        ((AtomKind::Ord, AtomKind::Rel), InterAtomSpacing::ThickSkipNonScript),
+        ((AtomKind::Ord, AtomKind::Open), InterAtomSpacing::None),
+        ((AtomKind::Ord, AtomKind::Close), InterAtomSpacing::None),
+        ((AtomKind::Ord, AtomKind::Punct), InterAtomSpacing::None),
+        ((AtomKind::Ord, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
+
+        // 1 1 * (3) 0 0 0 (1)
+        ((AtomKind::Op, AtomKind::Ord), InterAtomSpacing::ThinSkip),
+        ((AtomKind::Op, AtomKind::Op), InterAtomSpacing::ThinSkip),
+        //((AtomKind::Op, AtomKind::Bin), InterAtomSpacing::None),
+        ((AtomKind::Op, AtomKind::Rel), InterAtomSpacing::ThickSkipNonScript),
+        ((AtomKind::Op, AtomKind::Open), InterAtomSpacing::None),
+        ((AtomKind::Op, AtomKind::Close), InterAtomSpacing::None),
+        ((AtomKind::Op, AtomKind::Punct), InterAtomSpacing::None),
+        ((AtomKind::Op, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
+
+        // (2) (2) * * (2) * * (2)
+        ((AtomKind::Bin, AtomKind::Ord), InterAtomSpacing::MediumSkipNonScript),
+        ((AtomKind::Bin, AtomKind::Op), InterAtomSpacing::MediumSkipNonScript),
+        //((AtomKind::Bin, AtomKind::Bin), InterAtomSpacing::None),
+        //((AtomKind::Bin, AtomKind::Rel), InterAtomSpacing::None),
+        ((AtomKind::Bin, AtomKind::Open), InterAtomSpacing::MediumSkipNonScript),
+        //((AtomKind::Bin, AtomKind::Close), InterAtomSpacing::None),
+        //((AtomKind::Bin, AtomKind::Punct), InterAtomSpacing::None),
+        ((AtomKind::Bin, AtomKind::Inner), InterAtomSpacing::MediumSkipNonScript),
+
+        // (3) (3) * 0 (3) 0 0 (3)
+        ((AtomKind::Rel, AtomKind::Ord), InterAtomSpacing::ThickSkipNonScript),
+        ((AtomKind::Rel, AtomKind::Op), InterAtomSpacing::ThickSkipNonScript),
+        //((AtomKind::Rel, AtomKind::Bin), InterAtomSpacing::None),
+        ((AtomKind::Rel, AtomKind::Rel), InterAtomSpacing::None),
+        ((AtomKind::Rel, AtomKind::Open), InterAtomSpacing::ThickSkipNonScript),
+        ((AtomKind::Rel, AtomKind::Close), InterAtomSpacing::None),
+        ((AtomKind::Rel, AtomKind::Punct), InterAtomSpacing::None),
+        ((AtomKind::Rel, AtomKind::Inner), InterAtomSpacing::ThickSkipNonScript),
+
+        // 0 0 * 0 0 0 0 0
+        ((AtomKind::Open, AtomKind::Ord), InterAtomSpacing::None),
+        ((AtomKind::Open, AtomKind::Op), InterAtomSpacing::None),
+        //((AtomKind::Open, AtomKind::Bin), InterAtomSpacing::None),
+        ((AtomKind::Open, AtomKind::Rel), InterAtomSpacing::None),
+        ((AtomKind::Open, AtomKind::Open), InterAtomSpacing::None),
+        ((AtomKind::Open, AtomKind::Close), InterAtomSpacing::None),
+        ((AtomKind::Open, AtomKind::Punct), InterAtomSpacing::None),
+        ((AtomKind::Open, AtomKind::Inner), InterAtomSpacing::None),
+
+        // 0 1 (2) (3) 0 0 0 (1)
+        ((AtomKind::Close, AtomKind::Ord), InterAtomSpacing::None),
+        ((AtomKind::Close, AtomKind::Op), InterAtomSpacing::ThinSkip),
+        ((AtomKind::Close, AtomKind::Bin), InterAtomSpacing::MediumSkipNonScript),
+        ((AtomKind::Close, AtomKind::Rel), InterAtomSpacing::ThickSkipNonScript),
+        ((AtomKind::Close, AtomKind::Open), InterAtomSpacing::None),
+        ((AtomKind::Close, AtomKind::Close), InterAtomSpacing::None),
+        ((AtomKind::Close, AtomKind::Punct), InterAtomSpacing::None),
+        ((AtomKind::Close, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
+
+        // (1) (1) * (1) (1) (1) (1) (1)
+        ((AtomKind::Punct, AtomKind::Ord), InterAtomSpacing::ThinSkipNonScript),
+        ((AtomKind::Punct, AtomKind::Op), InterAtomSpacing::ThinSkipNonScript),
+        //((AtomKind::Punct, AtomKind::Bin), InterAtomSpacing::None),
+        ((AtomKind::Punct, AtomKind::Rel), InterAtomSpacing::ThinSkipNonScript),
+        ((AtomKind::Punct, AtomKind::Open), InterAtomSpacing::ThinSkipNonScript),
+        ((AtomKind::Punct, AtomKind::Close), InterAtomSpacing::ThinSkipNonScript),
+        ((AtomKind::Punct, AtomKind::Punct), InterAtomSpacing::ThinSkipNonScript),
+        ((AtomKind::Punct, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
+
+        // (1) 1 (2) (3) (1) 0 (1) (1)
+        ((AtomKind::Inner, AtomKind::Ord), InterAtomSpacing::ThinSkipNonScript),
+        ((AtomKind::Inner, AtomKind::Op), InterAtomSpacing::ThinSkip),
+        ((AtomKind::Inner, AtomKind::Bin), InterAtomSpacing::MediumSkipNonScript),
+        ((AtomKind::Inner, AtomKind::Rel), InterAtomSpacing::ThickSkipNonScript),
+        ((AtomKind::Inner, AtomKind::Open), InterAtomSpacing::ThinSkipNonScript),
+        ((AtomKind::Inner, AtomKind::Close), InterAtomSpacing::None),
+        ((AtomKind::Inner, AtomKind::Punct), InterAtomSpacing::ThinSkipNonScript),
+        ((AtomKind::Inner, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
+    ].iter().cloned().collect();
+}
 
 impl<'a> Parser<'a> {
     fn is_character_head(&mut self) -> bool {
@@ -188,6 +284,44 @@ impl<'a> Parser<'a> {
         current_list
     }
 
+    fn get_skip_for_atom_pair(
+        &mut self,
+        left_type: &AtomKind,
+        right_type: &AtomKind,
+    ) -> Option<Glue> {
+        // TODO: These should come from the state variables \thinmuskip,
+        // \mediummuskip, and \thickmuskip.
+        // TODO: These should be MuGlue, not plain Glue
+        let thinskip = Glue {
+            space: Dimen::from_unit(3.0, Unit::Point),
+            stretch: SpringDimen::Dimen(Dimen::zero()),
+            shrink: SpringDimen::Dimen(Dimen::zero()),
+        };
+        let mediumskip = Glue {
+            space: Dimen::from_unit(4.0, Unit::Point),
+            stretch: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
+            shrink: SpringDimen::Dimen(Dimen::from_unit(4.0, Unit::Point)),
+        };
+        let thickskip = Glue {
+            space: Dimen::from_unit(5.0, Unit::Point),
+            stretch: SpringDimen::Dimen(Dimen::from_unit(5.0, Unit::Point)),
+            shrink: SpringDimen::Dimen(Dimen::zero()),
+        };
+
+        if let Some(space) = INTER_ATOM_SPACING.get(&(*left_type, *right_type))
+        {
+            match space {
+                InterAtomSpacing::None => None,
+                InterAtomSpacing::ThinSkip => Some(thinskip),
+                InterAtomSpacing::ThinSkipNonScript => Some(thinskip),
+                InterAtomSpacing::MediumSkipNonScript => Some(mediumskip),
+                InterAtomSpacing::ThickSkipNonScript => Some(thickskip),
+            }
+        } else {
+            panic!("Invalid atom type pair: {:?}/{:?}", left_type, right_type);
+        }
+    }
+
     fn convert_math_list_to_horizontal_list(
         &mut self,
         list: MathList,
@@ -244,9 +378,20 @@ impl<'a> Parser<'a> {
 
         let mut resulting_horizontal_list: Vec<HorizontalListElem> = Vec::new();
 
+        let mut maybe_last_atom_kind: Option<AtomKind> = None;
+
         for elem in elems_after_first_pass {
             match elem {
                 MathListElem::Atom(atom) => {
+                    if let Some(last_atom_kind) = maybe_last_atom_kind {
+                        if let Some(skip) = self
+                            .get_skip_for_atom_pair(&last_atom_kind, &atom.kind)
+                        {
+                            resulting_horizontal_list
+                                .push(HorizontalListElem::HSkip(skip));
+                        }
+                    }
+
                     if atom.has_subscript() || atom.has_superscript() {
                         panic!("Atoms should be sub/superscript free in second pass!");
                     }
@@ -261,6 +406,8 @@ impl<'a> Parser<'a> {
                             panic!("Atom nucleuses should only be boxes in second pass!");
                         }
                     }
+
+                    maybe_last_atom_kind = Some(atom.kind);
                 }
                 _ => {
                     panic!("unimplemented math list elem: {:?}");
@@ -652,5 +799,67 @@ mod tests {
                 ]
             );
         });
+    }
+
+    #[test]
+    fn it_adds_space_between_atoms_of_different_types_in_math_lists() {
+        // o = ord
+        // p = op
+        // b = bin
+        // r = rel
+        // n = open
+        // c = close
+        // t = punct
+        with_parser(
+            &[
+                r"\hbox{%",
+                r"\def\,{\hskip 3pt}%",
+                r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
+                r"\def\;{\hskip 5pt plus 5pt}%",
+                r"\def\o{\hbox{o}}%",
+                r"\def\p{\hbox{p}}%",
+                r"\def\b{\hbox{b}}%",
+                r"\def\r{\hbox{r}}%",
+                r"\def\n{\hbox{n}}%",
+                r"\def\c{\hbox{c}}%",
+                r"\def\t{\hbox{t}}%",
+                r"\o\o\,\p\,\o\>\b\>\o\;\r\;\o\n\o\c\o\t\,\o\,%",
+                r"\p\,\p\;\r\;\p\n\p\c\,\p\t\,\p\,\o\>%",
+                r"\b\>\n\o\>\b\>\o\;%",
+                r"\r\r\;\n\r\c\;\r\t\,\r\;%",
+                r"\n\n\c\n\t\,\n%",
+                r"\c\c\t\,\c%",
+                r"\t\,\t%",
+                r"}%",
+                r#"\mathcode`o="016F%"#,
+                r#"\mathcode`p="1170%"#,
+                r#"\mathcode`b="2162%"#,
+                r#"\mathcode`r="3172%"#,
+                r#"\mathcode`n="416E%"#,
+                r#"\mathcode`c="5163%"#,
+                r#"\mathcode`t="6174%"#,
+                r"oopoboronocoto%",
+                r"pprpnpcptpo%",
+                r"bnobo%",
+                r"rrnrcrtr%",
+                r"nncntn%",
+                r"cctc%",
+                r"tt%",
+            ],
+            |parser| {
+                let parsed_box = parser.parse_box().unwrap();
+                let hlist = if let TeXBox::HorizontalBox(hbox) = parsed_box {
+                    hbox.list
+                } else {
+                    panic!("Invalid parsed box: {:?}", parsed_box);
+                };
+
+                let math_list = parser.parse_math_list();
+                assert_eq!(
+                    parser.convert_math_list_to_horizontal_list(math_list),
+                    hlist
+                );
+            },
+        );
     }
 }
