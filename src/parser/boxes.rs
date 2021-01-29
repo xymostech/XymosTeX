@@ -4,6 +4,7 @@ use crate::boxes::{
 use crate::category::Category;
 use crate::dimension::{Dimen, SpringDimen};
 use crate::glue::Glue;
+use crate::list::HorizontalListElem;
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -100,16 +101,12 @@ fn get_set_dimen_and_ratio(
 }
 
 impl<'a> Parser<'a> {
-    fn parse_horizontal_box(
+    pub fn combine_horizontal_list_into_horizontal_box_with_layout(
         &mut self,
+        list: Vec<HorizontalListElem>,
         layout: &BoxLayout,
-        restricted: bool,
-        indent: bool,
     ) -> HorizontalBox {
-        // Parse the actual list of elements
-        let list = self.parse_horizontal_list(restricted, indent);
-
-        // Keep track of the max height/depth and the total amount of width of
+        // Keep track of the max height/depth and the total amount of width of;
         // the elements in the list.
         let mut height = Dimen::zero();
         let mut depth = Dimen::zero();
@@ -143,6 +140,42 @@ impl<'a> Parser<'a> {
             list: list,
             glue_set_ratio: set_ratio,
         }
+    }
+
+    pub fn add_to_natural_layout_horizontal_box(
+        &mut self,
+        mut hbox: HorizontalBox,
+        elem: HorizontalListElem,
+    ) -> HorizontalBox {
+        if hbox.glue_set_ratio.is_some() {
+            panic!("Cannot add to an hbox with non-empty glue set ratio");
+        }
+
+        let (elem_height, elem_depth, elem_width) = elem.get_size(self.state);
+
+        if elem_height > hbox.height {
+            hbox.height = elem_height;
+        }
+        if elem_depth > hbox.depth {
+            hbox.depth = elem_depth;
+        }
+
+        hbox.width = hbox.width + elem_width.space;
+        hbox.list.push(elem);
+
+        hbox
+    }
+
+    fn parse_horizontal_box(
+        &mut self,
+        layout: &BoxLayout,
+        restricted: bool,
+        indent: bool,
+    ) -> HorizontalBox {
+        let list = self.parse_horizontal_list(restricted, indent);
+        self.combine_horizontal_list_into_horizontal_box_with_layout(
+            list, layout,
+        )
     }
 
     /// Provides an easy way for external consumers of boxes to parse a

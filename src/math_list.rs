@@ -4,13 +4,13 @@ use crate::math_code::{MathClass, MathCode};
 
 #[derive(Debug, PartialEq)]
 pub enum AtomKind {
-    Ord,
-    Op,
-    Bin,
-    Rel,
-    Open,
-    Close,
-    Punct,
+    Ord,   // 0
+    Op,    // 1
+    Bin,   // 2
+    Rel,   // 3
+    Open,  // 4
+    Close, // 5
+    Punct, // 6
     #[allow(dead_code)]
     Inner,
     #[allow(dead_code)]
@@ -43,8 +43,8 @@ impl AtomKind {
 
 #[derive(Debug, PartialEq)]
 pub struct MathSymbol {
-    family_number: u8,
-    position_number: u8,
+    pub family_number: u8,
+    pub position_number: u8,
 }
 
 impl MathSymbol {
@@ -68,10 +68,10 @@ pub enum MathField {
 
 #[derive(Debug, PartialEq)]
 pub struct MathAtom {
-    kind: AtomKind,
-    nucleus: Option<MathField>,
-    superscript: Option<MathField>,
-    subscript: Option<MathField>,
+    pub kind: AtomKind,
+    pub nucleus: Option<MathField>,
+    pub superscript: Option<MathField>,
+    pub subscript: Option<MathField>,
 }
 
 impl MathAtom {
@@ -115,7 +115,7 @@ impl MathAtom {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum MathStyle {
     DisplayStyle,
     DisplayStylePrime,

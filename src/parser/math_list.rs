@@ -1,8 +1,12 @@
+use crate::boxes::{HorizontalBox, TeXBox};
 use crate::category::Category;
+use crate::list::HorizontalListElem;
 use crate::math_code::MathCode;
 use crate::math_list::{
-    MathAtom, MathField, MathList, MathListElem, MathStyle, MathSymbol,
+    AtomKind, MathAtom, MathField, MathList, MathListElem, MathStyle,
+    MathSymbol,
 };
+use crate::parser::boxes::BoxLayout;
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -182,6 +186,89 @@ impl<'a> Parser<'a> {
         }
 
         current_list
+    }
+
+    fn convert_math_list_to_horizontal_list(
+        &mut self,
+        list: MathList,
+    ) -> Vec<HorizontalListElem> {
+        let mut elems_after_first_pass: MathList = Vec::new();
+
+        for mut elem in list {
+            match elem {
+                MathListElem::Atom(mut atom) => {
+                    match atom.nucleus {
+                        Some(MathField::Symbol(symbol)) => {
+                            let char_elem = HorizontalListElem::Char {
+                                chr: symbol.position_number as char,
+                                // TODO figure out what goes here
+                                font: self.state.get_current_font(),
+                            };
+
+                            let hbox = self
+                                .add_to_natural_layout_horizontal_box(
+                                    HorizontalBox::empty(),
+                                    char_elem,
+                                );
+
+                            atom.nucleus = Some(MathField::TeXBox(
+                                TeXBox::HorizontalBox(hbox),
+                            ));
+                        }
+                        Some(MathField::TeXBox(_)) => {
+                            // Nothing to do
+                        }
+                        Some(MathField::MathList(list)) => {
+                            let hlist =
+                                self.convert_math_list_to_horizontal_list(list);
+                            let hbox = self.combine_horizontal_list_into_horizontal_box_with_layout(hlist, &BoxLayout::Natural);
+
+                            atom.nucleus = Some(MathField::TeXBox(
+                                TeXBox::HorizontalBox(hbox),
+                            ));
+                        }
+                        None => {}
+                    }
+
+                    if atom.has_subscript() || atom.has_superscript() {
+                        panic!("Unimplemented superscript/subscript");
+                    }
+
+                    elems_after_first_pass.push(MathListElem::Atom(atom));
+                }
+                _ => {
+                    panic!("unimplemented math list elem: {:?}", elem);
+                }
+            }
+        }
+
+        let mut resulting_horizontal_list: Vec<HorizontalListElem> = Vec::new();
+
+        for elem in elems_after_first_pass {
+            match elem {
+                MathListElem::Atom(atom) => {
+                    if atom.has_subscript() || atom.has_superscript() {
+                        panic!("Atoms should be sub/superscript free in second pass!");
+                    }
+
+                    match atom.nucleus {
+                        Some(MathField::TeXBox(texbox)) => {
+                            resulting_horizontal_list
+                                .push(HorizontalListElem::Box(texbox));
+                        }
+                        None => {}
+                        _ => {
+                            panic!("Atom nucleuses should only be boxes in second pass!");
+                        }
+                    }
+                }
+                _ => {
+                    panic!("unimplemented math list elem: {:?}");
+                }
+            }
+        }
+
+        resulting_horizontal_list
     }
 }
 
@@ -524,6 +611,45 @@ mod tests {
                         MathField::Symbol(MathSymbol::from_math_code(&a_code))
                     )),
                 ],
+            );
+        });
+    }
+
+    #[test]
+    fn it_produces_empty_horizontal_lists_from_empty_math_lists() {
+        with_parser(&[r"%"], |parser| {
+            let math_list = parser.parse_math_list();
+            assert_eq!(
+                parser.convert_math_list_to_horizontal_list(math_list),
+                vec![]
+            );
+        });
+    }
+
+    #[test]
+    fn it_produces_single_characters_from_single_atom_math_lists() {
+        with_parser(&[r"\hbox{a}a%"], |parser| {
+            let hbox = parser.parse_box().unwrap();
+            let math_list = parser.parse_math_list();
+            assert_eq!(
+                parser.convert_math_list_to_horizontal_list(math_list),
+                vec![HorizontalListElem::Box(hbox)]
+            );
+        });
+    }
+
+    #[test]
+    fn it_produces_multiple_characters_from_multiple_ord_math_lists() {
+        with_parser(&[r"\hbox{a}\hbox{b}ab%"], |parser| {
+            let hbox_a = parser.parse_box().unwrap();
+            let hbox_b = parser.parse_box().unwrap();
+            let math_list = parser.parse_math_list();
+            assert_eq!(
+                parser.convert_math_list_to_horizontal_list(math_list),
+                vec![
+                    HorizontalListElem::Box(hbox_a),
+                    HorizontalListElem::Box(hbox_b)
+                ]
             );
         });
     }
