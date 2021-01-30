@@ -3,6 +3,7 @@ use crate::category::Category;
 use crate::dimension::{Dimen, SpringDimen, Unit};
 use crate::glue::Glue;
 use crate::list::HorizontalListElem;
+use crate::math_list::MathStyle;
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -91,7 +92,10 @@ impl<'a> Parser<'a> {
 
                         let math_list = self.parse_math_list();
                         let horizontal_list = self
-                            .convert_math_list_to_horizontal_list(math_list);
+                            .convert_math_list_to_horizontal_list(
+                                math_list,
+                                MathStyle::TextStyle,
+                            );
 
                         match self.lex_expanded_token() {
                             Some(Token::Char(_, Category::MathShift)) => {}

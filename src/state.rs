@@ -43,6 +43,10 @@ const ALL_PRIMITIVES: &[&str] = &[
     "vbox",
     "mathchardef",
     "mathcode",
+    "displaystyle",
+    "textstyle",
+    "scriptstyle",
+    "scriptscriptstyle",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {

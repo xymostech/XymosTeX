@@ -127,6 +127,21 @@ pub enum MathStyle {
     ScriptScriptStylePrime,
 }
 
+impl MathStyle {
+    pub fn is_script(&self) -> bool {
+        match self {
+            &MathStyle::DisplayStyle => false,
+            &MathStyle::DisplayStylePrime => false,
+            &MathStyle::TextStyle => false,
+            &MathStyle::TextStylePrime => false,
+            &MathStyle::ScriptStyle => true,
+            &MathStyle::ScriptStylePrime => true,
+            &MathStyle::ScriptScriptStyle => true,
+            &MathStyle::ScriptScriptStylePrime => true,
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub struct MathDelimiter {

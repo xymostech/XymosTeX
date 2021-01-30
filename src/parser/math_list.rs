@@ -241,6 +241,31 @@ impl<'a> Parser<'a> {
         atom.with_subscript(subscript)
     }
 
+    fn is_style_change_head(&mut self) -> bool {
+        self.is_next_expanded_token_in_set_of_primitives(&[
+            "displaystyle",
+            "textstyle",
+            "scriptstyle",
+            "scriptscriptstyle",
+        ])
+    }
+
+    fn parse_style_change(&mut self) -> MathStyle {
+        let tok = self.lex_expanded_token().unwrap();
+
+        if self.state.is_token_equal_to_prim(&tok, "displaystyle") {
+            MathStyle::DisplayStyle
+        } else if self.state.is_token_equal_to_prim(&tok, "textstyle") {
+            MathStyle::TextStyle
+        } else if self.state.is_token_equal_to_prim(&tok, "scriptstyle") {
+            MathStyle::ScriptStyle
+        } else if self.state.is_token_equal_to_prim(&tok, "scriptscriptstyle") {
+            MathStyle::ScriptScriptStyle
+        } else {
+            panic!("Invalid style change");
+        }
+    }
+
     pub fn parse_math_list(&mut self) -> MathList {
         let mut current_list = Vec::new();
 
@@ -272,6 +297,9 @@ impl<'a> Parser<'a> {
                 }));
             } else if self.is_assignment_head() {
                 self.parse_assignment();
+            } else if self.is_style_change_head() {
+                let style_change = self.parse_style_change();
+                current_list.push(MathListElem::StyleChange(style_change));
             } else {
                 match self.peek_expanded_token() {
                     Some(Token::Char(_, Category::EndGroup)) => break,
@@ -289,6 +317,7 @@ impl<'a> Parser<'a> {
         &mut self,
         left_type: &AtomKind,
         right_type: &AtomKind,
+        style: &MathStyle,
     ) -> Option<Glue> {
         // TODO: These should come from the state variables \thinmuskip,
         // \mediummuskip, and \thickmuskip.
@@ -311,12 +340,19 @@ impl<'a> Parser<'a> {
 
         if let Some(space) = INTER_ATOM_SPACING.get(&(*left_type, *right_type))
         {
-            match space {
-                InterAtomSpacing::None => None,
-                InterAtomSpacing::ThinSkip => Some(thinskip),
-                InterAtomSpacing::ThinSkipNonScript => Some(thinskip),
-                InterAtomSpacing::MediumSkipNonScript => Some(mediumskip),
-                InterAtomSpacing::ThickSkipNonScript => Some(thickskip),
+            match (space, style.is_script()) {
+                (InterAtomSpacing::None, _) => None,
+                (InterAtomSpacing::ThinSkip, _) => Some(thinskip),
+                (InterAtomSpacing::ThinSkipNonScript, false) => Some(thinskip),
+                (InterAtomSpacing::ThinSkipNonScript, true) => None,
+                (InterAtomSpacing::MediumSkipNonScript, false) => {
+                    Some(mediumskip)
+                }
+                (InterAtomSpacing::MediumSkipNonScript, true) => None,
+                (InterAtomSpacing::ThickSkipNonScript, false) => {
+                    Some(thickskip)
+                }
+                (InterAtomSpacing::ThickSkipNonScript, true) => None,
             }
         } else {
             panic!("Invalid atom type pair: {:?}/{:?}", left_type, right_type);
@@ -326,10 +362,12 @@ impl<'a> Parser<'a> {
     pub fn convert_math_list_to_horizontal_list(
         &mut self,
         list: MathList,
+        start_style: MathStyle,
     ) -> Vec<HorizontalListElem> {
         let mut elems_after_first_pass: MathList = Vec::new();
+        let mut current_style = start_style.clone();
 
-        for mut elem in list {
+        for elem in list {
             match elem {
                 MathListElem::Atom(mut atom) => {
                     match atom.nucleus {
@@ -354,8 +392,11 @@ impl<'a> Parser<'a> {
                             // Nothing to do
                         }
                         Some(MathField::MathList(list)) => {
-                            let hlist =
-                                self.convert_math_list_to_horizontal_list(list);
+                            let hlist = self
+                                .convert_math_list_to_horizontal_list(
+                                    list,
+                                    current_style.clone(),
+                                );
                             let hbox = self.combine_horizontal_list_into_horizontal_box_with_layout(hlist, &BoxLayout::Natural);
 
                             atom.nucleus = Some(MathField::TeXBox(
@@ -371,6 +412,11 @@ impl<'a> Parser<'a> {
 
                     elems_after_first_pass.push(MathListElem::Atom(atom));
                 }
+                MathListElem::StyleChange(new_style) => {
+                    current_style = new_style.clone();
+                    elems_after_first_pass
+                        .push(MathListElem::StyleChange(new_style));
+                }
                 _ => {
                     panic!("unimplemented math list elem: {:?}", elem);
                 }
@@ -378,16 +424,18 @@ impl<'a> Parser<'a> {
         }
 
         let mut resulting_horizontal_list: Vec<HorizontalListElem> = Vec::new();
-
         let mut maybe_last_atom_kind: Option<AtomKind> = None;
+        let mut current_style = start_style.clone();
 
         for elem in elems_after_first_pass {
             match elem {
                 MathListElem::Atom(atom) => {
                     if let Some(last_atom_kind) = maybe_last_atom_kind {
-                        if let Some(skip) = self
-                            .get_skip_for_atom_pair(&last_atom_kind, &atom.kind)
-                        {
+                        if let Some(skip) = self.get_skip_for_atom_pair(
+                            &last_atom_kind,
+                            &atom.kind,
+                            &current_style,
+                        ) {
                             resulting_horizontal_list
                                 .push(HorizontalListElem::HSkip(skip));
                         }
@@ -409,6 +457,9 @@ impl<'a> Parser<'a> {
                     }
 
                     maybe_last_atom_kind = Some(atom.kind);
+                }
+                MathListElem::StyleChange(new_style) => {
+                    current_style = new_style;
                 }
                 _ => {
                     panic!("unimplemented math list elem: {:?}");
@@ -744,13 +795,28 @@ mod tests {
     }
 
     #[test]
-    // \displaystyle isn't parsed yet so this test won't work, but we want to
-    // test this case in the future so ignore this test for now.
-    #[ignore]
+    fn it_parses_style_changes() {
+        with_parser(
+            &[r"\displaystyle \textstyle \scriptstyle \scriptscriptstyle%"],
+            |parser| {
+                assert_eq!(
+                    parser.parse_math_list(),
+                    vec![
+                        MathListElem::StyleChange(MathStyle::DisplayStyle),
+                        MathListElem::StyleChange(MathStyle::TextStyle),
+                        MathListElem::StyleChange(MathStyle::ScriptStyle),
+                        MathListElem::StyleChange(MathStyle::ScriptScriptStyle),
+                    ]
+                );
+            },
+        );
+    }
+
+    #[test]
     fn it_parses_superscripts_after_non_atoms() {
         let a_code = MathCode::from_number(0x7161);
 
-        with_parser(&[r"\displaystyle ^{a}%"], |parser| {
+        with_parser(&[r"\displaystyle ^a%"], |parser| {
             assert_eq!(
                 parser.parse_math_list(),
                 vec![
@@ -785,7 +851,10 @@ mod tests {
         with_parser(&[r"%"], |parser| {
             let math_list = parser.parse_math_list();
             assert_eq!(
-                parser.convert_math_list_to_horizontal_list(math_list),
+                parser.convert_math_list_to_horizontal_list(
+                    math_list,
+                    MathStyle::TextStyle
+                ),
                 vec![]
             );
         });
@@ -797,7 +866,10 @@ mod tests {
             let hbox = parser.parse_box().unwrap();
             let math_list = parser.parse_math_list();
             assert_eq!(
-                parser.convert_math_list_to_horizontal_list(math_list),
+                parser.convert_math_list_to_horizontal_list(
+                    math_list,
+                    MathStyle::TextStyle
+                ),
                 vec![HorizontalListElem::Box(hbox)]
             );
         });
@@ -810,7 +882,10 @@ mod tests {
             let hbox_b = parser.parse_box().unwrap();
             let math_list = parser.parse_math_list();
             assert_eq!(
-                parser.convert_math_list_to_horizontal_list(math_list),
+                parser.convert_math_list_to_horizontal_list(
+                    math_list,
+                    MathStyle::TextStyle
+                ),
                 vec![
                     HorizontalListElem::Box(hbox_a),
                     HorizontalListElem::Box(hbox_b)
@@ -874,7 +949,60 @@ mod tests {
 
                 let math_list = parser.parse_math_list();
                 assert_eq!(
-                    parser.convert_math_list_to_horizontal_list(math_list),
+                    parser.convert_math_list_to_horizontal_list(
+                        math_list,
+                        MathStyle::TextStyle
+                    ),
+                    hlist
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_does_not_add_some_inter_atom_space_in_script_styles() {
+        // o = ord
+        // b = bin
+        // r = rel
+        // p = punct
+        with_parser(
+            &[
+                r"\hbox{%",
+                r"\def\,{\hskip 3pt}%",
+                r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
+                r"\def\;{\hskip 5pt plus 5pt}%",
+                r"\def\o{\hbox{o}}%",
+                r"\def\b{\hbox{b}}%",
+                r"\def\r{\hbox{r}}%",
+                r"\def\p{\hbox{p}}%",
+                r"\o\;\r\p\,\o\>\b\>%",
+                r"\o\;\r\p\,\o\>\b%",
+                r"\o\r\p\o\b%",
+                r"\o\r\p\o\b%",
+                r"}%",
+                r#"\mathcode`o="016F%"#,
+                r#"\mathcode`b="2162%"#,
+                r#"\mathcode`r="3172%"#,
+                r#"\mathcode`p="6170%"#,
+                r"\displaystyle orpob%",
+                r"\textstyle orpob%",
+                r"\scriptstyle orpob%",
+                r"\scriptscriptstyle orpob%",
+            ],
+            |parser| {
+                let parsed_box = parser.parse_box().unwrap();
+                let hlist = if let TeXBox::HorizontalBox(hbox) = parsed_box {
+                    hbox.list
+                } else {
+                    panic!("Invalid parsed box: {:?}", parsed_box);
+                };
+
+                let math_list = parser.parse_math_list();
+                assert_eq!(
+                    parser.convert_math_list_to_horizontal_list(
+                        math_list,
+                        MathStyle::TextStyle
+                    ),
                     hlist
                 );
             },
