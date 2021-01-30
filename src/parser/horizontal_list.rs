@@ -14,6 +14,12 @@ fn get_space_glue() -> Glue {
     }
 }
 
+enum ElemResult {
+    Elem(HorizontalListElem),
+    Elems(Vec<HorizontalListElem>),
+    Nothing,
+}
+
 impl<'a> Parser<'a> {
     /// Returns if the next token is the start of something that only makes
     /// sense in vertical mode.
@@ -25,29 +31,31 @@ impl<'a> Parser<'a> {
         &mut self,
         group_level: &mut usize,
         restricted: bool,
-    ) -> Option<HorizontalListElem> {
+    ) -> ElemResult {
         let expanded_token = self.peek_expanded_token();
         let expanded_renamed_token = self.replace_renamed_token(expanded_token);
         match expanded_renamed_token {
-            None => None,
+            None => ElemResult::Nothing,
             Some(Token::Char(ch, cat)) => match cat {
                 Category::Letter => {
                     self.lex_expanded_token();
-                    Some(HorizontalListElem::Char {
+                    ElemResult::Elem(HorizontalListElem::Char {
                         chr: ch,
                         font: self.state.get_current_font(),
                     })
                 }
                 Category::Other => {
                     self.lex_expanded_token();
-                    Some(HorizontalListElem::Char {
+                    ElemResult::Elem(HorizontalListElem::Char {
                         chr: ch,
                         font: self.state.get_current_font(),
                     })
                 }
                 Category::Space => {
                     self.lex_expanded_token();
-                    Some(HorizontalListElem::HSkip(get_space_glue()))
+                    ElemResult::Elem(
+                        HorizontalListElem::HSkip(get_space_glue()),
+                    )
                 }
                 Category::BeginGroup => {
                     self.lex_expanded_token();
@@ -57,12 +65,44 @@ impl<'a> Parser<'a> {
                 }
                 Category::EndGroup => {
                     if *group_level == 0 {
-                        None
+                        ElemResult::Nothing
                     } else {
                         self.lex_expanded_token();
                         *group_level -= 1;
                         self.state.pop_state();
                         self.parse_horizontal_list_elem(group_level, restricted)
+                    }
+                }
+                Category::MathShift => {
+                    self.lex_expanded_token();
+
+                    let next_token = self.peek_unexpanded_token();
+                    let is_next_token_math_shift = match next_token {
+                        Some(Token::Char(_, Category::MathShift)) => true,
+                        _ => false,
+                    };
+
+                    if !restricted && is_next_token_math_shift {
+                        self.lex_unexpanded_token();
+
+                        panic!("display math mode unimplemented!");
+                    } else {
+                        self.state.push_state();
+
+                        let math_list = self.parse_math_list();
+                        let horizontal_list = self
+                            .convert_math_list_to_horizontal_list(math_list);
+
+                        match self.lex_expanded_token() {
+                            Some(Token::Char(_, Category::MathShift)) => {}
+                            rest => {
+                                panic!("Invalid end to math mode: {:?}", rest)
+                            }
+                        }
+
+                        self.state.pop_state();
+
+                        ElemResult::Elems(horizontal_list)
                     }
                 }
                 _ => panic!("unimplemented"),
@@ -77,7 +117,7 @@ impl<'a> Parser<'a> {
                     // list parsing.
                     // TODO(xymostech): This also is supposed to do some extra
                     // work before finishing the list.
-                    None
+                    ElemResult::Nothing
                 }
             }
             Some(ref tok)
@@ -85,7 +125,7 @@ impl<'a> Parser<'a> {
             {
                 self.lex_expanded_token();
                 let glue = self.parse_glue();
-                Some(HorizontalListElem::HSkip(glue))
+                ElemResult::Elem(HorizontalListElem::HSkip(glue))
             }
             _ => {
                 if self.is_assignment_head() {
@@ -94,7 +134,7 @@ impl<'a> Parser<'a> {
                 } else if self.is_box_head() {
                     let maybe_tex_box = self.parse_box();
                     if let Some(tex_box) = maybe_tex_box {
-                        Some(HorizontalListElem::Box(tex_box))
+                        ElemResult::Elem(HorizontalListElem::Box(tex_box))
                     } else {
                         self.parse_horizontal_list_elem(group_level, restricted)
                     }
@@ -134,10 +174,14 @@ impl<'a> Parser<'a> {
         }
 
         let mut group_level = 0;
-        while let Some(elem) =
-            self.parse_horizontal_list_elem(&mut group_level, restricted)
-        {
-            result.push(elem);
+
+        loop {
+            match self.parse_horizontal_list_elem(&mut group_level, restricted)
+            {
+                ElemResult::Nothing => break,
+                ElemResult::Elem(elem) => result.push(elem),
+                ElemResult::Elems(mut elems) => result.append(&mut elems),
+            }
         }
 
         result
@@ -526,5 +570,49 @@ mod tests {
 
             parser.parse_horizontal_list(false, false);
         });
+    }
+
+    #[test]
+    fn it_parses_math_shifts() {
+        with_parser(&[r"\hbox{a}\hbox{b}$ab$%"], |parser| {
+            let box_a = parser.parse_box().unwrap();
+            let box_b = parser.parse_box().unwrap();
+
+            assert_eq!(
+                parser.parse_horizontal_list(false, false),
+                &[
+                    HorizontalListElem::Box(box_a),
+                    HorizontalListElem::Box(box_b),
+                ]
+            );
+        });
+    }
+
+    #[test]
+    fn it_adds_grouping_around_math_lists() {
+        with_parser(
+            &[
+                r"\hbox{2}%",
+                r"\count0=1 \number\count0 $\count0=2 \number\count0$\number\count0%",
+            ],
+            |parser| {
+                let box_2 = parser.parse_box().unwrap();
+
+                assert_eq!(
+                    parser.parse_horizontal_list(false, false),
+                    &[
+                        HorizontalListElem::Char {
+                            chr: '1',
+                            font: "cmr10".to_string(),
+                        },
+                        HorizontalListElem::Box(box_2),
+                        HorizontalListElem::Char {
+                            chr: '1',
+                            font: "cmr10".to_string(),
+                        },
+                    ]
+                );
+            },
+        );
     }
 }

@@ -241,7 +241,7 @@ impl<'a> Parser<'a> {
         atom.with_subscript(subscript)
     }
 
-    fn parse_math_list(&mut self) -> MathList {
+    pub fn parse_math_list(&mut self) -> MathList {
         let mut current_list = Vec::new();
 
         loop {
@@ -275,6 +275,7 @@ impl<'a> Parser<'a> {
             } else {
                 match self.peek_expanded_token() {
                     Some(Token::Char(_, Category::EndGroup)) => break,
+                    Some(Token::Char(_, Category::MathShift)) => break,
                     None => break,
                     _ => panic!("unimplemented"),
                 }
@@ -322,7 +323,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn convert_math_list_to_horizontal_list(
+    pub fn convert_math_list_to_horizontal_list(
         &mut self,
         list: MathList,
     ) -> Vec<HorizontalListElem> {
@@ -758,6 +759,23 @@ mod tests {
                         MathField::Symbol(MathSymbol::from_math_code(&a_code))
                     )),
                 ],
+            );
+        });
+    }
+
+    #[test]
+    fn it_ends_on_math_shifts() {
+        let a_code = MathCode::from_number(0x7161);
+
+        with_parser(&[r"a$%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![MathListElem::Atom(MathAtom::from_math_code(&a_code)),]
+            );
+
+            assert_eq!(
+                parser.lex_expanded_token(),
+                Some(Token::Char('$', Category::MathShift))
             );
         });
     }

@@ -23,10 +23,11 @@ impl<'a> Parser<'a> {
     /// Checks if a token is the start of something that only is valid in
     /// horizontal mode.
     fn is_horizontal_mode_head(&self, tok: &Token) -> bool {
-        if let Token::Char(_, cat) = tok {
-            if *cat == Category::Letter || *cat == Category::Other {
-                return true;
-            }
+        match tok {
+            Token::Char(_, Category::Letter) => return true,
+            Token::Char(_, Category::Other) => return true,
+            Token::Char(_, Category::MathShift) => return true,
+            _ => {}
         }
 
         if self.state.is_token_equal_to_prim(tok, "hskip") {
@@ -587,12 +588,15 @@ mod tests {
                 r"\wd0=20pt%",
                 r"\setbox1=\hbox{\copy0 a}%",
                 r"\setbox2=\hbox{\copy0 @}%",
-                r"\setbox3=\hbox{\copy0 \hskip1pt}%",
+                r"\setbox3=\hbox{\copy0 $a$}%",
+                r"\setbox4=\hbox{\copy0 \hskip1pt}%",
                 r"a\par%",
                 r"@\par%",
+                r"$a$\par%",
                 r"\hskip 1pt\par%",
             ],
             |parser| {
+                parser.parse_assignment();
                 parser.parse_assignment();
                 parser.parse_assignment();
                 parser.parse_assignment();
@@ -602,6 +606,7 @@ mod tests {
                 let box1 = parser.state.get_box(1).unwrap();
                 let box2 = parser.state.get_box(2).unwrap();
                 let box3 = parser.state.get_box(3).unwrap();
+                let box4 = parser.state.get_box(4).unwrap();
 
                 let interline_glue1 = Dimen::from_unit(12.0, Unit::Point)
                     - *box1.depth()
@@ -609,6 +614,9 @@ mod tests {
                 let interline_glue2 = Dimen::from_unit(12.0, Unit::Point)
                     - *box2.depth()
                     - *box3.height();
+                let interline_glue3 = Dimen::from_unit(12.0, Unit::Point)
+                    - *box3.depth()
+                    - *box4.height();
 
                 assert_eq!(
                     parser.parse_vertical_list(true),
@@ -622,6 +630,10 @@ mod tests {
                             interline_glue2
                         )),
                         VerticalListElem::Box(box3),
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            interline_glue3
+                        )),
+                        VerticalListElem::Box(box4),
                     ]
                 );
             },
