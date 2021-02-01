@@ -35,7 +35,7 @@ fn get_scale(unit: Unit) -> (f64, f64) {
 }
 
 // Represents a dimension in terms of a number of scaled points.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Dimen(i32);
 
 impl Dimen {

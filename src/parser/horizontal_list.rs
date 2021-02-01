@@ -197,8 +197,16 @@ mod tests {
     use super::*;
 
     use crate::dimension::{FilDimen, FilKind};
+    use crate::font::Font;
     use crate::math_code::MathCode;
     use crate::testing::with_parser;
+
+    lazy_static! {
+        static ref CMR10: Font = Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        };
+    }
 
     fn assert_parses_to_with_restricted(
         lines: &[&str],
@@ -224,11 +232,11 @@ mod tests {
             &[
                 HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'b',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
             ],
         );
@@ -241,15 +249,15 @@ mod tests {
             &[
                 HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'b',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'c',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
             ],
         );
@@ -262,15 +270,15 @@ mod tests {
             &[
                 HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'b',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'c',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
             ],
         );
@@ -282,7 +290,7 @@ mod tests {
             &["\\let\\a=a%", "\\a%"],
             &[HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmr10".to_string(),
+                font: CMR10.clone(),
             }],
         );
     }
@@ -294,11 +302,11 @@ mod tests {
             &[
                 HorizontalListElem::Char {
                     chr: 'y',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'x',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
             ],
         );
@@ -311,7 +319,7 @@ mod tests {
             &[
                 HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::HSkip(get_space_glue()),
             ],
@@ -337,7 +345,7 @@ mod tests {
             &[
                 HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::HSkip(Glue {
                     space: Dimen::from_unit(-3.0, Unit::Point),
@@ -349,7 +357,7 @@ mod tests {
                 }),
                 HorizontalListElem::Char {
                     chr: 'b',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
             ],
         );
@@ -369,7 +377,7 @@ mod tests {
                 &[
                     HorizontalListElem::Char {
                         chr: 'a',
-                        font: "cmr10".to_string(),
+                        font: CMR10.clone(),
                     },
                     HorizontalListElem::Box(TeXBox::HorizontalBox(
                         HorizontalBox {
@@ -380,7 +388,7 @@ mod tests {
                             list: vec![
                                 HorizontalListElem::Char {
                                     chr: 'a',
-                                    font: "cmr10".to_string(),
+                                    font: CMR10.clone(),
                                 },
                                 HorizontalListElem::HSkip(Glue {
                                     space: Dimen::from_unit(2.0, Unit::Point),
@@ -391,7 +399,7 @@ mod tests {
                                 }),
                                 HorizontalListElem::Char {
                                     chr: 'g',
-                                    font: "cmr10".to_string(),
+                                    font: CMR10.clone(),
                                 },
                             ],
                             glue_set_ratio: None,
@@ -399,7 +407,7 @@ mod tests {
                     )),
                     HorizontalListElem::Char {
                         chr: 'b',
-                        font: "cmr10".to_string(),
+                        font: CMR10.clone(),
                     },
                 ]
             );
@@ -429,11 +437,11 @@ mod tests {
             &[
                 HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'b',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
             ],
         );
@@ -447,15 +455,15 @@ mod tests {
             &[
                 HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'b',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'c',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
             ],
             false,
@@ -470,11 +478,11 @@ mod tests {
             &[
                 HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'b',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
             ],
             true,
@@ -485,15 +493,15 @@ mod tests {
             &[
                 HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'b',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::Char {
                     chr: 'c',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
             ],
             true,
@@ -512,7 +520,7 @@ mod tests {
                     HorizontalListElem::Box(parser.state.get_box(0).unwrap()),
                     HorizontalListElem::Char {
                         chr: 'a',
-                        font: "cmr10".to_string(),
+                        font: CMR10.clone(),
                     },
                 ]
             );
@@ -527,7 +535,7 @@ mod tests {
                 parser.parse_horizontal_list(false, false),
                 &[HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },]
             );
             assert_eq!(
@@ -545,11 +553,11 @@ mod tests {
                     &[
                         HorizontalListElem::Char {
                             chr: 'a',
-                            font: "cmr10".to_string(),
+                            font: CMR10.clone(),
                         },
                         HorizontalListElem::Char {
                             chr: 'b',
-                            font: "cmr10".to_string(),
+                            font: CMR10.clone(),
                         },
                     ]
                 );
@@ -607,12 +615,12 @@ mod tests {
                     &[
                         HorizontalListElem::Char {
                             chr: '1',
-                            font: "cmr10".to_string(),
+                            font: CMR10.clone(),
                         },
                         HorizontalListElem::Box(box_2),
                         HorizontalListElem::Char {
                             chr: '1',
-                            font: "cmr10".to_string(),
+                            font: CMR10.clone(),
                         },
                     ]
                 );

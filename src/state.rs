@@ -4,6 +4,8 @@ use std::rc::Rc;
 
 use crate::boxes::TeXBox;
 use crate::category::Category;
+use crate::dimension::{Dimen, Unit};
+use crate::font::Font;
 use crate::makro::Macro;
 use crate::math_code::MathCode;
 use crate::paths::get_path_to_font;
@@ -103,7 +105,7 @@ pub struct TeXStateInner {
 
     // We keep track of the name of the current font. Metrics and other
     // information about the font are stored elsewhere.
-    current_font: String,
+    current_font: Font,
 }
 
 impl TeXStateInner {
@@ -161,8 +163,11 @@ impl TeXStateInner {
             token_definition_map: token_definitions,
             count_registers: [0; 256],
             box_registers: HashMap::new(),
-            // TODO(xymostech): This should initially be "nullfont"
-            current_font: "cmr10".to_string(),
+            current_font: Font {
+                // TODO(xymostech): This should initially be "nullfont"
+                font_name: "cmr10".to_string(),
+                scale: Dimen::from_unit(10.0, Unit::Point),
+            },
         }
     }
 
@@ -289,7 +294,7 @@ impl TeXStateInner {
         self.count_registers[register_index as usize] = value;
     }
 
-    fn get_current_font(&self) -> String {
+    fn get_current_font(&self) -> Font {
         self.current_font.clone()
     }
 
@@ -396,7 +401,7 @@ impl TeXStateStack {
     generate_inner_func!(fn is_token_equal_to_prim(token: &Token, cs: &str) -> bool);
     generate_inner_func!(fn get_count(register_index: u8) -> i32);
     generate_inner_global_func!(fn set_count(global: bool, register_index: u8, value: i32));
-    generate_inner_func!(fn get_current_font() -> String);
+    generate_inner_func!(fn get_current_font() -> Font);
 
     generate_inner_func!(fn get_box(box_index: u8) -> Option<TeXBox>);
     generate_inner_func!(fn get_box_copy(box_index: u8) -> Option<TeXBox>);
@@ -497,7 +502,7 @@ impl TeXState {
     generate_stack_func!(fn is_token_equal_to_prim(token: &Token, cs: &str) -> bool);
     generate_stack_func!(fn get_count(register_index: u8) -> i32);
     generate_stack_func!(fn set_count(global: bool, register_index: u8, value: i32));
-    generate_stack_func!(fn get_current_font() -> String);
+    generate_stack_func!(fn get_current_font() -> Font);
 
     generate_stack_func!(fn get_box(box_index: u8) -> Option<TeXBox>);
     generate_stack_func!(fn get_box_copy(box_index: u8) -> Option<TeXBox>);
@@ -527,7 +532,6 @@ mod tests {
     use super::*;
 
     use crate::boxes::HorizontalBox;
-    use crate::dimension::{Dimen, Unit};
 
     #[test]
     fn it_correctly_sets_categories() {

@@ -6,6 +6,7 @@ mod boxes;
 mod category;
 mod dimension;
 mod dvi;
+mod font;
 mod glue;
 mod lexer;
 mod list;

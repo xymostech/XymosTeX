@@ -2,6 +2,10 @@ use crate::dimension::{Dimen, Unit};
 use crate::tfm::{CharInfoEntry, TFMFile};
 
 impl TFMFile {
+    pub fn get_design_size(&self) -> f64 {
+        self.header.design_size
+    }
+
     fn get_char_info(&self, chr: char) -> &CharInfoEntry {
         let char_index = chr as usize;
         assert!(

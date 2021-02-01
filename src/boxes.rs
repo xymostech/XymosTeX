@@ -213,7 +213,16 @@ impl TeXBox {
 mod tests {
     use super::*;
 
+    use crate::dimension::Unit;
+    use crate::font::Font;
     use crate::glue::Glue;
+
+    lazy_static! {
+        static ref CMR10: Font = Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        };
+    }
 
     #[test]
     fn it_parses_to_chars() {
@@ -225,7 +234,7 @@ mod tests {
             list: vec![
                 HorizontalListElem::Char {
                     chr: 'a',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
                 HorizontalListElem::HSkip(Glue::from_dimen(Dimen::zero())),
                 HorizontalListElem::Box(TeXBox::HorizontalBox(HorizontalBox {
@@ -236,7 +245,7 @@ mod tests {
                     list: vec![
                         HorizontalListElem::Char {
                             chr: 'b',
-                            font: "cmr10".to_string(),
+                            font: CMR10.clone(),
                         },
                         HorizontalListElem::HSkip(Glue::from_dimen(
                             Dimen::zero(),
@@ -246,7 +255,7 @@ mod tests {
                 })),
                 HorizontalListElem::Char {
                     chr: 'c',
-                    font: "cmr10".to_string(),
+                    font: CMR10.clone(),
                 },
             ],
             glue_set_ratio: None,

@@ -4,6 +4,7 @@ use std::io;
 use crate::boxes::GlueSetRatio;
 use crate::boxes::TeXBox;
 use crate::dvi::{DVICommand, DVIFile};
+use crate::font::Font;
 use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::paths::get_path_to_font;
 use crate::tfm::TFMFile;
@@ -12,7 +13,7 @@ pub struct DVIFileWriter {
     commands: Vec<DVICommand>,
     last_page_start: i32,
     curr_font_num: i32,
-    font_nums: HashMap<String, i32>,
+    font_nums: HashMap<Font, i32>,
     next_font_num: i32,
     num: u32,
     den: u32,
@@ -50,38 +51,41 @@ impl DVIFileWriter {
 
     fn add_font_def_with_metrics(
         &mut self,
-        font: &str,
+        font: &Font,
         metrics: &TFMFile,
         font_num: i32,
     ) {
+        let design_size = (metrics.get_design_size() * 65536.0) as u32;
+
         self.commands.push(DVICommand::FntDef4 {
             font_num: font_num,
             checksum: metrics.get_checksum(),
 
-            // These are just copied from what TeX produces
-            scale: 655360,
-            design_size: 655360,
+            scale: font.scale.as_scaled_points() as u32,
+            design_size,
 
             area: 0,
-            length: font.len() as u8,
-            font_name: font.to_string(),
+            length: font.font_name.len() as u8,
+            font_name: font.font_name.to_string(),
         });
     }
 
-    fn add_font_def(&mut self, font: &str) -> i32 {
+    fn add_font_def(&mut self, font: &Font) -> i32 {
         let font_num = self.next_font_num;
         self.next_font_num = self.next_font_num + 1;
 
-        let metrics = get_metrics_for_font(font)
-            .expect(&format!("Error loading font metrics for {}", font));
+        let metrics = get_metrics_for_font(&font.font_name).expect(&format!(
+            "Error loading font metrics for {}",
+            font.font_name
+        ));
 
         self.add_font_def_with_metrics(font, &metrics, font_num);
-        self.font_nums.insert(font.to_string(), font_num);
+        self.font_nums.insert(font.clone(), font_num);
 
         font_num
     }
 
-    fn switch_to_font(&mut self, font: &str) {
+    fn switch_to_font(&mut self, font: &Font) {
         let font_num = if let Some(font_num) = self.font_nums.get(font) {
             *font_num
         } else {
@@ -163,7 +167,7 @@ impl DVIFileWriter {
                     DVICommand::Set1(*chr as u8)
                 };
 
-                self.switch_to_font(font);
+                self.switch_to_font(&font);
                 self.commands.push(command);
             }
 
@@ -248,8 +252,9 @@ impl DVIFileWriter {
         });
 
         for (font, font_num) in std::mem::take(&mut self.font_nums) {
-            let metrics = get_metrics_for_font(&font)
-                .expect(&format!("Error loading font metrics for {}", font));
+            let metrics = get_metrics_for_font(&font.font_name).expect(
+                &format!("Error loading font metrics for {}", font.font_name),
+            );
 
             self.add_font_def_with_metrics(&font, &metrics, font_num);
         }
@@ -278,20 +283,27 @@ mod tests {
     use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
     use crate::glue::Glue;
 
+    lazy_static! {
+        static ref CMR10: Font = Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        };
+    }
+
     #[test]
     fn it_generates_commands_for_chars() {
         let mut writer = DVIFileWriter::new();
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmr10".to_string(),
+                font: CMR10.clone(),
             },
             &None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 200 as char,
-                font: "cmr10".to_string(),
+                font: CMR10.clone(),
             },
             &None,
         );
@@ -308,60 +320,104 @@ mod tests {
 
     #[test]
     fn it_generates_fnt_commands() {
+        let cmr7 = Font {
+            font_name: "cmr7".to_string(),
+            scale: Dimen::from_unit(7.0, Unit::Point),
+        };
+        let big_cmr10 = Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(15.0, Unit::Point),
+        };
+        let small_cmr10 = Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(6.0, Unit::Point),
+        };
+
         let mut writer = DVIFileWriter::new();
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmr10".to_string(),
+                font: CMR10.clone(),
             },
             &None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmr10".to_string(),
+                font: CMR10.clone(),
             },
             &None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmr7".to_string(),
+                font: cmr7.clone(),
             },
             &None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmr7".to_string(),
+                font: cmr7.clone(),
             },
             &None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmr10".to_string(),
+                font: CMR10.clone(),
             },
             &None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmtt10".to_string(),
+                font: big_cmr10.clone(),
             },
             &None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmr7".to_string(),
+                font: small_cmr10.clone(),
             },
             &None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmr10".to_string(),
+                font: big_cmr10.clone(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: small_cmr10.clone(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: Font {
+                    font_name: "cmtt10".to_string(),
+                    scale: Dimen::from_unit(10.0, Unit::Point),
+                },
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: cmr7.clone(),
+            },
+            &None,
+        );
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Char {
+                chr: 'a',
+                font: CMR10.clone(),
             },
             &None,
         );
@@ -376,8 +432,8 @@ mod tests {
                 DVICommand::FntDef4 {
                     font_num: 0,
                     checksum: cmr10_metrics.get_checksum(),
-                    scale: 655360,
-                    design_size: 655360,
+                    scale: 10 * 65536,
+                    design_size: 10 * 65536,
                     area: 0,
                     length: 5,
                     font_name: "cmr10".to_string(),
@@ -388,8 +444,8 @@ mod tests {
                 DVICommand::FntDef4 {
                     font_num: 1,
                     checksum: cmr7_metrics.get_checksum(),
-                    scale: 655360,
-                    design_size: 655360,
+                    scale: 7 * 65536,
+                    design_size: 7 * 65536,
                     area: 0,
                     length: 4,
                     font_name: "cmr7".to_string(),
@@ -401,14 +457,40 @@ mod tests {
                 DVICommand::SetCharN(97),
                 DVICommand::FntDef4 {
                     font_num: 2,
+                    checksum: cmr10_metrics.get_checksum(),
+                    scale: 15 * 65536,
+                    design_size: 10 * 65536,
+                    area: 0,
+                    length: 5,
+                    font_name: "cmr10".to_string(),
+                },
+                DVICommand::Fnt4(2),
+                DVICommand::SetCharN(97),
+                DVICommand::FntDef4 {
+                    font_num: 3,
+                    checksum: cmr10_metrics.get_checksum(),
+                    scale: 6 * 65536,
+                    design_size: 10 * 65536,
+                    area: 0,
+                    length: 5,
+                    font_name: "cmr10".to_string(),
+                },
+                DVICommand::Fnt4(3),
+                DVICommand::SetCharN(97),
+                DVICommand::Fnt4(2),
+                DVICommand::SetCharN(97),
+                DVICommand::Fnt4(3),
+                DVICommand::SetCharN(97),
+                DVICommand::FntDef4 {
+                    font_num: 4,
                     checksum: cmtt10_metrics.get_checksum(),
-                    scale: 655360,
-                    design_size: 655360,
+                    scale: 10 * 65536,
+                    design_size: 10 * 65536,
                     area: 0,
                     length: 6,
                     font_name: "cmtt10".to_string(),
                 },
-                DVICommand::Fnt4(2),
+                DVICommand::Fnt4(4),
                 DVICommand::SetCharN(97),
                 DVICommand::Fnt4(1),
                 DVICommand::SetCharN(97),
@@ -678,7 +760,7 @@ mod tests {
 
             list: vec![HorizontalListElem::Char {
                 chr: 'a',
-                font: "cmr10".to_string(),
+                font: CMR10.clone(),
             }],
             glue_set_ratio: None,
         });
@@ -934,7 +1016,7 @@ mod tests {
 
             list: vec![HorizontalListElem::Char {
                 chr: 'g',
-                font: "cmr10".to_string(),
+                font: CMR10.clone(),
             }],
             glue_set_ratio: None,
         });
