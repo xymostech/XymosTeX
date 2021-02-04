@@ -338,6 +338,7 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
+    use crate::font::Font;
     use crate::testing::with_parser;
 
     #[test]
@@ -500,7 +501,13 @@ mod tests {
         with_parser(&[r"\setbox0=\hbox{a}%", r"\wd0%", r"\ht0"], |parser| {
             parser.parse_assignment();
 
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser
+                .state
+                .get_metrics_for_font(&Font {
+                    font_name: "cmr10".to_string(),
+                    scale: Dimen::from_unit(10.0, Unit::Point),
+                })
+                .unwrap();
 
             assert!(parser.is_internal_dimen_head());
             assert_eq!(parser.parse_internal_dimen(), metrics.get_width('a'));

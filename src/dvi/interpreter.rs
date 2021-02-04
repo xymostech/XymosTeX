@@ -2,8 +2,10 @@ use std::collections::{HashMap, HashSet};
 use std::iter::Peekable;
 
 use super::file::{DVICommand, DVIFile};
+use crate::dimension::Dimen;
+use crate::font::Font;
+use crate::font_metrics::FontMetrics;
 use crate::paths::get_path_to_font;
-use crate::tfm::TFMFile;
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub enum DVIOutputElement {
@@ -27,7 +29,7 @@ struct DVIStateStack {
 
 struct DVIState {
     // map of font number to font data
-    fonts: HashMap<i32, (TFMFile, String)>,
+    fonts: HashMap<i32, (FontMetrics, String)>,
 
     // current font num
     f: Option<i32>,
@@ -37,18 +39,15 @@ struct DVIState {
 }
 
 impl DVIState {
-    fn add_font(&mut self, font_num: i32, font_name: &str) {
-        let font_filename = format!("{}.tfm", font_name);
-        let font_path =
-            get_path_to_font(&font_filename).expect("Couldn't find font");
+    fn add_font(&mut self, font_num: i32, font: &Font) {
         let metrics =
-            TFMFile::from_path(&font_path).expect("Failed to read font");
+            FontMetrics::from_font(font).expect("Failed to load font");
 
         self.fonts
-            .insert(font_num, (metrics, font_name.to_string()));
+            .insert(font_num, (metrics, font.font_name.to_string()));
     }
 
-    fn current_font(&self) -> &(TFMFile, String) {
+    fn current_font(&self) -> &(FontMetrics, String) {
         let font_num = self.f.expect("No font selected");
         &self.fonts[&font_num]
     }
@@ -152,16 +151,30 @@ where
             DVICommand::FntDef1 {
                 font_num,
                 font_name,
+                scale,
                 ..
             } => {
-                state.add_font(*font_num as i32, font_name);
+                state.add_font(
+                    *font_num as i32,
+                    &Font {
+                        font_name: font_name.to_string(),
+                        scale: Dimen::from_scaled_points(*scale as i32),
+                    },
+                );
             }
             DVICommand::FntDef4 {
                 font_num,
                 font_name,
+                scale,
                 ..
             } => {
-                state.add_font(*font_num, font_name);
+                state.add_font(
+                    *font_num as i32,
+                    &Font {
+                        font_name: font_name.to_string(),
+                        scale: Dimen::from_scaled_points(*scale as i32),
+                    },
+                );
             }
             DVICommand::FntNumN(f) => {
                 state.f = Some(*f as i32);
@@ -261,11 +274,7 @@ pub fn interpret_dvi_file(file: DVIFile) -> Vec<DVIPageOutput> {
 mod tests {
     use super::*;
 
-    fn get_metrics_for_font(font: &str) -> TFMFile {
-        let font_file_name = format!("{}.tfm", font);
-        let font_path = get_path_to_font(&font_file_name).unwrap();
-        TFMFile::from_path(&font_path).unwrap()
-    }
+    use crate::dimension::Unit;
 
     fn empty_state() -> DVIState {
         DVIState {
@@ -436,7 +445,11 @@ mod tests {
             DVICommand::Eop,
         ]);
 
-        let metrics = get_metrics_for_font("cmr10");
+        let metrics = FontMetrics::from_font(&Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        })
+        .unwrap();
 
         assert_eq!(page.len(), 2);
         assert_eq!(
@@ -592,7 +605,11 @@ mod tests {
             DVICommand::Eop,
         ]);
 
-        let metrics = get_metrics_for_font("cmr10");
+        let metrics = FontMetrics::from_font(&Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        })
+        .unwrap();
 
         assert_eq!(page.len(), 4);
         assert_eq!(

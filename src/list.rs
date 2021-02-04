@@ -15,8 +15,7 @@ impl HorizontalListElem {
     pub fn get_size(&self, state: &TeXState) -> (Dimen, Dimen, Glue) {
         match self {
             HorizontalListElem::Char { chr, font } => {
-                let metrics =
-                    state.get_metrics_for_font(&font.font_name).unwrap();
+                let metrics = state.get_metrics_for_font(&font).unwrap();
 
                 let height = metrics.get_height(*chr);
                 let depth = metrics.get_depth(*chr);

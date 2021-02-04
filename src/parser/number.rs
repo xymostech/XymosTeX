@@ -242,6 +242,8 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use crate::category::Category;
+    use crate::dimension::{Dimen, Unit};
+    use crate::font::Font;
     use crate::testing::with_parser;
 
     #[test]
@@ -315,7 +317,13 @@ mod tests {
         with_parser(&[r"\setbox0=\hbox{g}%", r"\wd0%", r"-\ht0%"], |parser| {
             parser.parse_assignment();
 
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser
+                .state
+                .get_metrics_for_font(&Font {
+                    font_name: "cmr10".to_string(),
+                    scale: Dimen::from_unit(10.0, Unit::Point),
+                })
+                .unwrap();
 
             assert_eq!(
                 parser.parse_number(),

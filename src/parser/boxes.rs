@@ -319,7 +319,15 @@ mod tests {
     use super::*;
 
     use crate::dimension::{Dimen, Unit};
+    use crate::font::Font;
     use crate::testing::with_parser;
+
+    lazy_static! {
+        static ref CMR10: Font = Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        };
+    }
 
     #[test]
     fn it_parses_boxes_with_characters() {
@@ -327,7 +335,7 @@ mod tests {
             let hbox =
                 parser.parse_horizontal_box(&BoxLayout::Natural, true, false);
 
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
 
             assert_eq!(hbox.height, metrics.get_height('b'));
             assert_eq!(hbox.depth, metrics.get_depth('g'));
@@ -358,7 +366,7 @@ mod tests {
 
             assert_eq!(hbox.list.len(), 3);
 
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
 
             assert_eq!(hbox.height, metrics.get_height('b'));
             assert_eq!(hbox.depth, metrics.get_depth('g'));
@@ -374,7 +382,7 @@ mod tests {
     #[test]
     fn it_stretches_boxes_with_finite_glue_to_a_fixed_width() {
         with_parser(&["a\\hskip 0pt plus1pt b%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
 
             let fixed_width = metrics.get_width('a')
                 + metrics.get_width('b')
@@ -398,7 +406,7 @@ mod tests {
     fn it_stretches_boxes_with_infinite_glue_to_a_fixed_width() {
         // Fil
         with_parser(&["a\\hskip 0pt plus1fil b%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
             let fixed_width = metrics.get_width('a')
                 + metrics.get_width('b')
                 + Dimen::from_unit(5.0, Unit::Point);
@@ -418,7 +426,7 @@ mod tests {
 
         // Fill
         with_parser(&["a\\hskip 0pt plus1fill b%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
             let fixed_width = metrics.get_width('a')
                 + metrics.get_width('b')
                 + Dimen::from_unit(5.0, Unit::Point);
@@ -438,7 +446,7 @@ mod tests {
 
         // Filll
         with_parser(&["a\\hskip 0pt plus1filll b%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
             let fixed_width = metrics.get_width('a')
                 + metrics.get_width('b')
                 + Dimen::from_unit(5.0, Unit::Point);
@@ -463,7 +471,7 @@ mod tests {
             &["a\\hskip 0pt plus1pt\\hskip 0pt plus2pt b%"],
             |parser| {
                 let metrics =
-                    parser.state.get_metrics_for_font("cmr10").unwrap();
+                    parser.state.get_metrics_for_font(&CMR10).unwrap();
                 let fixed_width = metrics.get_width('a')
                     + metrics.get_width('b')
                     + Dimen::from_unit(6.0, Unit::Point);
@@ -486,7 +494,7 @@ mod tests {
     #[test]
     fn it_shrinks_boxes_with_finite_glue_when_setting_to_fixed_width() {
         with_parser(&["a\\hskip 0pt minus2ptb%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
             let fixed_width = metrics.get_width('a') + metrics.get_width('b')
                 - Dimen::from_unit(1.0, Unit::Point);
 
@@ -507,7 +515,7 @@ mod tests {
     #[test]
     fn it_shrinks_boxes_with_infinite_glue_when_setting_to_fixed_width() {
         with_parser(&["a\\hskip 0pt minus1fil b%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
             let fixed_width = metrics.get_width('a') + metrics.get_width('b')
                 - Dimen::from_unit(4.0, Unit::Point);
 
@@ -534,7 +542,7 @@ mod tests {
                 false,
             );
 
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
             let expected_width = metrics.get_width('a')
                 + metrics.get_width('b')
                 + Dimen::from_unit(6.0, Unit::Point);
@@ -556,7 +564,7 @@ mod tests {
                 false,
             );
 
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
             let expected_width = metrics.get_width('a')
                 + metrics.get_width('b')
                 + Dimen::from_unit(6.0, Unit::Point);
@@ -578,7 +586,7 @@ mod tests {
                 false,
             );
 
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
             let expected_width = metrics.get_width('a')
                 + metrics.get_width('b')
                 - Dimen::from_unit(1.0, Unit::Point);
@@ -594,7 +602,7 @@ mod tests {
     #[test]
     fn it_parses_horizontal_boxes_with_natural_width() {
         with_parser(&["\\hbox{abc}%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
             let expected_width = metrics.get_width('a')
                 + metrics.get_width('b')
                 + metrics.get_width('c');
@@ -628,7 +636,7 @@ mod tests {
     #[test]
     fn it_parses_horizontal_boxes_with_spread_width() {
         with_parser(&["\\hbox spread5pt{a\\hskip 0pt plus1filc}%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
             let expected_width = metrics.get_width('a')
                 + metrics.get_width('c')
                 + Dimen::from_unit(5.0, Unit::Point);
@@ -649,7 +657,7 @@ mod tests {
         with_parser(&[r"\setbox0=\hbox{a}%", r"\box0", r"\box0"], |parser| {
             parser.parse_assignment();
 
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
 
             assert!(parser.is_box_head());
             let parsed_box = parser.parse_box().unwrap();
@@ -678,7 +686,7 @@ mod tests {
     #[test]
     fn it_parses_vertical_lists() {
         with_parser(&[r"aby%", r"\vskip 2pt%", r"g%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
 
             let vbox = parser.parse_vertical_box(&BoxLayout::Natural, true);
 
@@ -759,7 +767,7 @@ mod tests {
             ],
             |parser| {
                 let metrics =
-                    parser.state.get_metrics_for_font("cmr10").unwrap();
+                    parser.state.get_metrics_for_font(&CMR10).unwrap();
 
                 parser.parse_assignment();
                 let vbox = parser.parse_box().unwrap();

@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn it_parses_explicit_box_elems() {
         with_parser(&[r"a\hbox{a\hskip 2pt plus1filg}b%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
 
             let total_width = metrics.get_width('a')
                 + metrics.get_width('g')
@@ -417,7 +417,7 @@ mod tests {
     #[test]
     fn it_parses_box_register_elems() {
         with_parser(&[r"\setbox0=\hbox{a}%", r"\box0%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font("cmr10").unwrap();
+            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
 
             let list = parser.parse_horizontal_list(true, false);
 

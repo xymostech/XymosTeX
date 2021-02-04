@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -6,10 +6,10 @@ use crate::boxes::TeXBox;
 use crate::category::Category;
 use crate::dimension::{Dimen, Unit};
 use crate::font::Font;
+use crate::font_metrics::FontMetrics;
 use crate::makro::Macro;
 use crate::math_code::MathCode;
 use crate::paths::get_path_to_font;
-use crate::tfm::TFMFile;
 use crate::token::Token;
 
 // A list of all primitive control sequences, used so that we can \let other
@@ -440,7 +440,7 @@ pub struct TeXState {
     // Stores metrics information about a given font file. We don't store this
     // in the `TeXStateInner` because loading the font metrics is global and
     // isn't affected by grouping.
-    font_metrics: HashMap<String, TFMFile>,
+    font_metrics: RefCell<HashMap<Font, FontMetrics>>,
 }
 
 // Since we're mostly want to just be calling the same-named functions from
@@ -459,20 +459,9 @@ macro_rules! generate_stack_func {
 
 impl TeXState {
     pub fn new() -> TeXState {
-        // TODO(xymostech): Make it so that we only actually load fonts when
-        // they are referenced. We need to preload this one since we set it as
-        // the default current font.
-        let cmr_font_path =
-            get_path_to_font("cmr10.tfm").expect("Couldn't find crm10.tfm");
-        let cmr_metrics = TFMFile::from_path(&cmr_font_path)
-            .expect("Failed to read cmr10.tfm");
-
-        let mut font_metrics = HashMap::new();
-        font_metrics.insert("cmr10".to_string(), cmr_metrics);
-
         TeXState {
             state_stack: RefCell::new(TeXStateStack::new()),
-            font_metrics: font_metrics,
+            font_metrics: RefCell::new(HashMap::new()),
         }
     }
 
@@ -522,8 +511,21 @@ impl TeXState {
         self.with_stack(|stack| stack.with_box(box_index, func))
     }
 
-    pub fn get_metrics_for_font(&self, font: &str) -> Option<&TFMFile> {
-        self.font_metrics.get(font)
+    pub fn get_metrics_for_font(
+        &self,
+        font: &Font,
+    ) -> Option<Ref<FontMetrics>> {
+        let has_metrics = self.font_metrics.borrow().contains_key(font);
+
+        if !has_metrics {
+            let mut font_metrics_mut = self.font_metrics.borrow_mut();
+            font_metrics_mut
+                .insert(font.clone(), FontMetrics::from_font(font)?);
+        }
+
+        Some(Ref::map(self.font_metrics.borrow(), |x| {
+            x.get(font).unwrap()
+        }))
     }
 }
 
@@ -796,5 +798,17 @@ mod tests {
                 .get_math_chardef(&Token::ControlSequence("hello".to_string())),
             Some(MathCode::from_number(0x7161))
         );
+    }
+
+    #[test]
+    fn it_does_not_throw_when_accessing_invalid_fonts() {
+        let state = TeXState::new();
+
+        let fake_font = Font {
+            font_name: "not_a_real_font".to_string(),
+            scale: Dimen::from_unit(1.0, Unit::Point),
+        };
+
+        assert_eq!(state.get_metrics_for_font(&fake_font).is_none(), true);
     }
 }

@@ -3,6 +3,8 @@ extern crate lazy_static;
 
 mod dimension;
 mod dvi;
+mod font;
+mod font_metrics;
 mod paths;
 mod tfm;
 

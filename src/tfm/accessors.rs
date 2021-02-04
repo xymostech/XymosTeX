@@ -78,6 +78,10 @@ mod tests {
     fn get_cmr10_dimensions() {
         let font_metrics = TFMFile::new(CMR10_TFM).unwrap();
 
+        assert_eq!(
+            font_metrics.get_width('a'),
+            Dimen::from_scaled_points(327681)
+        );
         assert!(font_metrics.get_height('a') > Dimen::zero());
         assert!(font_metrics.get_height('t') > font_metrics.get_height('a'));
         assert!(font_metrics.get_depth('g') > Dimen::zero());

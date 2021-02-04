@@ -7,6 +7,7 @@ mod category;
 mod dimension;
 mod dvi;
 mod font;
+mod font_metrics;
 mod glue;
 mod lexer;
 mod list;

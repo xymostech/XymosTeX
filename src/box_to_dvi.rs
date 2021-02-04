@@ -5,9 +5,9 @@ use crate::boxes::GlueSetRatio;
 use crate::boxes::TeXBox;
 use crate::dvi::{DVICommand, DVIFile};
 use crate::font::Font;
+use crate::font_metrics::FontMetrics;
 use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::paths::get_path_to_font;
-use crate::tfm::TFMFile;
 
 pub struct DVIFileWriter {
     commands: Vec<DVICommand>,
@@ -21,15 +21,6 @@ pub struct DVIFileWriter {
     num_pages: u16,
     max_stack_depth: u16,
     curr_stack_depth: u16,
-}
-
-fn get_metrics_for_font(font: &str) -> io::Result<TFMFile> {
-    let font_file_name = format!("{}.tfm", font);
-    let font_path = get_path_to_font(&font_file_name).ok_or(io::Error::new(
-        io::ErrorKind::Other,
-        format!("Couldn't find file {}", font_file_name),
-    ))?;
-    TFMFile::from_path(&font_path)
 }
 
 impl DVIFileWriter {
@@ -52,7 +43,7 @@ impl DVIFileWriter {
     fn add_font_def_with_metrics(
         &mut self,
         font: &Font,
-        metrics: &TFMFile,
+        metrics: &FontMetrics,
         font_num: i32,
     ) {
         let design_size = (metrics.get_design_size() * 65536.0) as u32;
@@ -74,7 +65,7 @@ impl DVIFileWriter {
         let font_num = self.next_font_num;
         self.next_font_num = self.next_font_num + 1;
 
-        let metrics = get_metrics_for_font(&font.font_name).expect(&format!(
+        let metrics = FontMetrics::from_font(font).expect(&format!(
             "Error loading font metrics for {}",
             font.font_name
         ));
@@ -252,9 +243,10 @@ impl DVIFileWriter {
         });
 
         for (font, font_num) in std::mem::take(&mut self.font_nums) {
-            let metrics = get_metrics_for_font(&font.font_name).expect(
-                &format!("Error loading font metrics for {}", font.font_name),
-            );
+            let metrics = FontMetrics::from_font(&font).expect(&format!(
+                "Error loading font metrics for {}",
+                font.font_name
+            ));
 
             self.add_font_def_with_metrics(&font, &metrics, font_num);
         }
@@ -332,6 +324,10 @@ mod tests {
             font_name: "cmr10".to_string(),
             scale: Dimen::from_unit(6.0, Unit::Point),
         };
+        let cmtt10 = Font {
+            font_name: "cmtt10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        };
 
         let mut writer = DVIFileWriter::new();
         writer.add_horizontal_list_elem(
@@ -400,10 +396,7 @@ mod tests {
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: Font {
-                    font_name: "cmtt10".to_string(),
-                    scale: Dimen::from_unit(10.0, Unit::Point),
-                },
+                font: cmtt10.clone(),
             },
             &None,
         );
@@ -422,9 +415,9 @@ mod tests {
             &None,
         );
 
-        let cmr10_metrics = get_metrics_for_font("cmr10").unwrap();
-        let cmr7_metrics = get_metrics_for_font("cmr7").unwrap();
-        let cmtt10_metrics = get_metrics_for_font("cmtt10").unwrap();
+        let cmr10_metrics = FontMetrics::from_font(&CMR10).unwrap();
+        let cmr7_metrics = FontMetrics::from_font(&cmr7).unwrap();
+        let cmtt10_metrics = FontMetrics::from_font(&cmtt10).unwrap();
 
         assert_eq!(
             writer.commands,
@@ -751,7 +744,7 @@ mod tests {
     fn it_adds_basic_horizontal_boxes() {
         let mut writer = DVIFileWriter::new();
 
-        let metrics = get_metrics_for_font("cmr10").unwrap();
+        let metrics = FontMetrics::from_font(&CMR10).unwrap();
 
         let box1 = TeXBox::HorizontalBox(HorizontalBox {
             height: metrics.get_width('a'),
@@ -1007,7 +1000,7 @@ mod tests {
     fn it_adds_basic_vertical_boxes() {
         let mut writer = DVIFileWriter::new();
 
-        let metrics = get_metrics_for_font("cmr10").unwrap();
+        let metrics = FontMetrics::from_font(&CMR10).unwrap();
 
         let hbox = TeXBox::HorizontalBox(HorizontalBox {
             height: metrics.get_height('g'),
@@ -1094,7 +1087,7 @@ mod tests {
     fn it_adds_pages() {
         let mut writer = DVIFileWriter::new();
 
-        let metrics = get_metrics_for_font("cmr10").unwrap();
+        let metrics = FontMetrics::from_font(&CMR10).unwrap();
 
         with_parser(
             &[
@@ -1211,7 +1204,7 @@ mod tests {
     fn it_adds_basic_pre_and_post() {
         let mut writer = DVIFileWriter::new();
 
-        let metrics = get_metrics_for_font("cmr10").unwrap();
+        let metrics = FontMetrics::from_font(&CMR10).unwrap();
 
         writer.start(
             (25400000, 473628672),
@@ -1399,7 +1392,7 @@ mod tests {
     fn it_places_boxes_in_boxes_correctly() {
         let mut writer = DVIFileWriter::new();
 
-        let metrics = get_metrics_for_font("cmr10").unwrap();
+        let metrics = FontMetrics::from_font(&CMR10).unwrap();
 
         with_parser(
             &[r"\vbox{\hbox{g\vbox{\noindent b\vskip0pt\noindent c}}}%"],
