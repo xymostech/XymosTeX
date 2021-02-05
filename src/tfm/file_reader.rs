@@ -10,7 +10,7 @@ const FIXNUM_FRAC_MASK: u32 = 0b0000_0000_0000_1111_1111_1111_1111_1111;
 
 impl<T: io::Read> TeXFileReader<T> {
     pub fn new(reader: T) -> TeXFileReader<T> {
-        TeXFileReader { reader: reader }
+        Self { reader }
     }
 
     pub fn read_32bit_int(&mut self) -> io::Result<u32> {
@@ -87,6 +87,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn it_reads_integers_and_fixnums() {
         #[rustfmt::skip]
         let mut reader = TeXFileReader::new(&[

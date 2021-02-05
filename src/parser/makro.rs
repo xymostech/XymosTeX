@@ -7,7 +7,7 @@ use crate::token::Token;
 
 fn parse_parameter_number(ch: char) -> usize {
     if ch >= '1' && ch <= '9' {
-        ((ch as u8) - ('0' as u8)) as usize
+        ((ch as u8) - (b'0')) as usize
     } else {
         panic!("Invalid number after parameter: {}", ch);
     }

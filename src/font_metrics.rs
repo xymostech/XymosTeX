@@ -27,7 +27,7 @@ impl FontMetrics {
         Some(FontMetrics {
             tfm_file: file,
             design_size: Dimen::from_unit(design_size, Unit::Point),
-            scale: font.scale.clone(),
+            scale: font.scale,
         })
     }
 

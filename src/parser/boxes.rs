@@ -47,12 +47,12 @@ fn get_set_dimen_and_ratio(
     glue: Glue,
     layout: &BoxLayout,
 ) -> (Dimen, Option<GlueSetRatio>) {
-    match layout {
+    match *layout {
         // If we just want the box at its natural dimension, we just return the
         // "space" component of our dimension.
-        &BoxLayout::Natural => (glue.space, None),
+        BoxLayout::Natural => (glue.space, None),
 
-        &BoxLayout::Fixed(final_dimen) => {
+        BoxLayout::Fixed(final_dimen) => {
             let natural_dimen = glue.space;
 
             // If the natural dimension of the box exactly equals the desired
@@ -81,7 +81,7 @@ fn get_set_dimen_and_ratio(
                 )
             }
         }
-        &BoxLayout::Spread(spread_needed) => {
+        BoxLayout::Spread(spread_needed) => {
             // If we're spreading the box, we just need to figure out if
             // we're stretching or shrinking, since we already know the
             // amount of spread.
@@ -133,11 +133,11 @@ impl<'a> Parser<'a> {
         let (set_width, set_ratio) = get_set_dimen_and_ratio(width, layout);
 
         HorizontalBox {
-            height: height,
-            depth: depth,
+            height,
+            depth,
             width: set_width,
 
-            list: list,
+            list,
             glue_set_ratio: set_ratio,
         }
     }
@@ -229,9 +229,9 @@ impl<'a> Parser<'a> {
         VerticalBox {
             height: set_height,
             depth: prev_depth,
-            width: width,
+            width,
 
-            list: list,
+            list,
             glue_set_ratio: glue_set,
         }
     }

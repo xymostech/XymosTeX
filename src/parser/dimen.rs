@@ -137,7 +137,7 @@ impl<'a> Parser<'a> {
                         // If we've already seen a decimal point, then add to
                         // our final value the new value times the current
                         // factor.
-                        value = value + token_value * decimal_factor;
+                        value += token_value * decimal_factor;
                         // And then the next digit should have 1/10 the impact,
                         // so devide our factor by 10.
                         decimal_factor /= 10.0;
@@ -390,6 +390,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn it_parses_decimals() {
         with_parser(
             &[

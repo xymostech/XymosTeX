@@ -17,14 +17,14 @@ enum PlainLexResult {
 }
 
 fn is_hex_char(ch: char) -> bool {
-    return ('0' <= ch && ch <= '9') || ('a' <= ch && ch <= 'f');
+    ('0' <= ch && ch <= '9') || ('a' <= ch && ch <= 'f')
 }
 
 fn hex_value(ch: char) -> u8 {
     if '0' <= ch && ch <= '9' {
-        (ch as u8) - ('0' as u8)
+        (ch as u8) - (b'0')
     } else if 'a' <= ch && ch <= 'f' {
-        (ch as u8) - ('a' as u8) + 10
+        (ch as u8) - (b'a') + 10
     } else {
         panic!("Illegal hex char: {}", ch);
     }
@@ -50,17 +50,17 @@ impl<'a> Lexer<'a> {
             .map(|s| {
                 let mut line = s.to_string();
                 line.push('\n');
-                return line.chars().collect();
+                line.chars().collect()
             })
             .collect();
 
-        return Lexer {
-            source: source,
+        Lexer {
+            source,
             row: 0,
             col: 0,
             lex_state: LexState::BeginningLine,
-            state: state,
-        };
+            state,
+        }
     }
 
     fn get_plain_char(&mut self) -> PlainLexResult {
@@ -78,7 +78,7 @@ impl<'a> Lexer<'a> {
 
         let ch = line[self.col];
         self.col += 1;
-        return PlainLexResult::Char(ch);
+        PlainLexResult::Char(ch)
     }
 
     fn unget_plain_char(&mut self, ch: &PlainLexResult) {

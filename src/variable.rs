@@ -9,7 +9,7 @@ pub enum IntegerVariable {
 impl IntegerVariable {
     pub fn set(&self, state: &TeXState, global: bool, value: i32) {
         match self {
-            IntegerVariable::CountRegister(index) => {
+            Self::CountRegister(index) => {
                 state.set_count(global, *index, value)
             }
         }
@@ -17,7 +17,7 @@ impl IntegerVariable {
 
     pub fn get(&self, state: &TeXState) -> i32 {
         match self {
-            IntegerVariable::CountRegister(index) => state.get_count(*index),
+            Self::CountRegister(index) => state.get_count(*index),
         }
     }
 }
@@ -32,31 +32,31 @@ pub enum DimenVariable {
 impl DimenVariable {
     pub fn get(&self, state: &TeXState) -> Dimen {
         match self {
-            DimenVariable::BoxWidth(index) => state
-                .with_box(*index, |tex_box| tex_box.width().clone())
-                .unwrap_or(Dimen::zero()),
-            DimenVariable::BoxHeight(index) => state
-                .with_box(*index, |tex_box| tex_box.height().clone())
-                .unwrap_or(Dimen::zero()),
-            DimenVariable::BoxDepth(index) => state
-                .with_box(*index, |tex_box| tex_box.depth().clone())
-                .unwrap_or(Dimen::zero()),
+            Self::BoxWidth(index) => state
+                .with_box(*index, |tex_box| *tex_box.width())
+                .unwrap_or_else(Dimen::zero),
+            Self::BoxHeight(index) => state
+                .with_box(*index, |tex_box| *tex_box.height())
+                .unwrap_or_else(Dimen::zero),
+            Self::BoxDepth(index) => state
+                .with_box(*index, |tex_box| *tex_box.depth())
+                .unwrap_or_else(Dimen::zero),
         }
     }
 
     pub fn set(&self, state: &TeXState, _global: bool, new_dimen: Dimen) {
         match self {
-            DimenVariable::BoxWidth(index) => {
+            Self::BoxWidth(index) => {
                 state.with_box(*index, |tex_box| {
                     *tex_box.mut_width() = new_dimen
                 });
             }
-            DimenVariable::BoxHeight(index) => {
+            Self::BoxHeight(index) => {
                 state.with_box(*index, |tex_box| {
                     *tex_box.mut_height() = new_dimen
                 });
             }
-            DimenVariable::BoxDepth(index) => {
+            Self::BoxDepth(index) => {
                 state.with_box(*index, |tex_box| {
                     *tex_box.mut_depth() = new_dimen
                 });

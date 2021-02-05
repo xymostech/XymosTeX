@@ -88,10 +88,7 @@ impl<'a> Parser<'a> {
             let token = self.lex_expanded_token();
             match token {
                 Some(ref tok)
-                    if token_equals_keyword_char(tok, keyword_char) =>
-                {
-                    ()
-                }
+                    if token_equals_keyword_char(tok, keyword_char) => {}
                 _ => panic!(
                     "Found invalid token {:?} while parsing keyword {}",
                     token, keyword

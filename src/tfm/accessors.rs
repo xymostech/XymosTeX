@@ -45,7 +45,7 @@ impl TFMFile {
         )
     }
 
-    pub fn get_checksum(&self) -> u32 {
+    pub const fn get_checksum(&self) -> u32 {
         self.header.checksum
     }
 }

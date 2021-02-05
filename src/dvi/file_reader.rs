@@ -20,7 +20,7 @@ macro_rules! generate_int_reader_func {
 
 impl<T: io::Read> DVIFileReader<T> {
     pub fn new(reader: T) -> Self {
-        DVIFileReader { reader: reader }
+        DVIFileReader { reader }
     }
 
     generate_int_reader_func!(fn read_1_byte_unsigned() -> u8, 1);

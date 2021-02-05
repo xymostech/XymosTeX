@@ -23,8 +23,8 @@ impl Macro {
         replacement_list: Vec<MacroListElem>,
     ) -> Macro {
         let makro: Macro = Macro {
-            parameter_list: parameter_list,
-            replacement_list: replacement_list,
+            parameter_list,
+            replacement_list,
         };
 
         makro.validate();

@@ -22,15 +22,15 @@ pub fn is_token_hex_digit(token: &Token) -> bool {
 pub fn token_digit_value(token: &Token) -> u8 {
     if let Token::Char(ch, Category::Other) = token {
         if *ch >= '0' && *ch <= '9' {
-            (*ch as u8) - ('0' as u8)
+            (*ch as u8) - (b'0')
         } else if *ch >= 'A' && *ch <= 'F' {
-            (*ch as u8) - ('A' as u8) + 10
+            (*ch as u8) - (b'A') + 10
         } else {
             panic!("Invalid token digit: {}", ch);
         }
     } else if let Token::Char(ch, Category::Letter) = token {
         if *ch >= 'A' && *ch <= 'F' {
-            (*ch as u8) - ('A' as u8) + 10
+            (*ch as u8) - (b'A') + 10
         } else {
             panic!("Invalid token digit: {}", ch);
         }
@@ -331,7 +331,7 @@ mod tests {
             );
             assert_eq!(
                 parser.parse_number(),
-                -1 * metrics.get_height('g').as_scaled_points()
+                -metrics.get_height('g').as_scaled_points()
             );
         });
     }

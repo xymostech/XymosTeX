@@ -19,9 +19,9 @@ impl<'a> Parser<'a> {
         }
 
         Glue {
-            space: space,
-            stretch: stretch,
-            shrink: shrink,
+            space,
+            stretch,
+            shrink,
         }
     }
 }

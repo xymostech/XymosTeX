@@ -36,6 +36,10 @@ impl Add for Glue {
 
 impl Sub for Glue {
     type Output = Glue;
+
+    // We dispatch to the Add impl to do subtraction here, so this isn't
+    // suspicious
+    #[allow(clippy::suspicious_arithmetic_impl)]
     fn sub(self, mut other: Glue) -> Glue {
         other.space = other.space * -1;
         other.stretch = other.stretch * -1;

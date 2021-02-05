@@ -29,7 +29,7 @@ macro_rules! generate_int_writer_func {
 
 impl<T: io::Write> DVIFileWriter<T> {
     pub fn new(writer: T) -> Self {
-        DVIFileWriter { writer: writer }
+        DVIFileWriter { writer }
     }
 
     generate_int_writer_func!(fn write_1_byte_unsigned(u8, 0, 1));
@@ -342,10 +342,7 @@ mod tests {
 
         assert_eq!(
             output,
-            vec![
-                'h' as u8, 'e' as u8, 'l' as u8, 'h' as u8, 'e' as u8,
-                'l' as u8, 'l' as u8, 'o' as u8, 0x00,
-            ]
+            vec![b'h', b'e', b'l', b'h', b'e', b'l', b'l', b'o', 0x00,]
         );
     }
 
@@ -360,7 +357,7 @@ mod tests {
                     num: 25400000,
                     den: 473628672,
                     mag: 1000,
-                    comment: vec!['h' as u8, 'i' as u8],
+                    comment: vec![b'h', b'i'],
                 },
                 DVICommand::Bop {
                     cs: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -433,7 +430,7 @@ mod tests {
                 1, 131, 146, 192,
                 28, 59, 0, 0,
                 0, 0, 3, 232,
-                2, 'h' as u8, 'i' as u8,
+                2, b'h', b'i',
 
                 // bop
                 139,
@@ -463,7 +460,7 @@ mod tests {
                 0, 10, 0, 0,
                 0,
                 5,
-                'c' as u8, 'm' as u8, 'r' as u8, '1' as u8, '0' as u8,
+                b'c', b'm', b'r', b'1', b'0',
 
                 // fnt_num 63
                 234,
@@ -532,7 +529,7 @@ mod tests {
                 0, 10, 0, 0,
                 0,
                 5,
-                'c' as u8, 'm' as u8, 'r' as u8, '1' as u8, '0' as u8,
+                b'c', b'm', b'r', b'1', b'0',
 
                 // post_post
                 249,

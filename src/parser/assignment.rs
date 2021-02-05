@@ -494,13 +494,11 @@ mod tests {
                 parser.parse_assignment();
 
                 assert_eq!(
-                    parser.state.with_box(0, |tex_box| tex_box.width().clone()),
+                    parser.state.with_box(0, |tex_box| *tex_box.width()),
                     Some(Dimen::from_unit(2.0, Unit::Point))
                 );
                 assert_eq!(
-                    parser
-                        .state
-                        .with_box(0, |tex_box| tex_box.height().clone()),
+                    parser.state.with_box(0, |tex_box| *tex_box.height()),
                     Some(Dimen::from_unit(3.0, Unit::Point))
                 );
             },

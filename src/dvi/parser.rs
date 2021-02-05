@@ -6,6 +6,9 @@ use crate::dvi::file_reader::DVIFileReader;
 
 impl DVICommand {
     /// Read a single DVI command from a file
+    // The argument names are taken from the dvi spec, so we leave them
+    // single-character to aid in reading
+    #[allow(clippy::many_single_char_names)]
     fn read_from<T: io::Read>(
         reader: &mut DVIFileReader<T>,
     ) -> io::Result<Option<Self>> {
@@ -28,12 +31,12 @@ impl DVICommand {
             // bop
             139 => {
                 let mut cs = [0; 10];
-                for i in 0..10 {
-                    cs[i] = reader.read_4_bytes_signed()?;
+                for c in &mut cs {
+                    *c = reader.read_4_bytes_signed()?;
                 }
                 let p = reader.read_4_bytes_signed()?;
 
-                Ok(Some(DVICommand::Bop { cs: cs, pointer: p }))
+                Ok(Some(DVICommand::Bop { cs, pointer: p }))
             }
             // eop
             140 => Ok(Some(DVICommand::Eop)),
@@ -159,9 +162,9 @@ impl DVICommand {
 
                 Ok(Some(DVICommand::Pre {
                     format: i,
-                    num: num,
-                    den: den,
-                    mag: mag,
+                    num,
+                    den,
+                    mag,
                     comment: x,
                 }))
             }
@@ -178,9 +181,9 @@ impl DVICommand {
 
                 Ok(Some(DVICommand::Post {
                     pointer: p,
-                    num: num,
-                    den: den,
-                    mag: mag,
+                    num,
+                    den,
+                    mag,
                     max_page_height: l,
                     max_page_width: u,
                     max_stack_depth: s,
@@ -193,7 +196,7 @@ impl DVICommand {
                 let i = reader.read_1_byte_unsigned()?;
 
                 let mut num_223s = 0;
-                while let Ok(_) = reader.read_1_byte_unsigned() {
+                while reader.read_1_byte_unsigned().is_ok() {
                     num_223s += 1;
                 }
 
@@ -218,7 +221,7 @@ impl DVIFile {
         while let Some(command) = DVICommand::read_from(&mut file_reader)? {
             commands.push(command);
         }
-        Ok(DVIFile { commands: commands })
+        Ok(DVIFile { commands })
     }
 }
 
@@ -239,7 +242,7 @@ mod tests {
                 1, 131, 146, 192,
                 28, 59, 0, 0,
                 0, 0, 3, 232,
-                2, 'h' as u8, 'i' as u8,
+                2, b'h', b'i',
 
                 // bop
                 139,
@@ -269,7 +272,7 @@ mod tests {
                 0, 10, 0, 0,
                 0,
                 5,
-                'c' as u8, 'm' as u8, 'r' as u8, '1' as u8, '0' as u8,
+                b'c', b'm', b'r', b'1', b'0',
 
                 // fnt_num 63
                 234,
@@ -338,7 +341,7 @@ mod tests {
                 0, 10, 0, 0,
                 0,
                 5,
-                'c' as u8, 'm' as u8, 'r' as u8, '1' as u8, '0' as u8,
+                b'c', b'm', b'r', b'1', b'0',
 
                 // post_post
                 249,
@@ -358,7 +361,7 @@ mod tests {
                         num: 25400000,
                         den: 473628672,
                         mag: 1000,
-                        comment: vec!['h' as u8, 'i' as u8],
+                        comment: vec![b'h', b'i'],
                     },
                     DVICommand::Bop {
                         cs: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],

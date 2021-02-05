@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 #[macro_use]
 extern crate lazy_static;
 
@@ -51,7 +53,7 @@ fn main() -> io::Result<()> {
     file_writer.start(
         (25400000, 473628672),
         1000,
-        "Made by XymosTeX".as_bytes().to_vec(),
+        b"Made by XymosTeX".to_vec(),
     );
 
     let result = parser.parse_outer_vertical_box();

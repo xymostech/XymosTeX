@@ -5,12 +5,12 @@ use crate::tfm::file_reader::TeXFileReader;
 use crate::tfm::*;
 
 impl TFMFile {
-    pub fn from_path(path: &str) -> io::Result<TFMFile> {
+    pub fn from_path(path: &str) -> io::Result<Self> {
         let file = fs::File::open(path)?;
-        TFMFile::new(file)
+        Self::new(file)
     }
 
-    pub fn new<T: io::Read>(reader: T) -> io::Result<TFMFile> {
+    pub fn new<T: io::Read>(reader: T) -> io::Result<Self> {
         let mut file_reader = TeXFileReader::new(reader);
 
         let file_length = file_reader.read_16bit_int()?;
@@ -47,46 +47,46 @@ impl TFMFile {
              the file length"
         );
 
-        let header = TFMFile::read_header(&mut file_reader)?;
+        let header = Self::read_header(&mut file_reader)?;
 
         let char_infos: Vec<CharInfoEntry> = (first_char..last_char + 1)
-            .map(|_| TFMFile::read_char_info(&mut file_reader))
+            .map(|_| Self::read_char_info(&mut file_reader))
             .collect::<io::Result<Vec<_>>>()?;
 
-        let widths = TFMFile::read_n_fixnums(&mut file_reader, num_widths)?;
-        let heights = TFMFile::read_n_fixnums(&mut file_reader, num_heights)?;
-        let depths = TFMFile::read_n_fixnums(&mut file_reader, num_depths)?;
+        let widths = Self::read_n_fixnums(&mut file_reader, num_widths)?;
+        let heights = Self::read_n_fixnums(&mut file_reader, num_heights)?;
+        let depths = Self::read_n_fixnums(&mut file_reader, num_depths)?;
         let italic_corrections =
-            TFMFile::read_n_fixnums(&mut file_reader, num_italic_corrections)?;
+            Self::read_n_fixnums(&mut file_reader, num_italic_corrections)?;
 
         let lig_kern_steps = (0..num_lig_kerns)
-            .map(|_| TFMFile::read_lig_kern_step(&mut file_reader))
+            .map(|_| Self::read_lig_kern_step(&mut file_reader))
             .collect::<io::Result<Vec<_>>>()?;
 
-        let kerns = TFMFile::read_n_fixnums(&mut file_reader, num_kerns)?;
+        let kerns = Self::read_n_fixnums(&mut file_reader, num_kerns)?;
 
         let ext_recipes = (0..num_ext_recipes)
-            .map(|_| TFMFile::read_extensible_recipe(&mut file_reader))
+            .map(|_| Self::read_extensible_recipe(&mut file_reader))
             .collect::<io::Result<Vec<_>>>()?;
 
         let font_parameters =
-            TFMFile::read_n_fixnums(&mut file_reader, num_params)?;
+            Self::read_n_fixnums(&mut file_reader, num_params)?;
 
-        Ok(TFMFile {
+        Ok(Self {
             first_char: first_char as usize,
             last_char: last_char as usize,
 
-            header: header,
+            header,
 
-            char_infos: char_infos,
-            widths: widths,
-            heights: heights,
-            depths: depths,
-            italic_corrections: italic_corrections,
-            lig_kern_steps: lig_kern_steps,
-            kerns: kerns,
-            ext_recipes: ext_recipes,
-            font_parameters: font_parameters,
+            char_infos,
+            widths,
+            heights,
+            depths,
+            italic_corrections,
+            lig_kern_steps,
+            kerns,
+            ext_recipes,
+            font_parameters,
         })
     }
 
@@ -102,12 +102,12 @@ impl TFMFile {
         let parc_face_byte = file_reader.read_8bit_int()?;
 
         Ok(TFMHeader {
-            checksum: checksum,
-            design_size: design_size,
-            coding_scheme: coding_scheme,
-            parc_font_identifier: parc_font_identifier,
-            seven_bit_safe: seven_bit_safe,
-            parc_face_byte: parc_face_byte,
+            checksum,
+            design_size,
+            coding_scheme,
+            parc_font_identifier,
+            seven_bit_safe,
+            parc_face_byte,
         })
     }
 
@@ -145,7 +145,7 @@ impl TFMFile {
             height_index: height_index as usize,
             depth_index: depth_index as usize,
             italic_correction_index: italic_correction_index as usize,
-            kind: kind,
+            kind,
         })
     }
 
@@ -175,9 +175,9 @@ impl TFMFile {
         };
 
         Ok(LigKernStep {
-            stop: stop,
+            stop,
             next_char: next_char as usize,
-            kind: kind,
+            kind,
         })
     }
 
@@ -189,12 +189,7 @@ impl TFMFile {
         let bot = file_reader.read_8bit_int()? as usize;
         let ext = file_reader.read_8bit_int()? as usize;
 
-        Ok(ExtRecipe {
-            top: top,
-            mid: mid,
-            bot: bot,
-            ext: ext,
-        })
+        Ok(ExtRecipe { top, mid, bot, ext })
     }
 }
 

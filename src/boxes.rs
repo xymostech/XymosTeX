@@ -37,7 +37,7 @@ pub struct GlueSetRatio {
 impl GlueSetRatio {
     pub fn from(kind: GlueSetRatioKind, ratio: f64) -> GlueSetRatio {
         GlueSetRatio {
-            kind: kind,
+            kind,
             stretch: (ratio * 65536.0) as i32,
         }
     }
@@ -94,7 +94,7 @@ impl HorizontalBox {
         // Since `to_chars()` is really just for early debugging, this is a
         // special rule for adding a space when we encounter an 'indent' box,
         // which is an empty box with positive width.
-        if self.list.len() == 0 && self.width > Dimen::zero() {
+        if self.list.is_empty() && self.width > Dimen::zero() {
             return vec![' '];
         }
 
@@ -269,7 +269,7 @@ mod tests {
             list: vec![
                 VerticalListElem::Box(inner_hbox.clone()),
                 VerticalListElem::VSkip(Glue::from_dimen(Dimen::zero())),
-                VerticalListElem::Box(inner_hbox.clone()),
+                VerticalListElem::Box(inner_hbox),
             ],
             glue_set_ratio: None,
         });

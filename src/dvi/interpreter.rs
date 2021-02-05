@@ -5,7 +5,6 @@ use super::file::{DVICommand, DVIFile};
 use crate::dimension::Dimen;
 use crate::font::Font;
 use crate::font_metrics::FontMetrics;
-use crate::paths::get_path_to_font;
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub enum DVIOutputElement {

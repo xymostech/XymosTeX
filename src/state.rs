@@ -9,7 +9,6 @@ use crate::font::Font;
 use crate::font_metrics::FontMetrics;
 use crate::makro::Macro;
 use crate::math_code::MathCode;
-use crate::paths::get_path_to_font;
 use crate::token::Token;
 
 // A list of all primitive control sequences, used so that we can \let other
@@ -57,7 +56,7 @@ fn is_primitive(maybe_prim: &str) -> bool {
             return true;
         }
     }
-    return false;
+    false
 }
 
 #[derive(Clone)]
@@ -279,7 +278,7 @@ impl TeXStateInner {
             }
         }
 
-        return false;
+        false
     }
 
     fn get_count(&self, register_index: u8) -> i32 {
@@ -747,12 +746,12 @@ mod tests {
             glue_set_ratio: None,
         });
 
-        state.set_box(true, 0, test_box.clone());
+        state.set_box(true, 0, test_box);
         state.push_state();
 
         // We have access to the box
         assert_eq!(
-            state.with_box(0, |box_ref| box_ref.mut_width().clone()),
+            state.with_box(0, |box_ref| *box_ref.mut_width()),
             Some(Dimen::from_unit(3.0, Unit::Point))
         );
 

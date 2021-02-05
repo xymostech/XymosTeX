@@ -22,8 +22,8 @@ impl<'a> Parser<'a> {
     {
         let lexer = Lexer::new(lines, &state);
         Parser {
-            lexer: lexer,
-            state: state,
+            lexer,
+            state,
             upcoming_tokens: Vec::new(),
             conditional_depth: 0,
         }

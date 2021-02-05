@@ -94,7 +94,7 @@ fn it_matches_real_tex_output() {
     file_writer.start(
         (25400000, 473628672),
         1000,
-        "Made by XymosTeX".as_bytes().to_vec(),
+        b"Made by XymosTeX".to_vec(),
     );
 
     with_parser(&lines[..], |parser| {

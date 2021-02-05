@@ -34,7 +34,7 @@ impl<'a> Parser<'a> {
             return true;
         }
 
-        return false;
+        false
     }
 
     fn parse_vertical_list_elem(
@@ -154,7 +154,7 @@ impl<'a> Parser<'a> {
                 // HACK(xymostech): \topskip should be handled in the outer
                 // place where we build pages, but we're doing it here since
                 // that doesn't exist yet.
-                if !internal && result.len() == 0 {
+                if !internal && result.is_empty() {
                     let box_height = tex_box.height();
                     let total_skip =
                         topskip.clone() - Glue::from_dimen(*box_height);
@@ -184,13 +184,13 @@ impl<'a> Parser<'a> {
                 }
 
                 // Keep track of the depth of the most recent box
-                prev_depth = tex_box.depth().clone();
+                prev_depth = *tex_box.depth();
             }
 
             if !internal {
                 if let VerticalListElem::VSkip(_) = elem {
                     // Glue disappears at a page break.
-                    if result.len() != 0 {
+                    if !result.is_empty() {
                         result.push(elem);
                     }
                 } else {

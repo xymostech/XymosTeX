@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io;
 
 use crate::boxes::GlueSetRatio;
 use crate::boxes::TeXBox;
@@ -7,7 +6,6 @@ use crate::dvi::{DVICommand, DVIFile};
 use crate::font::Font;
 use crate::font_metrics::FontMetrics;
 use crate::list::{HorizontalListElem, VerticalListElem};
-use crate::paths::get_path_to_font;
 
 pub struct DVIFileWriter {
     commands: Vec<DVICommand>,
@@ -49,7 +47,7 @@ impl DVIFileWriter {
         let design_size = (metrics.get_design_size() * 65536.0) as u32;
 
         self.commands.push(DVICommand::FntDef4 {
-            font_num: font_num,
+            font_num,
             checksum: metrics.get_checksum(),
 
             scale: font.scale.as_scaled_points() as u32,
@@ -63,12 +61,11 @@ impl DVIFileWriter {
 
     fn add_font_def(&mut self, font: &Font) -> i32 {
         let font_num = self.next_font_num;
-        self.next_font_num = self.next_font_num + 1;
+        self.next_font_num += 1;
 
-        let metrics = FontMetrics::from_font(font).expect(&format!(
-            "Error loading font metrics for {}",
-            font.font_name
-        ));
+        let metrics = FontMetrics::from_font(font).unwrap_or_else(|| {
+            panic!("Error loading font metrics for {}", font.font_name)
+        });
 
         self.add_font_def_with_metrics(font, &metrics, font_num);
         self.font_nums.insert(font.clone(), font_num);
@@ -200,7 +197,7 @@ impl DVIFileWriter {
         let old_last_page_start = self.last_page_start;
         self.last_page_start = self.total_byte_size() as i32;
         self.commands.push(DVICommand::Bop {
-            cs: cs,
+            cs,
             pointer: old_last_page_start,
         });
 
@@ -221,10 +218,10 @@ impl DVIFileWriter {
 
         self.commands.push(DVICommand::Pre {
             format: 2,
-            num: num,
-            den: den,
-            mag: mag,
-            comment: comment,
+            num,
+            den,
+            mag,
+            comment,
         });
     }
 
@@ -243,10 +240,9 @@ impl DVIFileWriter {
         });
 
         for (font, font_num) in std::mem::take(&mut self.font_nums) {
-            let metrics = FontMetrics::from_font(&font).expect(&format!(
-                "Error loading font metrics for {}",
-                font.font_name
-            ));
+            let metrics = FontMetrics::from_font(&font).unwrap_or_else(|| {
+                panic!("Error loading font metrics for {}", font.font_name)
+            });
 
             self.add_font_def_with_metrics(&font, &metrics, font_num);
         }
@@ -382,14 +378,14 @@ mod tests {
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: big_cmr10.clone(),
+                font: big_cmr10,
             },
             &None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
                 chr: 'a',
-                font: small_cmr10.clone(),
+                font: small_cmr10,
             },
             &None,
         );
@@ -758,11 +754,8 @@ mod tests {
             glue_set_ratio: None,
         });
 
-        writer.add_box(&box1.clone());
-        writer.add_horizontal_list_elem(
-            &HorizontalListElem::Box(box1.clone()),
-            &None,
-        );
+        writer.add_box(&box1);
+        writer.add_horizontal_list_elem(&HorizontalListElem::Box(box1), &None);
 
         assert_matches(
             &writer.commands,
@@ -1030,11 +1023,8 @@ mod tests {
             glue_set_ratio: None,
         });
 
-        writer.add_box(&vbox.clone());
-        writer.add_vertical_list_elem(
-            &VerticalListElem::Box(vbox.clone()),
-            &None,
-        );
+        writer.add_box(&vbox);
+        writer.add_vertical_list_elem(&VerticalListElem::Box(vbox), &None);
 
         assert_matches(
             &writer.commands,
@@ -1145,7 +1135,7 @@ mod tests {
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
                 MaybeEquals::Anything,
-                MaybeEquals::Equals(DVICommand::SetCharN('g' as u8)),
+                MaybeEquals::Equals(DVICommand::SetCharN(b'g')),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('g').as_scaled_points(),
@@ -1160,7 +1150,7 @@ mod tests {
                     metrics.get_height('a').as_scaled_points(),
                 )),
                 MaybeEquals::Equals(DVICommand::Push),
-                MaybeEquals::Equals(DVICommand::SetCharN('a' as u8)),
+                MaybeEquals::Equals(DVICommand::SetCharN(b'a')),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('a').as_scaled_points(),
@@ -1175,7 +1165,7 @@ mod tests {
                 )),
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
-                MaybeEquals::Equals(DVICommand::SetCharN('q' as u8)),
+                MaybeEquals::Equals(DVICommand::SetCharN(b'q')),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('q').as_scaled_points(),
@@ -1190,7 +1180,7 @@ mod tests {
                 )),
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
-                MaybeEquals::Equals(DVICommand::SetCharN('a' as u8)),
+                MaybeEquals::Equals(DVICommand::SetCharN(b'a')),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('a').as_scaled_points(),
@@ -1206,11 +1196,7 @@ mod tests {
 
         let metrics = FontMetrics::from_font(&CMR10).unwrap();
 
-        writer.start(
-            (25400000, 473628672),
-            1000,
-            "hello, world!".as_bytes().to_vec(),
-        );
+        writer.start((25400000, 473628672), 1000, b"hello, world!".to_vec());
 
         with_parser(&[r"\vbox{\noindent a}%"], |parser| {
             let page1 = parser.parse_box().unwrap();
@@ -1236,9 +1222,8 @@ mod tests {
                     den: 473628672,
                     mag: 1000,
                     comment: vec![
-                        'h' as u8, 'e' as u8, 'l' as u8, 'l' as u8, 'o' as u8,
-                        ',' as u8, ' ' as u8, 'w' as u8, 'o' as u8, 'r' as u8,
-                        'l' as u8, 'd' as u8, '!' as u8,
+                        b'h', b'e', b'l', b'l', b'o', b',', b' ', b'w', b'o',
+                        b'r', b'l', b'd', b'!',
                     ],
                 }),
                 MaybeEquals::Equals(DVICommand::Bop {
@@ -1251,7 +1236,7 @@ mod tests {
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
                 MaybeEquals::Anything,
-                MaybeEquals::Equals(DVICommand::SetCharN('a' as u8)),
+                MaybeEquals::Equals(DVICommand::SetCharN(b'a')),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('a').as_scaled_points(),
@@ -1421,7 +1406,7 @@ mod tests {
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
                 MaybeEquals::Anything,
-                MaybeEquals::Equals(DVICommand::SetCharN('g' as u8)),
+                MaybeEquals::Equals(DVICommand::SetCharN(b'g')),
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Equals(DVICommand::Down4(
                     -metrics.get_height('b').as_scaled_points()
@@ -1433,7 +1418,7 @@ mod tests {
                     metrics.get_height('b').as_scaled_points(),
                 )),
                 MaybeEquals::Equals(DVICommand::Push),
-                MaybeEquals::Equals(DVICommand::SetCharN('b' as u8)),
+                MaybeEquals::Equals(DVICommand::SetCharN(b'b')),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('b').as_scaled_points(),
@@ -1447,7 +1432,7 @@ mod tests {
                     metrics.get_height('c').as_scaled_points(),
                 )),
                 MaybeEquals::Equals(DVICommand::Push),
-                MaybeEquals::Equals(DVICommand::SetCharN('c' as u8)),
+                MaybeEquals::Equals(DVICommand::SetCharN(b'c')),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('c').as_scaled_points(),

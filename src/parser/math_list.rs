@@ -425,7 +425,7 @@ impl<'a> Parser<'a> {
 
         let mut resulting_horizontal_list: Vec<HorizontalListElem> = Vec::new();
         let mut maybe_last_atom_kind: Option<AtomKind> = None;
-        let mut current_style = start_style.clone();
+        let mut current_style = start_style;
 
         for elem in elems_after_first_pass {
             match elem {
@@ -462,7 +462,7 @@ impl<'a> Parser<'a> {
                     current_style = new_style;
                 }
                 _ => {
-                    panic!("unimplemented math list elem: {:?}");
+                    panic!("unimplemented math list elem: {:?}", elem);
                 }
             }
         }
