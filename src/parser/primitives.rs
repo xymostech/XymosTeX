@@ -179,6 +179,37 @@ impl<'a> Parser<'a> {
         maybe_token
             .map(|token| self.state.get_renamed_token(&token).unwrap_or(token))
     }
+
+    fn parse_file_name_character(&mut self) -> Option<char> {
+        let ch = match self.peek_expanded_token() {
+            Some(Token::Char(ch, _)) => Some(ch),
+            _ => None,
+        }?;
+
+        if '0' <= ch && ch <= '9'
+            || 'a' <= ch && ch <= 'z'
+            || 'A' <= ch && ch <= 'Z'
+            || ch == '-'
+            || ch == '_'
+        {
+            self.lex_expanded_token();
+            Some(ch)
+        } else {
+            None
+        }
+    }
+
+    /// Parses a filename. A filename consists of a consecutive string of
+    /// alphanumeric characters and - and _ of any character token type.
+    pub fn parse_file_name(&mut self) -> String {
+        self.parse_optional_spaces_expanded();
+
+        let mut chars = Vec::new();
+        while let Some(ch) = self.parse_file_name_character() {
+            chars.push(ch);
+        }
+        chars.into_iter().collect::<String>()
+    }
 }
 
 #[cfg(test)]
@@ -348,6 +379,33 @@ mod tests {
                 parser.replace_renamed_token(unreplaced),
                 Some(Token::Char('{', Category::BeginGroup))
             );
+        });
+    }
+
+    #[test]
+    fn it_parses_file_names() {
+        with_parser(&[r"cmr10%"], |parser| {
+            assert_eq!(parser.parse_file_name(), "cmr10".to_string(),);
+        });
+
+        with_parser(&[r"azAZ09%"], |parser| {
+            assert_eq!(parser.parse_file_name(), "azAZ09".to_string(),);
+        });
+
+        with_parser(&[r"a-font_name%"], |parser| {
+            assert_eq!(parser.parse_file_name(), "a-font_name".to_string(),);
+        });
+
+        with_parser(&[r"abcdefghijklmnop%"], |parser| {
+            assert_eq!(
+                parser.parse_file_name(),
+                "abcdefghijklmnop".to_string(),
+            );
+        });
+
+        with_parser(&[r"abc+%"], |parser| {
+            assert_eq!(parser.parse_file_name(), "abc".to_string(),);
+            assert!(parser.lex_unexpanded_token().is_some());
         });
     }
 }

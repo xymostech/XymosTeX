@@ -1,9 +1,18 @@
 use std::rc::Rc;
 
 use crate::category::Category;
+use crate::dimension::Dimen;
+use crate::font::Font;
+use crate::font_metrics::FontMetrics;
 use crate::math_code::MathCode;
 use crate::parser::Parser;
 use crate::token::Token;
+
+enum AtClause {
+    Natural,
+    Scaled(u16),
+    At(Dimen),
+}
 
 impl<'a> Parser<'a> {
     fn is_variable_assignment_head(&mut self) -> bool {
@@ -32,6 +41,10 @@ impl<'a> Parser<'a> {
         self.is_next_expanded_token_in_set_of_primitives(&["mathcode"])
     }
 
+    fn is_font_assignment_head(&mut self) -> bool {
+        self.is_next_expanded_token_in_set_of_primitives(&["font"])
+    }
+
     fn is_simple_assignment_head(&mut self) -> bool {
         self.is_let_assignment_head()
             || self.is_variable_assignment_head()
@@ -39,6 +52,7 @@ impl<'a> Parser<'a> {
             || self.is_box_assignment_head()
             || self.is_shorthand_definition_head()
             || self.is_code_assignment_head()
+            || self.is_font_assignment_head()
     }
 
     fn is_assignment_prefix(&mut self) -> bool {
@@ -190,6 +204,84 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_at_clause(&mut self) -> AtClause {
+        if self.parse_optional_keyword_expanded("at") {
+            let dimen = self.parse_dimen();
+            AtClause::At(dimen)
+        } else if self.parse_optional_keyword_expanded("scaled") {
+            let number = self.parse_number();
+            if number < 0 || number > 32768 {
+                panic!("Invalid magnification: {}", number);
+            }
+            AtClause::Scaled(number as u16)
+        } else {
+            self.parse_optional_spaces_expanded();
+            AtClause::Natural
+        }
+    }
+
+    fn parse_font_assignment(&mut self, global: bool) {
+        let tok = self.lex_expanded_token().unwrap();
+
+        if !self.state.is_token_equal_to_prim(&tok, "font") {
+            panic!("Invalid font assignment head");
+        }
+
+        let fontdef_name = self.parse_unexpanded_control_sequence();
+
+        // The TeXbook says that we need to "take precautions so that
+        // \font\cs=name\cs won't expand the second \cs until the assignments
+        // are done". We don't currently have a way to indicate that a certain
+        // token shouldn't be expanded, so assigning it to \relax and letting
+        // that stop the parsing should work. If someone reassigns \relax, this
+        // won't work correctly, so this should probably be improved at some
+        // point.
+        // TODO: Figure out how to actually prevent expansion of a given token
+        // while parsing the file name.
+        self.state.set_let(
+            false,
+            &fontdef_name,
+            &Token::ControlSequence("relax".to_string()),
+        );
+
+        self.parse_equals_expanded();
+
+        let font_name = self.parse_file_name();
+        let at = self.parse_at_clause();
+
+        let font_metrics = FontMetrics::from_font(&Font {
+            font_name: font_name.clone(),
+            // Since we're only accessing the design size, the scale for
+            // the font doesn't matter here.
+            scale: Dimen::zero(),
+        })
+        .unwrap_or_else(|| panic!("Invalid font name: {}", font_name));
+
+        let design_size = 65536.0 * font_metrics.get_design_size();
+
+        let font = match at {
+            AtClause::Natural => Font {
+                font_name,
+                scale: Dimen::from_scaled_points(design_size as i32),
+            },
+            AtClause::At(dimen) => Font {
+                font_name,
+                scale: dimen,
+            },
+            AtClause::Scaled(magnification) => {
+                let font_scale_sp =
+                    design_size * (magnification as f64) / 1000.0;
+
+                Font {
+                    font_name,
+                    scale: Dimen::from_scaled_points(font_scale_sp as i32),
+                }
+            }
+        };
+
+        self.state.set_fontdef(global, &fontdef_name, &font);
+    }
+
     fn parse_simple_assignment(&mut self, global: bool) {
         if self.is_variable_assignment_head() {
             self.parse_variable_assignment(global)
@@ -203,6 +295,8 @@ impl<'a> Parser<'a> {
             self.parse_shorthand_definition(global)
         } else if self.is_code_assignment_head() {
             self.parse_code_assignment(global)
+        } else if self.is_font_assignment_head() {
+            self.parse_font_assignment(global)
         } else {
             panic!("unimplemented");
         }
@@ -567,5 +661,83 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn it_assigns_fonts() {
+        with_parser(
+            &[
+                r"\font\abc=cmr7%",
+                r"\font\$=cmr10 at 5pt%",
+                r"\font\boo=cmtt10 scaled 2000%",
+            ],
+            |parser| {
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert_eq!(
+                    parser.state.get_fontdef(&Token::ControlSequence(
+                        "abc".to_string()
+                    )),
+                    Some(Font {
+                        font_name: "cmr7".to_string(),
+                        scale: Dimen::from_unit(7.0, Unit::Point),
+                    })
+                );
+
+                assert_eq!(
+                    parser
+                        .state
+                        .get_fontdef(&Token::ControlSequence("$".to_string())),
+                    Some(Font {
+                        font_name: "cmr10".to_string(),
+                        scale: Dimen::from_unit(5.0, Unit::Point),
+                    })
+                );
+
+                assert_eq!(
+                    parser.state.get_fontdef(&Token::ControlSequence(
+                        "boo".to_string()
+                    )),
+                    Some(Font {
+                        font_name: "cmtt10".to_string(),
+                        scale: Dimen::from_unit(20.0, Unit::Point),
+                    })
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_expands_macros_in_font_assignment() {
+        with_parser(&[r"\def\y{10}%", r"\font\z=cmr\y%"], |parser| {
+            parser.parse_assignment();
+            parser.parse_assignment();
+
+            assert_eq!(
+                parser
+                    .state
+                    .get_fontdef(&Token::ControlSequence("z".to_string())),
+                Some(Font {
+                    font_name: "cmr10".to_string(),
+                    scale: Dimen::from_unit(10.0, Unit::Point),
+                })
+            );
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid font name: cmr")]
+    fn it_does_not_expand_the_assigned_font_name_in_font_assignment() {
+        with_parser(&[r"\def\x{10}%", r"\font\x=cmr\x%"], |parser| {
+            parser.parse_assignment();
+            parser.parse_assignment();
+        });
     }
 }

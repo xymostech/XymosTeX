@@ -48,6 +48,7 @@ const ALL_PRIMITIVES: &[&str] = &[
     "textstyle",
     "scriptstyle",
     "scriptscriptstyle",
+    "font",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {
@@ -65,6 +66,7 @@ enum TokenDefinition {
     Token(Token),
     MathCode(MathCode),
     Primitive(&'static str),
+    Font(Font),
 }
 
 // This contains all of the mutable state about our TeX environment
@@ -297,6 +299,21 @@ impl TeXStateInner {
         self.current_font.clone()
     }
 
+    fn set_fontdef(&mut self, token: &Token, font: &Font) {
+        self.token_definition_map
+            .insert(token.clone(), TokenDefinition::Font(font.clone()));
+    }
+
+    fn get_fontdef(&self, token: &Token) -> Option<Font> {
+        if let Some(TokenDefinition::Font(font)) =
+            self.token_definition_map.get(token)
+        {
+            Some(font.clone())
+        } else {
+            None
+        }
+    }
+
     fn get_box(&self, box_index: u8) -> Option<TeXBox> {
         self.box_registers
             .get(&box_index)
@@ -401,9 +418,11 @@ impl TeXStateStack {
     generate_inner_func!(fn get_count(register_index: u8) -> i32);
     generate_inner_global_func!(fn set_count(global: bool, register_index: u8, value: i32));
     generate_inner_func!(fn get_current_font() -> Font);
-
+    generate_inner_global_func!(fn set_fontdef(global: bool, token: &Token, font: &Font));
+    generate_inner_func!(fn get_fontdef(token: &Token) -> Option<Font>);
     generate_inner_func!(fn get_box(box_index: u8) -> Option<TeXBox>);
     generate_inner_func!(fn get_box_copy(box_index: u8) -> Option<TeXBox>);
+
     // Because globally setting boxes means that we should share references
     // between the different stack levels, we can't handle generating this
     // function automatically with `generate_inner_global_func!()`.
@@ -491,7 +510,8 @@ impl TeXState {
     generate_stack_func!(fn get_count(register_index: u8) -> i32);
     generate_stack_func!(fn set_count(global: bool, register_index: u8, value: i32));
     generate_stack_func!(fn get_current_font() -> Font);
-
+    generate_stack_func!(fn set_fontdef(global: bool, token: &Token, font: &Font));
+    generate_stack_func!(fn get_fontdef(token: &Token) -> Option<Font>);
     generate_stack_func!(fn get_box(box_index: u8) -> Option<TeXBox>);
     generate_stack_func!(fn get_box_copy(box_index: u8) -> Option<TeXBox>);
     generate_stack_func!(fn set_box(global: bool, box_index: u8, tex_box: TeXBox));
@@ -809,5 +829,27 @@ mod tests {
         };
 
         assert_eq!(state.get_metrics_for_font(&fake_font).is_none(), true);
+    }
+
+    #[test]
+    fn it_gets_and_sets_fonts_correctly() {
+        let state = TeXState::new();
+
+        state.set_fontdef(
+            false,
+            &Token::ControlSequence("abc".to_string()),
+            &Font {
+                font_name: "cmr7".to_string(),
+                scale: Dimen::from_unit(7.0, Unit::Point),
+            },
+        );
+
+        assert_eq!(
+            state.get_fontdef(&Token::ControlSequence("abc".to_string())),
+            Some(Font {
+                font_name: "cmr7".to_string(),
+                scale: Dimen::from_unit(7.0, Unit::Point),
+            })
+        );
     }
 }
