@@ -299,6 +299,10 @@ impl TeXStateInner {
         self.current_font.clone()
     }
 
+    fn set_current_font(&mut self, font: &Font) {
+        self.current_font = font.clone();
+    }
+
     fn set_fontdef(&mut self, token: &Token, font: &Font) {
         self.token_definition_map
             .insert(token.clone(), TokenDefinition::Font(font.clone()));
@@ -418,6 +422,7 @@ impl TeXStateStack {
     generate_inner_func!(fn get_count(register_index: u8) -> i32);
     generate_inner_global_func!(fn set_count(global: bool, register_index: u8, value: i32));
     generate_inner_func!(fn get_current_font() -> Font);
+    generate_inner_global_func!(fn set_current_font(global: bool, font: &Font));
     generate_inner_global_func!(fn set_fontdef(global: bool, token: &Token, font: &Font));
     generate_inner_func!(fn get_fontdef(token: &Token) -> Option<Font>);
     generate_inner_func!(fn get_box(box_index: u8) -> Option<TeXBox>);
@@ -510,6 +515,7 @@ impl TeXState {
     generate_stack_func!(fn get_count(register_index: u8) -> i32);
     generate_stack_func!(fn set_count(global: bool, register_index: u8, value: i32));
     generate_stack_func!(fn get_current_font() -> Font);
+    generate_stack_func!(fn set_current_font(global: bool, font: &Font));
     generate_stack_func!(fn set_fontdef(global: bool, token: &Token, font: &Font));
     generate_stack_func!(fn get_fontdef(token: &Token) -> Option<Font>);
     generate_stack_func!(fn get_box(box_index: u8) -> Option<TeXBox>);
@@ -850,6 +856,27 @@ mod tests {
                 font_name: "cmr7".to_string(),
                 scale: Dimen::from_unit(7.0, Unit::Point),
             })
+        );
+    }
+
+    #[test]
+    fn it_gets_and_sets_the_current_font_correctly() {
+        let state = TeXState::new();
+
+        state.set_current_font(
+            false,
+            &Font {
+                font_name: "cmr10".to_string(),
+                scale: Dimen::from_unit(5.0, Unit::Point),
+            },
+        );
+
+        assert_eq!(
+            state.get_current_font(),
+            Font {
+                font_name: "cmr10".to_string(),
+                scale: Dimen::from_unit(5.0, Unit::Point),
+            }
         );
     }
 }

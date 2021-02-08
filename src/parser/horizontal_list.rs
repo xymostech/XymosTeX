@@ -627,4 +627,55 @@ mod tests {
             },
         );
     }
+
+    #[test]
+    fn it_uses_current_font_for_characters() {
+        let cmr7 = Font {
+            font_name: "cmr7".to_string(),
+            scale: Dimen::from_unit(7.0, Unit::Point),
+        };
+
+        with_parser(
+            &[
+                r"\font\a=cmr10%",
+                r"\font\b=cmr7%",
+                r"\a a{b\b c}d{e\global\b f}g%",
+            ],
+            |parser| {
+                assert_eq!(
+                    parser.parse_horizontal_list(false, false),
+                    &[
+                        HorizontalListElem::Char {
+                            chr: 'a',
+                            font: CMR10.clone(),
+                        },
+                        HorizontalListElem::Char {
+                            chr: 'b',
+                            font: CMR10.clone(),
+                        },
+                        HorizontalListElem::Char {
+                            chr: 'c',
+                            font: cmr7.clone(),
+                        },
+                        HorizontalListElem::Char {
+                            chr: 'd',
+                            font: CMR10.clone(),
+                        },
+                        HorizontalListElem::Char {
+                            chr: 'e',
+                            font: CMR10.clone(),
+                        },
+                        HorizontalListElem::Char {
+                            chr: 'f',
+                            font: cmr7.clone(),
+                        },
+                        HorizontalListElem::Char {
+                            chr: 'g',
+                            font: cmr7.clone(),
+                        },
+                    ]
+                );
+            },
+        );
+    }
 }

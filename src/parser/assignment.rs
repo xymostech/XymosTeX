@@ -45,6 +45,13 @@ impl<'a> Parser<'a> {
         self.is_next_expanded_token_in_set_of_primitives(&["font"])
     }
 
+    fn is_fontdef_assignment_head(&mut self) -> bool {
+        match self.peek_expanded_token() {
+            Some(tok) => self.state.get_fontdef(&tok).is_some(),
+            None => false,
+        }
+    }
+
     fn is_simple_assignment_head(&mut self) -> bool {
         self.is_let_assignment_head()
             || self.is_variable_assignment_head()
@@ -53,6 +60,7 @@ impl<'a> Parser<'a> {
             || self.is_shorthand_definition_head()
             || self.is_code_assignment_head()
             || self.is_font_assignment_head()
+            || self.is_fontdef_assignment_head()
     }
 
     fn is_assignment_prefix(&mut self) -> bool {
@@ -282,6 +290,12 @@ impl<'a> Parser<'a> {
         self.state.set_fontdef(global, &fontdef_name, &font);
     }
 
+    fn parse_fontdef_assignment(&mut self, global: bool) {
+        let tok = self.lex_expanded_token().unwrap();
+        let font = self.state.get_fontdef(&tok).unwrap();
+        self.state.set_current_font(global, &font);
+    }
+
     fn parse_simple_assignment(&mut self, global: bool) {
         if self.is_variable_assignment_head() {
             self.parse_variable_assignment(global)
@@ -297,6 +311,8 @@ impl<'a> Parser<'a> {
             self.parse_code_assignment(global)
         } else if self.is_font_assignment_head() {
             self.parse_font_assignment(global)
+        } else if self.is_fontdef_assignment_head() {
+            self.parse_fontdef_assignment(global)
         } else {
             panic!("unimplemented");
         }
@@ -739,5 +755,71 @@ mod tests {
             parser.parse_assignment();
             parser.parse_assignment();
         });
+    }
+
+    #[test]
+    fn it_sets_current_fonts() {
+        with_parser(
+            &[
+                r"\font\a=cmr10\a%",
+                r"\font\b=cmr7 scaled 2000\b%",
+                r"\font\c=cmtt10 at 5pt\c%",
+                r"\let\x=\a%",
+                r"\x%",
+            ],
+            |parser| {
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert_eq!(
+                    parser.state.get_current_font(),
+                    Font {
+                        font_name: "cmr10".to_string(),
+                        scale: Dimen::from_unit(10.0, Unit::Point),
+                    }
+                );
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert_eq!(
+                    parser.state.get_current_font(),
+                    Font {
+                        font_name: "cmr7".to_string(),
+                        scale: Dimen::from_unit(14.0, Unit::Point),
+                    }
+                );
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert_eq!(
+                    parser.state.get_current_font(),
+                    Font {
+                        font_name: "cmtt10".to_string(),
+                        scale: Dimen::from_unit(5.0, Unit::Point),
+                    }
+                );
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment();
+
+                assert_eq!(
+                    parser.state.get_current_font(),
+                    Font {
+                        font_name: "cmr10".to_string(),
+                        scale: Dimen::from_unit(10.0, Unit::Point),
+                    }
+                );
+            },
+        );
     }
 }
