@@ -476,6 +476,27 @@ mod tests {
     use super::*;
     use crate::testing::with_parser;
 
+    fn assert_math_list_converts_to_horizontal_list(
+        math_list_lines: &[&str],
+        horizontal_list_lines: &[&str],
+    ) {
+        with_parser(math_list_lines, |math_parser| {
+            with_parser(horizontal_list_lines, |hlist_parser| {
+                let math_list = math_parser.parse_math_list();
+                let horizontal_list =
+                    hlist_parser.parse_horizontal_list(false, false);
+
+                assert_eq!(
+                    math_parser.convert_math_list_to_horizontal_list(
+                        math_list,
+                        MathStyle::TextStyle
+                    ),
+                    horizontal_list
+                );
+            });
+        });
+    }
+
     #[test]
     fn it_parses_math_symbols() {
         with_parser(&["a2*%"], |parser| {
@@ -848,50 +869,20 @@ mod tests {
 
     #[test]
     fn it_produces_empty_horizontal_lists_from_empty_math_lists() {
-        with_parser(&[r"%"], |parser| {
-            let math_list = parser.parse_math_list();
-            assert_eq!(
-                parser.convert_math_list_to_horizontal_list(
-                    math_list,
-                    MathStyle::TextStyle
-                ),
-                vec![]
-            );
-        });
+        assert_math_list_converts_to_horizontal_list(&[r"%"], &[r"%"]);
     }
 
     #[test]
     fn it_produces_single_characters_from_single_atom_math_lists() {
-        with_parser(&[r"\hbox{a}a%"], |parser| {
-            let hbox = parser.parse_box().unwrap();
-            let math_list = parser.parse_math_list();
-            assert_eq!(
-                parser.convert_math_list_to_horizontal_list(
-                    math_list,
-                    MathStyle::TextStyle
-                ),
-                vec![HorizontalListElem::Box(hbox)]
-            );
-        });
+        assert_math_list_converts_to_horizontal_list(&[r"a%"], &[r"\hbox{a}%"]);
     }
 
     #[test]
     fn it_produces_multiple_characters_from_multiple_ord_math_lists() {
-        with_parser(&[r"\hbox{a}\hbox{b}ab%"], |parser| {
-            let hbox_a = parser.parse_box().unwrap();
-            let hbox_b = parser.parse_box().unwrap();
-            let math_list = parser.parse_math_list();
-            assert_eq!(
-                parser.convert_math_list_to_horizontal_list(
-                    math_list,
-                    MathStyle::TextStyle
-                ),
-                vec![
-                    HorizontalListElem::Box(hbox_a),
-                    HorizontalListElem::Box(hbox_b)
-                ]
-            );
-        });
+        assert_math_list_converts_to_horizontal_list(
+            &[r"ab%"],
+            &[r"\hbox{a}\hbox{b}%"],
+        );
     }
 
     #[test]
@@ -903,9 +894,24 @@ mod tests {
         // n = open
         // c = close
         // t = punct
-        with_parser(
+        assert_math_list_converts_to_horizontal_list(
             &[
-                r"\hbox{%",
+                r#"\mathcode`o="016F%"#,
+                r#"\mathcode`p="1170%"#,
+                r#"\mathcode`b="2162%"#,
+                r#"\mathcode`r="3172%"#,
+                r#"\mathcode`n="416E%"#,
+                r#"\mathcode`c="5163%"#,
+                r#"\mathcode`t="6174%"#,
+                r"oopoboronocoto%",
+                r"pprpnpcptpo%",
+                r"bnobo%",
+                r"rrnrcrtr%",
+                r"nncntn%",
+                r"cctc%",
+                r"tt%",
+            ],
+            &[
                 r"\def\,{\hskip 3pt}%",
                 r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
                 r"\def\;{\hskip 5pt plus 5pt}%",
@@ -923,39 +929,7 @@ mod tests {
                 r"\n\n\c\n\t\,\n%",
                 r"\c\c\t\,\c%",
                 r"\t\,\t%",
-                r"}%",
-                r#"\mathcode`o="016F%"#,
-                r#"\mathcode`p="1170%"#,
-                r#"\mathcode`b="2162%"#,
-                r#"\mathcode`r="3172%"#,
-                r#"\mathcode`n="416E%"#,
-                r#"\mathcode`c="5163%"#,
-                r#"\mathcode`t="6174%"#,
-                r"oopoboronocoto%",
-                r"pprpnpcptpo%",
-                r"bnobo%",
-                r"rrnrcrtr%",
-                r"nncntn%",
-                r"cctc%",
-                r"tt%",
             ],
-            |parser| {
-                let parsed_box = parser.parse_box().unwrap();
-                let hlist = if let TeXBox::HorizontalBox(hbox) = parsed_box {
-                    hbox.list
-                } else {
-                    panic!("Invalid parsed box: {:?}", parsed_box);
-                };
-
-                let math_list = parser.parse_math_list();
-                assert_eq!(
-                    parser.convert_math_list_to_horizontal_list(
-                        math_list,
-                        MathStyle::TextStyle
-                    ),
-                    hlist
-                );
-            },
         );
     }
 
@@ -965,9 +939,18 @@ mod tests {
         // b = bin
         // r = rel
         // p = punct
-        with_parser(
+        assert_math_list_converts_to_horizontal_list(
             &[
-                r"\hbox{%",
+                r#"\mathcode`o="016F%"#,
+                r#"\mathcode`b="2162%"#,
+                r#"\mathcode`r="3172%"#,
+                r#"\mathcode`p="6170%"#,
+                r"\displaystyle orpob%",
+                r"\textstyle orpob%",
+                r"\scriptstyle orpob%",
+                r"\scriptscriptstyle orpob%",
+            ],
+            &[
                 r"\def\,{\hskip 3pt}%",
                 r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
                 r"\def\;{\hskip 5pt plus 5pt}%",
@@ -979,33 +962,7 @@ mod tests {
                 r"\o\;\r\p\,\o\>\b%",
                 r"\o\r\p\o\b%",
                 r"\o\r\p\o\b%",
-                r"}%",
-                r#"\mathcode`o="016F%"#,
-                r#"\mathcode`b="2162%"#,
-                r#"\mathcode`r="3172%"#,
-                r#"\mathcode`p="6170%"#,
-                r"\displaystyle orpob%",
-                r"\textstyle orpob%",
-                r"\scriptstyle orpob%",
-                r"\scriptscriptstyle orpob%",
             ],
-            |parser| {
-                let parsed_box = parser.parse_box().unwrap();
-                let hlist = if let TeXBox::HorizontalBox(hbox) = parsed_box {
-                    hbox.list
-                } else {
-                    panic!("Invalid parsed box: {:?}", parsed_box);
-                };
-
-                let math_list = parser.parse_math_list();
-                assert_eq!(
-                    parser.convert_math_list_to_horizontal_list(
-                        math_list,
-                        MathStyle::TextStyle
-                    ),
-                    hlist
-                );
-            },
         );
     }
 }
