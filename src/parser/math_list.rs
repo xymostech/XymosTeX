@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use crate::boxes::{HorizontalBox, TeXBox};
 use crate::category::Category;
 use crate::dimension::{Dimen, SpringDimen, Unit};
+use crate::font::Font;
 use crate::glue::Glue;
 use crate::list::HorizontalListElem;
 use crate::math_code::MathCode;
@@ -11,7 +14,6 @@ use crate::math_list::{
 use crate::parser::boxes::BoxLayout;
 use crate::parser::Parser;
 use crate::token::Token;
-use std::collections::HashMap;
 
 #[derive(Clone)]
 enum InterAtomSpacing {
@@ -103,6 +105,60 @@ lazy_static! {
         ((AtomKind::Inner, AtomKind::Close), InterAtomSpacing::None),
         ((AtomKind::Inner, AtomKind::Punct), InterAtomSpacing::ThinSkipNonScript),
         ((AtomKind::Inner, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
+    ].iter().cloned().collect();
+}
+
+lazy_static! {
+    // TODO: pull these from \textfont, \scriptfont, and \scriptscriptfont
+    static ref MATH_FONTS: HashMap<(MathStyle, u8), Font> = [
+        ((MathStyle::TextStyle, 0), Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        }),
+        ((MathStyle::ScriptStyle, 0), Font {
+            font_name: "cmr7".to_string(),
+            scale: Dimen::from_unit(7.0, Unit::Point),
+        }),
+        ((MathStyle::ScriptScriptStyle, 0), Font {
+            font_name: "cmr5".to_string(),
+            scale: Dimen::from_unit(5.0, Unit::Point),
+        }),
+        ((MathStyle::TextStyle, 1), Font {
+            font_name: "cmmi10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        }),
+        ((MathStyle::ScriptStyle, 1), Font {
+            font_name: "cmmi7".to_string(),
+            scale: Dimen::from_unit(7.0, Unit::Point),
+        }),
+        ((MathStyle::ScriptScriptStyle, 1), Font {
+            font_name: "cmmi5".to_string(),
+            scale: Dimen::from_unit(5.0, Unit::Point),
+        }),
+        ((MathStyle::TextStyle, 2), Font {
+            font_name: "cmsy10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        }),
+        ((MathStyle::ScriptStyle, 2), Font {
+            font_name: "cmsy7".to_string(),
+            scale: Dimen::from_unit(7.0, Unit::Point),
+        }),
+        ((MathStyle::ScriptScriptStyle, 2), Font {
+            font_name: "cmsy5".to_string(),
+            scale: Dimen::from_unit(5.0, Unit::Point),
+        }),
+        ((MathStyle::TextStyle, 3), Font {
+            font_name: "cmex10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        }),
+        ((MathStyle::ScriptStyle, 3), Font {
+            font_name: "cmex7".to_string(),
+            scale: Dimen::from_unit(7.0, Unit::Point),
+        }),
+        ((MathStyle::ScriptScriptStyle, 3), Font {
+            font_name: "cmex5".to_string(),
+            scale: Dimen::from_unit(5.0, Unit::Point),
+        }),
     ].iter().cloned().collect();
 }
 
@@ -372,10 +428,36 @@ impl<'a> Parser<'a> {
                 MathListElem::Atom(mut atom) => {
                     match atom.nucleus {
                         Some(MathField::Symbol(symbol)) => {
+                            let font_style = match current_style {
+                                MathStyle::DisplayStyle => MathStyle::TextStyle,
+                                MathStyle::DisplayStylePrime => {
+                                    MathStyle::TextStyle
+                                }
+                                MathStyle::TextStyle => MathStyle::TextStyle,
+                                MathStyle::TextStylePrime => {
+                                    MathStyle::TextStyle
+                                }
+                                MathStyle::ScriptStyle => {
+                                    MathStyle::ScriptStyle
+                                }
+                                MathStyle::ScriptStylePrime => {
+                                    MathStyle::ScriptStyle
+                                }
+                                MathStyle::ScriptScriptStyle => {
+                                    MathStyle::ScriptScriptStyle
+                                }
+                                MathStyle::ScriptScriptStylePrime => {
+                                    MathStyle::ScriptScriptStyle
+                                }
+                            };
+
+                            let font = MATH_FONTS
+                                .get(&(font_style, symbol.family_number))
+                                .unwrap();
+
                             let char_elem = HorizontalListElem::Char {
                                 chr: symbol.position_number as char,
-                                // TODO figure out what goes here
-                                font: self.state.get_current_font(),
+                                font: font.clone(),
                             };
 
                             let hbox = self
@@ -874,14 +956,17 @@ mod tests {
 
     #[test]
     fn it_produces_single_characters_from_single_atom_math_lists() {
-        assert_math_list_converts_to_horizontal_list(&[r"a%"], &[r"\hbox{a}%"]);
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a%"],
+            &[r"\font\teni=cmmi10\teni \hbox{a}%"],
+        );
     }
 
     #[test]
     fn it_produces_multiple_characters_from_multiple_ord_math_lists() {
         assert_math_list_converts_to_horizontal_list(
             &[r"ab%"],
-            &[r"\hbox{a}\hbox{b}%"],
+            &[r"\font\teni=cmmi10\teni \hbox{a}\hbox{b}%"],
         );
     }
 
@@ -896,13 +981,13 @@ mod tests {
         // t = punct
         assert_math_list_converts_to_horizontal_list(
             &[
-                r#"\mathcode`o="016F%"#,
-                r#"\mathcode`p="1170%"#,
-                r#"\mathcode`b="2162%"#,
-                r#"\mathcode`r="3172%"#,
-                r#"\mathcode`n="416E%"#,
-                r#"\mathcode`c="5163%"#,
-                r#"\mathcode`t="6174%"#,
+                r#"\mathcode`o="006F%"#,
+                r#"\mathcode`p="1070%"#,
+                r#"\mathcode`b="2062%"#,
+                r#"\mathcode`r="3072%"#,
+                r#"\mathcode`n="406E%"#,
+                r#"\mathcode`c="5063%"#,
+                r#"\mathcode`t="6074%"#,
                 r"oopoboronocoto%",
                 r"pprpnpcptpo%",
                 r"bnobo%",
@@ -941,16 +1026,18 @@ mod tests {
         // p = punct
         assert_math_list_converts_to_horizontal_list(
             &[
-                r#"\mathcode`o="016F%"#,
-                r#"\mathcode`b="2162%"#,
-                r#"\mathcode`r="3172%"#,
-                r#"\mathcode`p="6170%"#,
+                r#"\mathcode`o="006F%"#,
+                r#"\mathcode`b="2062%"#,
+                r#"\mathcode`r="3072%"#,
+                r#"\mathcode`p="6070%"#,
                 r"\displaystyle orpob%",
                 r"\textstyle orpob%",
                 r"\scriptstyle orpob%",
                 r"\scriptscriptstyle orpob%",
             ],
             &[
+                r"\font\sevenrm=cmr7%",
+                r"\font\fiverm=cmr5%",
                 r"\def\,{\hskip 3pt}%",
                 r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
                 r"\def\;{\hskip 5pt plus 5pt}%",
@@ -960,8 +1047,31 @@ mod tests {
                 r"\def\p{\hbox{p}}%",
                 r"\o\;\r\p\,\o\>\b\>%",
                 r"\o\;\r\p\,\o\>\b%",
+                r"\sevenrm%",
                 r"\o\r\p\o\b%",
+                r"\fiverm%",
                 r"\o\r\p\o\b%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_chooses_correct_fonts_for_different_styles() {
+        assert_math_list_converts_to_horizontal_list(
+            &[
+                r"\displaystyle a%",
+                r"\textstyle a%",
+                r"\scriptstyle a%",
+                r"\scriptscriptstyle a%",
+            ],
+            &[
+                r"\font\teni=cmmi10%",
+                r"\font\seveni=cmmi7%",
+                r"\font\fivei=cmmi5%",
+                r"\hbox{\teni a}%",
+                r"\hbox{\teni a}%",
+                r"\hbox{\seveni a}%",
+                r"\hbox{\fivei a}%",
             ],
         );
     }

@@ -586,18 +586,22 @@ mod tests {
 
     #[test]
     fn it_parses_math_shifts() {
-        with_parser(&[r"\hbox{a}\hbox{b}$ab$%"], |parser| {
-            let box_a = parser.parse_box().unwrap();
-            let box_b = parser.parse_box().unwrap();
+        with_parser(
+            &[r"\font\x=cmmi10\hbox{\x a}\hbox{\x b}$ab$%"],
+            |parser| {
+                parser.parse_assignment();
+                let box_a = parser.parse_box().unwrap();
+                let box_b = parser.parse_box().unwrap();
 
-            assert_eq!(
-                parser.parse_horizontal_list(false, false),
-                &[
-                    HorizontalListElem::Box(box_a),
-                    HorizontalListElem::Box(box_b),
-                ]
-            );
-        });
+                assert_eq!(
+                    parser.parse_horizontal_list(false, false),
+                    &[
+                        HorizontalListElem::Box(box_a),
+                        HorizontalListElem::Box(box_b),
+                    ]
+                );
+            },
+        );
     }
 
     #[test]

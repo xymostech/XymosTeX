@@ -269,7 +269,11 @@ impl<'a> Parser<'a> {
                 _ => panic!("Expected { when parsing box"),
             }
 
+            self.state.push_state();
+
             let hbox = self.parse_horizontal_box(&layout, true, false);
+
+            self.state.pop_state();
 
             // And there should always be a } after the horizontal list
             match self.lex_expanded_token() {
@@ -287,7 +291,11 @@ impl<'a> Parser<'a> {
                 _ => panic!("Expected { when parsing box"),
             }
 
+            self.state.push_state();
+
             let vbox = self.parse_vertical_box(&layout, true);
+
+            self.state.pop_state();
 
             // And there should always be a } after the horizontal list
             match self.lex_expanded_token() {
@@ -774,6 +782,29 @@ mod tests {
 
                 assert_eq!(*vbox.height(), Dimen::from_unit(20.0, Unit::Point));
                 assert_eq!(*vbox.depth(), metrics.get_depth('g'));
+            },
+        );
+    }
+
+    #[test]
+    fn it_parses_state_group_around_box_definitions() {
+        with_parser(
+            &[
+                r"\setbox0=\hbox{%",
+                r"\count0=1 %",
+                r"\number\count0%",
+                r"\hbox{\number\count0\count0=2 \number\count0}%",
+                r"\number\count0%",
+                r"\vbox{\number\count0\count0=2 \number\count0}%",
+                r"\number\count0%",
+                r"}%",
+                r"\setbox1=\hbox{1\hbox{12}1\vbox{12}1}%",
+            ],
+            |parser| {
+                parser.parse_assignment();
+                parser.parse_assignment();
+
+                assert_eq!(parser.state.get_box(0), parser.state.get_box(1),);
             },
         );
     }
