@@ -95,6 +95,15 @@ impl MathAtom {
         }
     }
 
+    pub fn from_math_list(math_list: MathList) -> MathAtom {
+        MathAtom {
+            kind: AtomKind::Ord,
+            nucleus: Some(MathField::MathList(math_list)),
+            superscript: None,
+            subscript: None,
+        }
+    }
+
     pub fn with_superscript(mut self, superscript: MathField) -> MathAtom {
         self.superscript = Some(superscript);
         self

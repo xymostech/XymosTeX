@@ -358,6 +358,12 @@ impl<'a> Parser<'a> {
                 current_list.push(MathListElem::StyleChange(style_change));
             } else {
                 match self.peek_expanded_token() {
+                    Some(Token::Char(_, Category::BeginGroup)) => {
+                        let inner_list = self.parse_math_group();
+                        current_list.push(MathListElem::Atom(
+                            MathAtom::from_math_list(inner_list),
+                        ));
+                    }
                     Some(Token::Char(_, Category::EndGroup)) => break,
                     Some(Token::Char(_, Category::MathShift)) => break,
                     None => break,
@@ -1072,6 +1078,70 @@ mod tests {
                 r"\hbox{\teni a}%",
                 r"\hbox{\seveni a}%",
                 r"\hbox{\fivei a}%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_parses_math_fields_as_elements() {
+        let a_code = MathCode::from_number(0x7161);
+        let b_code = MathCode::from_number(0x7162);
+        let c_code = MathCode::from_number(0x7163);
+        let d_code = MathCode::from_number(0x7164);
+
+        with_parser(&[r"a{bc}d%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![
+                    MathListElem::Atom(MathAtom::from_math_code(&a_code)),
+                    MathListElem::Atom(MathAtom::from_math_list(vec![
+                        MathListElem::Atom(MathAtom::from_math_code(&b_code)),
+                        MathListElem::Atom(MathAtom::from_math_code(&c_code)),
+                    ],)),
+                    MathListElem::Atom(MathAtom::from_math_code(&d_code)),
+                ]
+            );
+        });
+    }
+
+    #[test]
+    fn it_pushes_state_in_math_fields() {
+        let one_code = MathCode::from_number(0x7031);
+        let two_code = MathCode::from_number(0x7032);
+
+        with_parser(
+            &[
+                r"\count0=1 \number\count0%",
+                r"{\number\count0 \count0=2 \number\count0}%",
+                r"\number\count0%",
+            ],
+            |parser| {
+                assert_eq!(
+                    parser.parse_math_list(),
+                    vec![
+                        MathListElem::Atom(MathAtom::from_math_code(&one_code)),
+                        MathListElem::Atom(MathAtom::from_math_list(vec![
+                            MathListElem::Atom(MathAtom::from_math_code(
+                                &one_code
+                            )),
+                            MathListElem::Atom(MathAtom::from_math_code(
+                                &two_code
+                            )),
+                        ],)),
+                        MathListElem::Atom(MathAtom::from_math_code(&one_code)),
+                    ]
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_converts_math_field_nuclei_to_boxes() {
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a{bc}d%"],
+            &[
+                r"\font\teni=cmmi10\teni%",
+                r"\hbox{a}\hbox{\hbox{b}\hbox{c}}\hbox{d}%",
             ],
         );
     }
