@@ -364,6 +364,9 @@ impl<'a> Parser<'a> {
                             MathAtom::from_math_list(inner_list),
                         ));
                     }
+                    Some(Token::Char(_, Category::Space)) => {
+                        self.lex_expanded_token();
+                    }
                     Some(Token::Char(_, Category::EndGroup)) => break,
                     Some(Token::Char(_, Category::MathShift)) => break,
                     None => break,
@@ -1144,5 +1147,25 @@ mod tests {
                 r"\hbox{a}\hbox{\hbox{b}\hbox{c}}\hbox{d}%",
             ],
         );
+    }
+
+    #[test]
+    fn it_ignores_spaces_in_math_lists() {
+        let a_code = MathCode::from_number(0x7161);
+        let b_code = MathCode::from_number(0x7162);
+        let c_code = MathCode::from_number(0x7163);
+        let d_code = MathCode::from_number(0x7164);
+
+        with_parser(&[r"a b ", r"c          d"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![
+                    MathListElem::Atom(MathAtom::from_math_code(&a_code)),
+                    MathListElem::Atom(MathAtom::from_math_code(&b_code)),
+                    MathListElem::Atom(MathAtom::from_math_code(&c_code)),
+                    MathListElem::Atom(MathAtom::from_math_code(&d_code)),
+                ]
+            )
+        });
     }
 }
