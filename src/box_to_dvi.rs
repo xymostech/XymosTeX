@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::boxes::GlueSetRatio;
 use crate::boxes::TeXBox;
+use crate::dimension::Dimen;
 use crate::dvi::{DVICommand, DVIFile};
 use crate::font::Font;
 use crate::font_metrics::FontMetrics;
@@ -170,8 +171,17 @@ impl DVIFileWriter {
                     .push(DVICommand::Right4(move_amount.as_scaled_points()));
             }
 
-            HorizontalListElem::Box(tex_box) => {
-                self.add_box(tex_box);
+            HorizontalListElem::Box { tex_box, shift } => {
+                if shift != &Dimen::zero() {
+                    self.commands.push(DVICommand::Push);
+                    self.commands
+                        .push(DVICommand::Down4(-shift.as_scaled_points()));
+                    self.add_box(tex_box);
+                    self.commands.push(DVICommand::Pop);
+                } else {
+                    self.add_box(tex_box);
+                }
+
                 self.commands.push(DVICommand::Right4(
                     tex_box.width().as_scaled_points(),
                 ));
@@ -755,7 +765,13 @@ mod tests {
         });
 
         writer.add_box(&box1);
-        writer.add_horizontal_list_elem(&HorizontalListElem::Box(box1), &None);
+        writer.add_horizontal_list_elem(
+            &HorizontalListElem::Box {
+                tex_box: box1,
+                shift: Dimen::zero(),
+            },
+            &None,
+        );
 
         assert_matches(
             &writer.commands,
@@ -1521,5 +1537,73 @@ mod tests {
         );
 
         assert_eq!(writer.total_byte_size() % 4, 0);
+    }
+
+    #[test]
+    fn it_writes_shifted_horizontal_boxes_correctly() {
+        let mut writer = DVIFileWriter::new();
+
+        let metrics = FontMetrics::from_font(&CMR10).unwrap();
+
+        with_parser(&[r"\hbox{a}%"], |parser| {
+            let hbox = parser.parse_box().unwrap();
+            writer.add_horizontal_list_elem(
+                &HorizontalListElem::Box {
+                    tex_box: hbox.clone(),
+                    shift: Dimen::from_unit(2.0, Unit::Point),
+                },
+                &None,
+            );
+            writer.add_horizontal_list_elem(
+                &HorizontalListElem::Box {
+                    tex_box: hbox.clone(),
+                    shift: Dimen::from_unit(-2.0, Unit::Point),
+                },
+                &None,
+            );
+            writer.add_horizontal_list_elem(
+                &HorizontalListElem::Box {
+                    tex_box: hbox,
+                    shift: Dimen::zero(),
+                },
+                &None,
+            );
+        });
+
+        assert_matches(
+            &writer.commands,
+            &[
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    -Dimen::from_unit(2.0, Unit::Point).as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Anything,
+                MaybeEquals::Anything,
+                MaybeEquals::Equals(DVICommand::SetCharN(97)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Right4(
+                    metrics.get_width('a').as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    Dimen::from_unit(2.0, Unit::Point).as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(97)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Right4(
+                    metrics.get_width('a').as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(97)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Right4(
+                    metrics.get_width('a').as_scaled_points(),
+                )),
+            ],
+        );
     }
 }

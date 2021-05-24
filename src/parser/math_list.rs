@@ -537,9 +537,13 @@ impl<'a> Parser<'a> {
                     }
 
                     match atom.nucleus {
-                        Some(MathField::TeXBox(texbox)) => {
-                            resulting_horizontal_list
-                                .push(HorizontalListElem::Box(texbox));
+                        Some(MathField::TeXBox(tex_box)) => {
+                            resulting_horizontal_list.push(
+                                HorizontalListElem::Box {
+                                    tex_box,
+                                    shift: Dimen::zero(),
+                                },
+                            );
                         }
                         None => {}
                         _ => {

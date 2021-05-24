@@ -49,6 +49,8 @@ const ALL_PRIMITIVES: &[&str] = &[
     "scriptstyle",
     "scriptscriptstyle",
     "font",
+    "raise",
+    "lower",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {

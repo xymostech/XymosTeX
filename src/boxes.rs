@@ -103,7 +103,9 @@ impl HorizontalBox {
             .flat_map(|elem| match elem {
                 HorizontalListElem::Char { chr: ch, font: _ } => vec![*ch],
                 HorizontalListElem::HSkip(_) => vec![' '],
-                HorizontalListElem::Box(tex_box) => tex_box.to_chars(),
+                HorizontalListElem::Box { tex_box, shift: _ } => {
+                    tex_box.to_chars()
+                }
             })
             .collect()
     }
@@ -237,22 +239,25 @@ mod tests {
                     font: CMR10.clone(),
                 },
                 HorizontalListElem::HSkip(Glue::from_dimen(Dimen::zero())),
-                HorizontalListElem::Box(TeXBox::HorizontalBox(HorizontalBox {
-                    width: Dimen::zero(),
-                    height: Dimen::zero(),
-                    depth: Dimen::zero(),
+                HorizontalListElem::Box {
+                    tex_box: TeXBox::HorizontalBox(HorizontalBox {
+                        width: Dimen::zero(),
+                        height: Dimen::zero(),
+                        depth: Dimen::zero(),
 
-                    list: vec![
-                        HorizontalListElem::Char {
-                            chr: 'b',
-                            font: CMR10.clone(),
-                        },
-                        HorizontalListElem::HSkip(Glue::from_dimen(
-                            Dimen::zero(),
-                        )),
-                    ],
-                    glue_set_ratio: None,
-                })),
+                        list: vec![
+                            HorizontalListElem::Char {
+                                chr: 'b',
+                                font: CMR10.clone(),
+                            },
+                            HorizontalListElem::HSkip(Glue::from_dimen(
+                                Dimen::zero(),
+                            )),
+                        ],
+                        glue_set_ratio: None,
+                    }),
+                    shift: Dimen::zero(),
+                },
                 HorizontalListElem::Char {
                     chr: 'c',
                     font: CMR10.clone(),

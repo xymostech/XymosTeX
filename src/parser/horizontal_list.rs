@@ -131,6 +131,31 @@ impl<'a> Parser<'a> {
                 let glue = self.parse_glue();
                 ElemResult::Elem(HorizontalListElem::HSkip(glue))
             }
+            Some(ref tok)
+                if self.state.is_token_equal_to_prim(tok, "raise") =>
+            {
+                self.lex_expanded_token();
+                let shift = self.parse_dimen();
+                if let Some(tex_box) = self.parse_box() {
+                    ElemResult::Elem(HorizontalListElem::Box { tex_box, shift })
+                } else {
+                    self.parse_horizontal_list_elem(group_level, restricted)
+                }
+            }
+            Some(ref tok)
+                if self.state.is_token_equal_to_prim(tok, "lower") =>
+            {
+                self.lex_expanded_token();
+                let shift = self.parse_dimen();
+                if let Some(tex_box) = self.parse_box() {
+                    ElemResult::Elem(HorizontalListElem::Box {
+                        tex_box,
+                        shift: shift * -1,
+                    })
+                } else {
+                    self.parse_horizontal_list_elem(group_level, restricted)
+                }
+            }
             _ => {
                 if self.is_assignment_head() {
                     self.parse_assignment();
@@ -138,7 +163,10 @@ impl<'a> Parser<'a> {
                 } else if self.is_box_head() {
                     let maybe_tex_box = self.parse_box();
                     if let Some(tex_box) = maybe_tex_box {
-                        ElemResult::Elem(HorizontalListElem::Box(tex_box))
+                        ElemResult::Elem(HorizontalListElem::Box {
+                            tex_box,
+                            shift: Dimen::zero(),
+                        })
                     } else {
                         self.parse_horizontal_list_elem(group_level, restricted)
                     }
@@ -174,7 +202,10 @@ impl<'a> Parser<'a> {
             // TODO(xymostech): This should be \parindent, not a fixed 20pt.
             hbox.width = Dimen::from_unit(20.0, Unit::Point);
             let tex_box = TeXBox::HorizontalBox(hbox);
-            result.push(HorizontalListElem::Box(tex_box));
+            result.push(HorizontalListElem::Box {
+                tex_box,
+                shift: Dimen::zero(),
+            });
         }
 
         let mut group_level = 0;
@@ -379,8 +410,8 @@ mod tests {
                         chr: 'a',
                         font: CMR10.clone(),
                     },
-                    HorizontalListElem::Box(TeXBox::HorizontalBox(
-                        HorizontalBox {
+                    HorizontalListElem::Box {
+                        tex_box: TeXBox::HorizontalBox(HorizontalBox {
                             width: total_width,
                             height: metrics.get_height('a'),
                             depth: metrics.get_depth('g'),
@@ -403,8 +434,9 @@ mod tests {
                                 },
                             ],
                             glue_set_ratio: None,
-                        }
-                    )),
+                        }),
+                        shift: Dimen::zero()
+                    },
                     HorizontalListElem::Char {
                         chr: 'b',
                         font: CMR10.clone(),
@@ -422,7 +454,11 @@ mod tests {
             let list = parser.parse_horizontal_list(true, false);
 
             assert_eq!(list.len(), 1);
-            if let HorizontalListElem::Box(ref tex_box) = list[0] {
+            if let HorizontalListElem::Box {
+                ref tex_box,
+                shift: _,
+            } = list[0]
+            {
                 assert_eq!(tex_box.width(), &metrics.get_width('a'));
             } else {
                 panic!("Element is not a box: {:?}", list[0]);
@@ -517,7 +553,10 @@ mod tests {
             assert_eq!(
                 parser.parse_horizontal_list(false, true),
                 &[
-                    HorizontalListElem::Box(parser.state.get_box(0).unwrap()),
+                    HorizontalListElem::Box {
+                        tex_box: parser.state.get_box(0).unwrap(),
+                        shift: Dimen::zero()
+                    },
                     HorizontalListElem::Char {
                         chr: 'a',
                         font: CMR10.clone(),
@@ -596,8 +635,14 @@ mod tests {
                 assert_eq!(
                     parser.parse_horizontal_list(false, false),
                     &[
-                        HorizontalListElem::Box(box_a),
-                        HorizontalListElem::Box(box_b),
+                        HorizontalListElem::Box {
+                            tex_box: box_a,
+                            shift: Dimen::zero()
+                        },
+                        HorizontalListElem::Box {
+                            tex_box: box_b,
+                            shift: Dimen::zero()
+                        },
                     ]
                 );
             },
@@ -621,7 +666,10 @@ mod tests {
                             chr: '1',
                             font: CMR10.clone(),
                         },
-                        HorizontalListElem::Box(box_2),
+                        HorizontalListElem::Box {
+                            tex_box: box_2,
+                            shift: Dimen::zero()
+                        },
                         HorizontalListElem::Char {
                             chr: '1',
                             font: CMR10.clone(),
@@ -676,6 +724,71 @@ mod tests {
                         HorizontalListElem::Char {
                             chr: 'g',
                             font: cmr7.clone(),
+                        },
+                    ]
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_parses_raise_and_lower_commands() {
+        with_parser(
+            &[
+                r"\hbox{a}%",
+                r"\vbox{b}%",
+                r"\raise 2pt \hbox{a}c\lower 3pt \vbox{b}%",
+            ],
+            |parser| {
+                let abox = parser.parse_box().unwrap();
+                let bbox = parser.parse_box().unwrap();
+
+                assert_eq!(
+                    parser.parse_horizontal_list(false, false),
+                    &[
+                        HorizontalListElem::Box {
+                            tex_box: abox,
+                            shift: Dimen::from_unit(2.0, Unit::Point),
+                        },
+                        HorizontalListElem::Char {
+                            chr: 'c',
+                            font: CMR10.clone(),
+                        },
+                        HorizontalListElem::Box {
+                            tex_box: bbox,
+                            shift: Dimen::from_unit(-3.0, Unit::Point),
+                        },
+                    ]
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_ignores_empty_boxes_in_raise_and_lower() {
+        with_parser(
+            &[
+                r"a%",
+                r"\raise 2pt \box10%",
+                r"b%",
+                r"\lower 3pt \box11%",
+                r"c%",
+            ],
+            |parser| {
+                assert_eq!(
+                    parser.parse_horizontal_list(false, false),
+                    &[
+                        HorizontalListElem::Char {
+                            chr: 'a',
+                            font: CMR10.clone(),
+                        },
+                        HorizontalListElem::Char {
+                            chr: 'b',
+                            font: CMR10.clone(),
+                        },
+                        HorizontalListElem::Char {
+                            chr: 'c',
+                            font: CMR10.clone(),
                         },
                     ]
                 );
