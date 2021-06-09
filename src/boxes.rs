@@ -141,7 +141,7 @@ impl VerticalBox {
             // between each element here.
             .flat_map(|elem| match elem {
                 VerticalListElem::VSkip(_) => vec![],
-                VerticalListElem::Box(tex_box) => {
+                VerticalListElem::Box { tex_box, shift: _ } => {
                     let mut vec = tex_box.to_chars();
                     vec.push('\n');
                     vec
@@ -272,9 +272,15 @@ mod tests {
             depth: Dimen::zero(),
 
             list: vec![
-                VerticalListElem::Box(inner_hbox.clone()),
+                VerticalListElem::Box {
+                    tex_box: inner_hbox.clone(),
+                    shift: Dimen::zero(),
+                },
                 VerticalListElem::VSkip(Glue::from_dimen(Dimen::zero())),
-                VerticalListElem::Box(inner_hbox),
+                VerticalListElem::Box {
+                    tex_box: inner_hbox,
+                    shift: Dimen::zero(),
+                },
             ],
             glue_set_ratio: None,
         });

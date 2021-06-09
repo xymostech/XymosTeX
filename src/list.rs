@@ -47,17 +47,21 @@ impl HorizontalListElem {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum VerticalListElem {
-    Box(TeXBox),
+    Box { tex_box: TeXBox, shift: Dimen },
     VSkip(Glue),
 }
 
 impl VerticalListElem {
     pub fn get_size(&self) -> (Glue, Dimen, Dimen) {
         match self {
-            VerticalListElem::Box(tex_box) => (
+            VerticalListElem::Box { tex_box, shift } => (
                 Glue::from_dimen(*tex_box.height()),
                 *tex_box.depth(),
-                *tex_box.width(),
+                if *tex_box.width() + *shift < Dimen::zero() {
+                    Dimen::zero()
+                } else {
+                    *tex_box.width() + *shift
+                },
             ),
 
             VerticalListElem::VSkip(glue) => {
@@ -76,7 +80,7 @@ mod tests {
     use crate::state::TeXState;
 
     #[test]
-    fn it_calculates_elem_sizes_with_shifts() {
+    fn it_calculates_horizontal_list_elem_sizes_with_shifts() {
         let mut hbox = HorizontalBox::empty();
         hbox.height = Dimen::from_unit(2.0, Unit::Point);
         hbox.depth = Dimen::from_unit(3.0, Unit::Point);
@@ -148,6 +152,81 @@ mod tests {
                 Dimen::from_unit(0.0, Unit::Point),
                 Dimen::from_unit(6.0, Unit::Point),
                 Glue::from_dimen(Dimen::from_unit(4.0, Unit::Point)),
+            )
+        );
+    }
+
+    #[test]
+    fn it_calculates_vertical_list_elem_sizes_with_shifts() {
+        let mut hbox = HorizontalBox::empty();
+        hbox.height = Dimen::from_unit(2.0, Unit::Point);
+        hbox.depth = Dimen::from_unit(3.0, Unit::Point);
+        hbox.width = Dimen::from_unit(4.0, Unit::Point);
+
+        let tex_box = TeXBox::HorizontalBox(hbox);
+
+        assert_eq!(
+            VerticalListElem::Box {
+                tex_box: tex_box.clone(),
+                shift: Dimen::zero()
+            }
+            .get_size(),
+            (
+                Glue::from_dimen(Dimen::from_unit(2.0, Unit::Point)),
+                Dimen::from_unit(3.0, Unit::Point),
+                Dimen::from_unit(4.0, Unit::Point),
+            )
+        );
+
+        assert_eq!(
+            VerticalListElem::Box {
+                tex_box: tex_box.clone(),
+                shift: Dimen::from_unit(1.0, Unit::Point)
+            }
+            .get_size(),
+            (
+                Glue::from_dimen(Dimen::from_unit(2.0, Unit::Point)),
+                Dimen::from_unit(3.0, Unit::Point),
+                Dimen::from_unit(5.0, Unit::Point),
+            )
+        );
+
+        assert_eq!(
+            VerticalListElem::Box {
+                tex_box: tex_box.clone(),
+                shift: Dimen::from_unit(4.0, Unit::Point)
+            }
+            .get_size(),
+            (
+                Glue::from_dimen(Dimen::from_unit(2.0, Unit::Point)),
+                Dimen::from_unit(3.0, Unit::Point),
+                Dimen::from_unit(8.0, Unit::Point),
+            )
+        );
+
+        assert_eq!(
+            VerticalListElem::Box {
+                tex_box: tex_box.clone(),
+                shift: Dimen::from_unit(-1.0, Unit::Point)
+            }
+            .get_size(),
+            (
+                Glue::from_dimen(Dimen::from_unit(2.0, Unit::Point)),
+                Dimen::from_unit(3.0, Unit::Point),
+                Dimen::from_unit(3.0, Unit::Point),
+            )
+        );
+
+        assert_eq!(
+            VerticalListElem::Box {
+                tex_box,
+                shift: Dimen::from_unit(-5.0, Unit::Point)
+            }
+            .get_size(),
+            (
+                Glue::from_dimen(Dimen::from_unit(2.0, Unit::Point)),
+                Dimen::from_unit(3.0, Unit::Point),
+                Dimen::from_unit(0.0, Unit::Point),
             )
         );
     }

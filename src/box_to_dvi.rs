@@ -131,11 +131,19 @@ impl DVIFileWriter {
                     .push(DVICommand::Down4(move_amount.as_scaled_points()));
             }
 
-            VerticalListElem::Box(tex_box) => {
+            VerticalListElem::Box { tex_box, shift } => {
                 self.commands.push(DVICommand::Down4(
                     tex_box.height().as_scaled_points(),
                 ));
-                self.add_box(tex_box);
+                if shift != &Dimen::zero() {
+                    self.commands.push(DVICommand::Push);
+                    self.commands
+                        .push(DVICommand::Right4(shift.as_scaled_points()));
+                    self.add_box(tex_box);
+                    self.commands.push(DVICommand::Pop);
+                } else {
+                    self.add_box(tex_box);
+                }
                 self.commands.push(DVICommand::Down4(
                     tex_box.depth().as_scaled_points(),
                 ));
@@ -1029,7 +1037,10 @@ mod tests {
             width: *hbox.width(),
 
             list: vec![
-                VerticalListElem::Box(hbox.clone()),
+                VerticalListElem::Box {
+                    tex_box: hbox.clone(),
+                    shift: Dimen::zero(),
+                },
                 VerticalListElem::VSkip(Glue {
                     space: Dimen::from_unit(2.0, Unit::Point),
                     stretch: SpringDimen::Dimen(Dimen::zero()),
@@ -1040,7 +1051,13 @@ mod tests {
         });
 
         writer.add_box(&vbox);
-        writer.add_vertical_list_elem(&VerticalListElem::Box(vbox), &None);
+        writer.add_vertical_list_elem(
+            &VerticalListElem::Box {
+                tex_box: vbox,
+                shift: Dimen::zero(),
+            },
+            &None,
+        );
 
         assert_matches(
             &writer.commands,
@@ -1603,6 +1620,77 @@ mod tests {
                 MaybeEquals::Equals(DVICommand::Right4(
                     metrics.get_width('a').as_scaled_points(),
                 )),
+            ],
+        );
+    }
+
+    #[test]
+    fn it_writes_shifted_vertical_elements_correctly() {
+        let mut writer = DVIFileWriter::new();
+
+        let metrics = FontMetrics::from_font(&CMR10).unwrap();
+
+        with_parser(&[r"\hbox{a}%"], |parser| {
+            let hbox = parser.parse_box().unwrap();
+            writer.add_vertical_list_elem(
+                &VerticalListElem::Box {
+                    tex_box: hbox.clone(),
+                    shift: Dimen::from_unit(2.0, Unit::Point),
+                },
+                &None,
+            );
+            writer.add_vertical_list_elem(
+                &VerticalListElem::Box {
+                    tex_box: hbox.clone(),
+                    shift: Dimen::from_unit(-2.0, Unit::Point),
+                },
+                &None,
+            );
+            writer.add_vertical_list_elem(
+                &VerticalListElem::Box {
+                    tex_box: hbox,
+                    shift: Dimen::zero(),
+                },
+                &None,
+            );
+        });
+
+        assert_matches(
+            &writer.commands,
+            &[
+                MaybeEquals::Equals(DVICommand::Down4(
+                    metrics.get_height('a').as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Right4(
+                    Dimen::from_unit(2.0, Unit::Point).as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Anything,
+                MaybeEquals::Anything,
+                MaybeEquals::Equals(DVICommand::SetCharN(97)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(0)),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    metrics.get_height('a').as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Right4(
+                    -Dimen::from_unit(2.0, Unit::Point).as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(97)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(0)),
+                MaybeEquals::Equals(DVICommand::Down4(
+                    metrics.get_height('a').as_scaled_points(),
+                )),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(97)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Down4(0)),
             ],
         );
     }
