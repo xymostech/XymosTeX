@@ -104,6 +104,15 @@ impl MathAtom {
         }
     }
 
+    pub fn from_box(tex_box: TeXBox) -> MathAtom {
+        MathAtom {
+            kind: AtomKind::Ord,
+            nucleus: Some(MathField::TeXBox(tex_box)),
+            superscript: None,
+            subscript: None,
+        }
+    }
+
     pub fn with_superscript(mut self, superscript: MathField) -> MathAtom {
         self.superscript = Some(superscript);
         self

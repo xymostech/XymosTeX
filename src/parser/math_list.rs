@@ -386,6 +386,11 @@ impl<'a> Parser<'a> {
             } else if self.is_style_change_head() {
                 let style_change = self.parse_style_change();
                 current_list.push(MathListElem::StyleChange(style_change));
+            } else if self.is_box_head() {
+                if let Some(tex_box) = self.parse_box() {
+                    current_list
+                        .push(MathListElem::Atom(MathAtom::from_box(tex_box)));
+                }
             } else {
                 match self.peek_expanded_token() {
                     Some(Token::Char(_, Category::BeginGroup)) => {
@@ -1299,6 +1304,20 @@ mod tests {
                 r"\advance\count1 by 32768%",
                 r"\wd1=\count1 sp%",
                 r"\hbox{\teni a}\raise 237825sp \box1%",
+            ],
+        );
+    }
+
+    #[test]
+    fn boxes_can_be_used_as_nuclei() {
+        assert_math_list_converts_to_horizontal_list(
+            &[r"\hbox{ab}^{\hbox{c}}%"],
+            &[
+                r"\setbox0=\hbox{\hbox{c}}%",
+                r"\count0=\wd0%",
+                r"\advance\count0 by 32768%",
+                r"\wd0=\count0 sp%",
+                r"\hbox{ab}\raise 237825sp \box0%",
             ],
         );
     }
