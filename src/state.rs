@@ -540,6 +540,12 @@ impl TeXState {
         self.with_stack(|stack| stack.with_box(box_index, func))
     }
 
+    /// Returns a reference to the font metrics for a given font.
+    /// NOTE: this will load the font metrics for a font if they haven't been
+    /// loaded yet, which attempts to generate a mutable font metrics ref in
+    /// the process. Thus, holding onto a reference to FontMetrics can cause
+    /// problems if unloaded fonts are accessed. Prefer `with_metrics_for_font`
+    /// which drops the FontMetrics reference immediately after use.
     pub fn get_metrics_for_font(
         &self,
         font: &Font,
@@ -555,6 +561,19 @@ impl TeXState {
         Some(Ref::map(self.font_metrics.borrow(), |x| {
             x.get(font).unwrap()
         }))
+    }
+
+    /// Given a font, calls a callback with the font's font metrics, and
+    /// returns the result of the callback.
+    pub fn with_metrics_for_font<T, F>(&self, font: &Font, func: F) -> Option<T>
+    where
+        F: FnOnce(Ref<FontMetrics>) -> T,
+    {
+        let metrics = self.get_metrics_for_font(font);
+        match metrics {
+            Some(metrics) => Some(func(metrics)),
+            None => None,
+        }
     }
 }
 
@@ -839,6 +858,14 @@ mod tests {
         };
 
         assert_eq!(state.get_metrics_for_font(&fake_font).is_none(), true);
+        assert_eq!(
+            state
+                .with_metrics_for_font(&fake_font, |metrics| {
+                    panic!("Shouldn't reach here");
+                })
+                .is_none(),
+            true
+        );
     }
 
     #[test]
@@ -881,6 +908,23 @@ mod tests {
                 font_name: "cmr10".to_string(),
                 scale: Dimen::from_unit(5.0, Unit::Point),
             }
+        );
+    }
+
+    #[test]
+    fn it_allows_for_temporary_access_of_font_metrics() {
+        let state = TeXState::new();
+
+        let font = Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        };
+
+        assert_eq!(
+            state.with_metrics_for_font(&font, |metrics| {
+                metrics.get_checksum()
+            }),
+            Some(1274110073)
         );
     }
 }

@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::collections::HashMap;
 
 use crate::boxes::{HorizontalBox, TeXBox};
@@ -108,6 +109,19 @@ lazy_static! {
     ].iter().cloned().collect();
 }
 
+fn get_font_style_for_math_style(style: &MathStyle) -> MathStyle {
+    match style {
+        MathStyle::DisplayStyle => MathStyle::TextStyle,
+        MathStyle::DisplayStylePrime => MathStyle::TextStyle,
+        MathStyle::TextStyle => MathStyle::TextStyle,
+        MathStyle::TextStylePrime => MathStyle::TextStyle,
+        MathStyle::ScriptStyle => MathStyle::ScriptStyle,
+        MathStyle::ScriptStylePrime => MathStyle::ScriptStyle,
+        MathStyle::ScriptScriptStyle => MathStyle::ScriptScriptStyle,
+        MathStyle::ScriptScriptStylePrime => MathStyle::ScriptScriptStyle,
+    }
+}
+
 lazy_static! {
     // TODO: pull these from \textfont, \scriptfont, and \scriptscriptfont
     static ref MATH_FONTS: HashMap<(MathStyle, u8), Font> = [
@@ -152,14 +166,30 @@ lazy_static! {
             scale: Dimen::from_unit(10.0, Unit::Point),
         }),
         ((MathStyle::ScriptStyle, 3), Font {
-            font_name: "cmex7".to_string(),
+            font_name: "cmex10".to_string(),
             scale: Dimen::from_unit(7.0, Unit::Point),
         }),
         ((MathStyle::ScriptScriptStyle, 3), Font {
-            font_name: "cmex5".to_string(),
+            font_name: "cmex10".to_string(),
             scale: Dimen::from_unit(5.0, Unit::Point),
         }),
     ].iter().cloned().collect();
+}
+
+// This represents the translation of a given MathAtom into horizontal list
+// elems.
+struct TranslatedMathAtom {
+    kind: AtomKind,
+    translation: Vec<HorizontalListElem>,
+}
+
+// When performing the transformation from math list to horizontal list,
+// there's an intermediate step where not everything has been translated, but
+// the result is no longer a plain MathList. This type keeps track of all of
+// the necessary elements in that intermediate step.
+enum TranslatedMathListElem {
+    Atom(TranslatedMathAtom),
+    StyleChange(MathStyle),
 }
 
 impl<'a> Parser<'a> {
@@ -424,89 +454,175 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn convert_math_field_to_box(
+        &mut self,
+        field: MathField,
+        style: &MathStyle,
+    ) -> TeXBox {
+        match field {
+            MathField::Symbol(symbol) => {
+                let font = MATH_FONTS
+                    .get(&(
+                        get_font_style_for_math_style(style),
+                        symbol.family_number,
+                    ))
+                    .unwrap();
+
+                let char_elem = HorizontalListElem::Char {
+                    chr: symbol.position_number as char,
+                    font: font.clone(),
+                };
+
+                let hbox = self.add_to_natural_layout_horizontal_box(
+                    HorizontalBox::empty(),
+                    char_elem,
+                );
+
+                TeXBox::HorizontalBox(hbox)
+            }
+            MathField::TeXBox(tex_box) => tex_box,
+            MathField::MathList(list) => {
+                let hlist = self
+                    .convert_math_list_to_horizontal_list(list, style.clone());
+                let hbox = self
+                    .combine_horizontal_list_into_horizontal_box_with_layout(
+                        hlist,
+                        &BoxLayout::Natural,
+                    );
+
+                TeXBox::HorizontalBox(hbox)
+            }
+        }
+    }
+
     pub fn convert_math_list_to_horizontal_list(
         &mut self,
         list: MathList,
         start_style: MathStyle,
     ) -> Vec<HorizontalListElem> {
-        let mut elems_after_first_pass: MathList = Vec::new();
+        let mut elems_after_first_pass: Vec<TranslatedMathListElem> =
+            Vec::new();
         let mut current_style = start_style.clone();
 
         for elem in list {
             match elem {
-                MathListElem::Atom(mut atom) => {
-                    match atom.nucleus {
-                        Some(MathField::Symbol(symbol)) => {
-                            let font_style = match current_style {
-                                MathStyle::DisplayStyle => MathStyle::TextStyle,
-                                MathStyle::DisplayStylePrime => {
-                                    MathStyle::TextStyle
-                                }
-                                MathStyle::TextStyle => MathStyle::TextStyle,
-                                MathStyle::TextStylePrime => {
-                                    MathStyle::TextStyle
-                                }
-                                MathStyle::ScriptStyle => {
-                                    MathStyle::ScriptStyle
-                                }
-                                MathStyle::ScriptStylePrime => {
-                                    MathStyle::ScriptStyle
-                                }
-                                MathStyle::ScriptScriptStyle => {
-                                    MathStyle::ScriptScriptStyle
-                                }
-                                MathStyle::ScriptScriptStylePrime => {
-                                    MathStyle::ScriptScriptStyle
-                                }
-                            };
+                MathListElem::Atom(atom) => {
+                    let translated_nucleus = match atom.nucleus {
+                        Some(field) => {
+                            Some(self.convert_math_field_to_box(
+                                field,
+                                &current_style,
+                            ))
+                        }
+                        None => None,
+                    };
 
-                            let font = MATH_FONTS
-                                .get(&(font_style, symbol.family_number))
-                                .unwrap();
+                    let (nucleus_height, nucleus_depth) =
+                        match translated_nucleus {
+                            None => (Dimen::zero(), Dimen::zero()),
+                            Some(ref tex_box) => {
+                                (*tex_box.height(), *tex_box.depth())
+                            }
+                        };
 
-                            let char_elem = HorizontalListElem::Char {
-                                chr: symbol.position_number as char,
-                                font: font.clone(),
-                            };
+                    let font = &MATH_FONTS
+                        [&(get_font_style_for_math_style(&current_style), 2)];
 
-                            let hbox = self
-                                .add_to_natural_layout_horizontal_box(
-                                    HorizontalBox::empty(),
-                                    char_elem,
+                    let (sup_drop, sub_drop) = self
+                        .state
+                        .with_metrics_for_font(font, |metrics| {
+                            let sup_drop = metrics.get_font_dimension(18);
+                            let sub_drop = metrics.get_font_dimension(19);
+
+                            (sup_drop, sub_drop)
+                        })
+                        .unwrap();
+
+                    let mut sup_shift = nucleus_height - sup_drop;
+                    let sub_shift = nucleus_depth + sub_drop;
+
+                    // TODO(xymostech): Pull this from \scriptspace
+                    let scriptspace = Dimen::from_unit(0.5, Unit::Point);
+
+                    let sub_sup_translation =
+                        match (atom.superscript, atom.subscript) {
+                            (Some(superscript), None) => {
+                                let mut sup_box = self
+                                    .convert_math_field_to_box(
+                                        superscript,
+                                        &current_style.up_arrow(),
+                                    );
+                                *sup_box.mut_width() =
+                                    *sup_box.width() + scriptspace;
+
+                                let (blah, x_height) = self
+                                    .state
+                                    .with_metrics_for_font(font, |metrics| {
+                                        let blah =match current_style {
+                                    MathStyle::DisplayStyle => {
+                                        metrics.get_font_dimension(13)
+                                    }
+                                    MathStyle::DisplayStylePrime => {
+                                        metrics.get_font_dimension(15)
+                                    }
+                                    MathStyle::TextStylePrime => {
+                                        metrics.get_font_dimension(15)
+                                    }
+                                    MathStyle::ScriptStylePrime => {
+                                        metrics.get_font_dimension(15)
+                                    }
+                                    MathStyle::ScriptScriptStylePrime => {
+                                        metrics.get_font_dimension(15)
+                                    }
+                                    _ => metrics.get_font_dimension(14),
+                                };
+
+                                        (blah, metrics.get_font_dimension(5))
+                                    })
+                                    .unwrap();
+
+                                sup_shift = max(
+                                    max(sup_shift, blah),
+                                    *sup_box.depth() + x_height.abs() / 4,
                                 );
 
-                            atom.nucleus = Some(MathField::TeXBox(
-                                TeXBox::HorizontalBox(hbox),
-                            ));
-                        }
-                        Some(MathField::TeXBox(_)) => {
-                            // Nothing to do
-                        }
-                        Some(MathField::MathList(list)) => {
-                            let hlist = self
-                                .convert_math_list_to_horizontal_list(
-                                    list,
-                                    current_style.clone(),
-                                );
-                            let hbox = self.combine_horizontal_list_into_horizontal_box_with_layout(hlist, &BoxLayout::Natural);
+                                Some(HorizontalListElem::Box {
+                                    tex_box: sup_box,
+                                    shift: sup_shift,
+                                })
+                            }
+                            (None, Some(subscript)) => {
+                                panic!("Unimplemented subscript");
+                            }
+                            (Some(superscript), Some(subscript)) => {
+                                panic!("Unimplemented superscript+subscript");
+                            }
+                            (None, None) => None,
+                        };
 
-                            atom.nucleus = Some(MathField::TeXBox(
-                                TeXBox::HorizontalBox(hbox),
-                            ));
-                        }
-                        None => {}
+                    let mut translation = Vec::new();
+                    if let Some(tex_box) = translated_nucleus {
+                        translation.push(HorizontalListElem::Box {
+                            tex_box,
+                            shift: Dimen::zero(),
+                        });
+                    }
+                    if let Some(list_elem) = sub_sup_translation {
+                        translation.push(list_elem);
                     }
 
-                    if atom.has_subscript() || atom.has_superscript() {
-                        panic!("Unimplemented superscript/subscript");
-                    }
+                    let translated_atom = TranslatedMathAtom {
+                        kind: atom.kind,
+                        translation,
+                    };
 
-                    elems_after_first_pass.push(MathListElem::Atom(atom));
+                    elems_after_first_pass
+                        .push(TranslatedMathListElem::Atom(translated_atom));
                 }
                 MathListElem::StyleChange(new_style) => {
                     current_style = new_style.clone();
                     elems_after_first_pass
-                        .push(MathListElem::StyleChange(new_style));
+                        .push(TranslatedMathListElem::StyleChange(new_style));
                 }
                 _ => {
                     panic!("unimplemented math list elem: {:?}", elem);
@@ -520,7 +636,7 @@ impl<'a> Parser<'a> {
 
         for elem in elems_after_first_pass {
             match elem {
-                MathListElem::Atom(atom) => {
+                TranslatedMathListElem::Atom(atom) => {
                     if let Some(last_atom_kind) = maybe_last_atom_kind {
                         if let Some(skip) = self.get_skip_for_atom_pair(
                             &last_atom_kind,
@@ -532,32 +648,12 @@ impl<'a> Parser<'a> {
                         }
                     }
 
-                    if atom.has_subscript() || atom.has_superscript() {
-                        panic!("Atoms should be sub/superscript free in second pass!");
-                    }
-
-                    match atom.nucleus {
-                        Some(MathField::TeXBox(tex_box)) => {
-                            resulting_horizontal_list.push(
-                                HorizontalListElem::Box {
-                                    tex_box,
-                                    shift: Dimen::zero(),
-                                },
-                            );
-                        }
-                        None => {}
-                        _ => {
-                            panic!("Atom nucleuses should only be boxes in second pass!");
-                        }
-                    }
+                    resulting_horizontal_list.extend(atom.translation);
 
                     maybe_last_atom_kind = Some(atom.kind);
                 }
-                MathListElem::StyleChange(new_style) => {
+                TranslatedMathListElem::StyleChange(new_style) => {
                     current_style = new_style;
-                }
-                _ => {
-                    panic!("unimplemented math list elem: {:?}", elem);
                 }
             }
         }
@@ -1171,5 +1267,39 @@ mod tests {
                 ]
             )
         });
+    }
+
+    #[test]
+    fn it_converts_superscripts_to_raised_boxes() {
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a^b%"],
+            &[
+                r"\font\teni=cmmi10%",
+                r"\font\seveni=cmmi7%",
+                r"\setbox0=\hbox{\seveni b}%",
+                r"\count0=\wd0%",
+                r"\advance\count0 by 32768%",
+                r"\wd0=\count0 sp%",
+                r"\hbox{\teni a}\raise 237825sp \box0%",
+            ],
+        );
+
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a^{b^c}%"],
+            &[
+                r"\font\teni=cmmi10%",
+                r"\font\seveni=cmmi7%",
+                r"\font\fivei=cmmi5%",
+                r"\setbox0=\hbox{\fivei c}%",
+                r"\count0=\wd0%",
+                r"\advance\count0 by 32768%",
+                r"\wd0=\count0 sp%",
+                r"\setbox1=\hbox{\hbox{\seveni b}\raise 197774sp \box0}%",
+                r"\count1=\wd1%",
+                r"\advance\count1 by 32768%",
+                r"\wd1=\count1 sp%",
+                r"\hbox{\teni a}\raise 237825sp \box1%",
+            ],
+        );
     }
 }

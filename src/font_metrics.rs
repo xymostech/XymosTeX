@@ -59,6 +59,10 @@ impl FontMetrics {
     pub fn get_depth(&self, chr: char) -> Dimen {
         self.scale_dimen(self.tfm_file.get_depth(chr))
     }
+
+    pub fn get_font_dimension(&self, dimen_number: usize) -> Dimen {
+        self.scale_dimen(self.tfm_file.get_font_dimension(dimen_number))
+    }
 }
 
 #[cfg(test)]
@@ -109,6 +113,20 @@ mod tests {
         assert_eq!(
             twentypt_metrics.get_depth('j') / 4,
             fivept_metrics.get_depth('j')
+        );
+    }
+
+    #[test]
+    fn it_scales_font_dimensions() {
+        let twentypt_metrics = FontMetrics::from_font(&Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(20.0, Unit::Point),
+        })
+        .unwrap();
+
+        assert_eq!(
+            twentypt_metrics.get_font_dimension(5),
+            Dimen::from_scaled_points(282168 * 2)
         );
     }
 }

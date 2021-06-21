@@ -48,6 +48,13 @@ impl TFMFile {
     pub const fn get_checksum(&self) -> u32 {
         self.header.checksum
     }
+
+    pub fn get_font_dimension(&self, dimen_number: usize) -> Dimen {
+        Dimen::from_unit(
+            self.header.design_size * self.font_parameters[dimen_number - 1],
+            Unit::Point,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -90,5 +97,36 @@ mod tests {
         for ch in (0 as u8)..128 {
             assert!(font_metrics.get_width(ch as char) > Dimen::zero());
         }
+    }
+
+    #[test]
+    fn get_cmr10_font_dimens() {
+        let font_metrics = TFMFile::new(CMR10_TFM).unwrap();
+
+        assert_eq!(font_metrics.get_font_dimension(1), Dimen::zero());
+        assert_eq!(
+            font_metrics.get_font_dimension(2),
+            Dimen::from_scaled_points(218453)
+        );
+        assert_eq!(
+            font_metrics.get_font_dimension(3),
+            Dimen::from_scaled_points(109226)
+        );
+        assert_eq!(
+            font_metrics.get_font_dimension(4),
+            Dimen::from_scaled_points(72818)
+        );
+        assert_eq!(
+            font_metrics.get_font_dimension(5),
+            Dimen::from_scaled_points(282168)
+        );
+        assert_eq!(
+            font_metrics.get_font_dimension(6),
+            Dimen::from_scaled_points(655361)
+        );
+        assert_eq!(
+            font_metrics.get_font_dimension(7),
+            Dimen::from_scaled_points(72818)
+        );
     }
 }

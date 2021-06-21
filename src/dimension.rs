@@ -73,11 +73,25 @@ impl Dimen {
     pub fn as_scaled_points(&self) -> i32 {
         self.0
     }
+
+    pub fn abs(&self) -> Dimen {
+        if *self < Dimen::zero() {
+            *self * -1
+        } else {
+            *self
+        }
+    }
 }
 
 impl PartialOrd for Dimen {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.0.cmp(&other.0))
+    }
+}
+
+impl Ord for Dimen {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
     }
 }
 

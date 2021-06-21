@@ -149,6 +149,40 @@ impl MathStyle {
             MathStyle::ScriptScriptStylePrime => true,
         }
     }
+
+    pub fn prime(&self) -> MathStyle {
+        match *self {
+            MathStyle::DisplayStyle => MathStyle::DisplayStylePrime,
+            MathStyle::DisplayStylePrime => MathStyle::DisplayStylePrime,
+            MathStyle::TextStyle => MathStyle::TextStylePrime,
+            MathStyle::TextStylePrime => MathStyle::TextStylePrime,
+            MathStyle::ScriptStyle => MathStyle::ScriptStylePrime,
+            MathStyle::ScriptStylePrime => MathStyle::ScriptStylePrime,
+            MathStyle::ScriptScriptStyle => MathStyle::ScriptScriptStylePrime,
+            MathStyle::ScriptScriptStylePrime => {
+                MathStyle::ScriptScriptStylePrime
+            }
+        }
+    }
+
+    pub fn up_arrow(&self) -> MathStyle {
+        match *self {
+            MathStyle::DisplayStyle => MathStyle::ScriptStyle,
+            MathStyle::DisplayStylePrime => MathStyle::ScriptStylePrime,
+            MathStyle::TextStyle => MathStyle::ScriptStyle,
+            MathStyle::TextStylePrime => MathStyle::ScriptStylePrime,
+            MathStyle::ScriptStyle => MathStyle::ScriptScriptStyle,
+            MathStyle::ScriptStylePrime => MathStyle::ScriptScriptStylePrime,
+            MathStyle::ScriptScriptStyle => MathStyle::ScriptScriptStyle,
+            MathStyle::ScriptScriptStylePrime => {
+                MathStyle::ScriptScriptStylePrime
+            }
+        }
+    }
+
+    pub fn down_arrow(&self) -> MathStyle {
+        self.up_arrow().prime()
+    }
 }
 
 #[allow(dead_code)]
