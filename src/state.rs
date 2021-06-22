@@ -860,7 +860,7 @@ mod tests {
         assert_eq!(state.get_metrics_for_font(&fake_font).is_none(), true);
         assert_eq!(
             state
-                .with_metrics_for_font(&fake_font, |metrics| {
+                .with_metrics_for_font(&fake_font, |_metrics| {
                     panic!("Shouldn't reach here");
                 })
                 .is_none(),

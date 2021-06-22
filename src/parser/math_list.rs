@@ -544,66 +544,92 @@ impl<'a> Parser<'a> {
                         .unwrap();
 
                     let mut sup_shift = nucleus_height - sup_drop;
-                    let sub_shift = nucleus_depth + sub_drop;
+                    let mut sub_shift = nucleus_depth + sub_drop;
 
                     // TODO(xymostech): Pull this from \scriptspace
                     let scriptspace = Dimen::from_unit(0.5, Unit::Point);
 
-                    let sub_sup_translation =
-                        match (atom.superscript, atom.subscript) {
-                            (Some(superscript), None) => {
-                                let mut sup_box = self
-                                    .convert_math_field_to_box(
-                                        superscript,
-                                        &current_style.up_arrow(),
-                                    );
-                                *sup_box.mut_width() =
-                                    *sup_box.width() + scriptspace;
+                    let sub_sup_translation = match (
+                        atom.superscript,
+                        atom.subscript,
+                    ) {
+                        (Some(superscript), None) => {
+                            let mut sup_box = self.convert_math_field_to_box(
+                                superscript,
+                                &current_style.up_arrow(),
+                            );
+                            *sup_box.mut_width() =
+                                *sup_box.width() + scriptspace;
 
-                                let (blah, x_height) = self
-                                    .state
-                                    .with_metrics_for_font(font, |metrics| {
-                                        let blah =match current_style {
-                                    MathStyle::DisplayStyle => {
-                                        metrics.get_font_dimension(13)
-                                    }
-                                    MathStyle::DisplayStylePrime => {
-                                        metrics.get_font_dimension(15)
-                                    }
-                                    MathStyle::TextStylePrime => {
-                                        metrics.get_font_dimension(15)
-                                    }
-                                    MathStyle::ScriptStylePrime => {
-                                        metrics.get_font_dimension(15)
-                                    }
-                                    MathStyle::ScriptScriptStylePrime => {
-                                        metrics.get_font_dimension(15)
-                                    }
-                                    _ => metrics.get_font_dimension(14),
-                                };
+                            let (sup_shift_for_style, x_height) = self
+                                .state
+                                .with_metrics_for_font(font, |metrics| {
+                                    let sup_shift_for_style = match current_style {
+                                        MathStyle::DisplayStyle => {
+                                            metrics.get_font_dimension(13)
+                                        }
+                                        MathStyle::DisplayStylePrime => {
+                                            metrics.get_font_dimension(15)
+                                        }
+                                        MathStyle::TextStylePrime => {
+                                            metrics.get_font_dimension(15)
+                                        }
+                                        MathStyle::ScriptStylePrime => {
+                                            metrics.get_font_dimension(15)
+                                        }
+                                        MathStyle::ScriptScriptStylePrime => {
+                                            metrics.get_font_dimension(15)
+                                        }
+                                        _ => metrics.get_font_dimension(14),
+                                    };
 
-                                        (blah, metrics.get_font_dimension(5))
-                                    })
-                                    .unwrap();
-
-                                sup_shift = max(
-                                    max(sup_shift, blah),
-                                    *sup_box.depth() + x_height.abs() / 4,
-                                );
-
-                                Some(HorizontalListElem::Box {
-                                    tex_box: sup_box,
-                                    shift: sup_shift,
+                                    (sup_shift_for_style, metrics.get_font_dimension(5))
                                 })
-                            }
-                            (None, Some(subscript)) => {
-                                panic!("Unimplemented subscript");
-                            }
-                            (Some(superscript), Some(subscript)) => {
-                                panic!("Unimplemented superscript+subscript");
-                            }
-                            (None, None) => None,
-                        };
+                                .unwrap();
+
+                            sup_shift = max(
+                                max(sup_shift, sup_shift_for_style),
+                                *sup_box.depth() + x_height.abs() / 4,
+                            );
+
+                            Some(HorizontalListElem::Box {
+                                tex_box: sup_box,
+                                shift: sup_shift,
+                            })
+                        }
+                        (None, Some(subscript)) => {
+                            let mut sub_box = self.convert_math_field_to_box(
+                                subscript,
+                                &current_style.down_arrow(),
+                            );
+                            *sub_box.mut_width() =
+                                *sub_box.width() + scriptspace;
+
+                            let (sub1, x_height) = self
+                                .state
+                                .with_metrics_for_font(font, |metrics| {
+                                    (
+                                        metrics.get_font_dimension(16),
+                                        metrics.get_font_dimension(5),
+                                    )
+                                })
+                                .unwrap();
+
+                            sub_shift = max(
+                                max(sub_shift, sub1),
+                                *sub_box.height() - x_height.abs() * 4 / 5,
+                            );
+
+                            Some(HorizontalListElem::Box {
+                                tex_box: sub_box,
+                                shift: sub_shift * -1,
+                            })
+                        }
+                        (Some(_superscript), Some(_subscript)) => {
+                            panic!("Unimplemented superscript+subscript");
+                        }
+                        (None, None) => None,
+                    };
 
                     let mut translation = Vec::new();
                     if let Some(tex_box) = translated_nucleus {
@@ -1318,6 +1344,84 @@ mod tests {
                 r"\advance\count0 by 32768%",
                 r"\wd0=\count0 sp%",
                 r"\hbox{ab}\raise 237825sp \box0%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_converts_subscripts_to_lowered_boxes() {
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a_b%"],
+            &[
+                r"\font\teni=cmmi10%",
+                r"\font\seveni=cmmi7%",
+                r"\setbox0=\hbox{\seveni b}%",
+                r"\count0=\wd0%",
+                r"\advance\count0 by 32768%",
+                r"\wd0=\count0 sp%",
+                r"\hbox{\teni a}\lower 98303sp \box0%",
+            ],
+        );
+
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a_{b_c}%"],
+            &[
+                r"\font\teni=cmmi10%",
+                r"\font\seveni=cmmi7%",
+                r"\font\fivei=cmmi5%",
+                r"\setbox0=\hbox{\fivei c}%",
+                r"\count0=\wd0%",
+                r"\advance\count0 by 32768%",
+                r"\wd0=\count0 sp%",
+                r"\setbox1=\hbox{\hbox{\seveni b}\lower 65536sp \box0}%",
+                r"\count1=\wd1%",
+                r"\advance\count1 by 32768%",
+                r"\wd1=\count1 sp%",
+                r"\hbox{\teni a}\lower 98303sp \box1%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_converts_subscripts_in_superscripts() {
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a^{b_c}%"],
+            &[
+                r"\font\teni=cmmi10%",
+                r"\font\seveni=cmmi7%",
+                r"\font\fivei=cmmi5%",
+                r"\setbox0=\hbox{\fivei c}%",
+                r"\count0=\wd0%",
+                r"\advance\count0 by 32768%",
+                r"\wd0=\count0 sp%",
+                r"\setbox1=\hbox{\hbox{\seveni b}\lower 65536sp \box0}%",
+                r"\count1=\wd1%",
+                r"\advance\count1 by 32768%",
+                r"\wd1=\count1 sp%",
+                r"\hbox{\teni a}\raise 237825sp \box1%",
+            ],
+        );
+    }
+
+    #[test]
+    // Currently fails because single char nuclei aren't handled correctly
+    #[ignore]
+    fn it_converts_superscripts_in_subscripts() {
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a_{b^c}%"],
+            &[
+                r"\font\teni=cmmi10%",
+                r"\font\seveni=cmmi7%",
+                r"\font\fivei=cmmi5%",
+                r"\setbox0=\hbox{\fivei c}%",
+                r"\count0=\wd0%",
+                r"\advance\count0 by 32768%",
+                r"\wd0=\count0 sp%",
+                r"\setbox1=\hbox{\hbox{\seveni b}\raise 131071sp \box0}%",
+                r"\count1=\wd1%",
+                r"\advance\count1 by 32768%",
+                r"\wd1=\count1 sp%",
+                r"\hbox{\teni a}\lower 98303sp \box1%",
             ],
         );
     }
