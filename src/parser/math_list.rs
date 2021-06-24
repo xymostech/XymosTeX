@@ -512,23 +512,51 @@ impl<'a> Parser<'a> {
         for elem in list {
             match elem {
                 MathListElem::Atom(atom) => {
-                    let translated_nucleus = match atom.nucleus {
+                    let (
+                        translated_nucleus,
+                        nucleus_is_symbol,
+                        nucleus_height,
+                        nucleus_depth,
+                    ) = match atom.nucleus {
+                        Some(MathField::Symbol(symbol)) => {
+                            let font = &MATH_FONTS[&(
+                                get_font_style_for_math_style(&current_style),
+                                symbol.family_number,
+                            )];
+
+                            let char_elem = HorizontalListElem::Char {
+                                chr: symbol.position_number as char,
+                                font: font.clone(),
+                            };
+
+                            (
+                                vec![char_elem],
+                                true,
+                                Dimen::zero(),
+                                Dimen::zero(),
+                            )
+                        }
                         Some(field) => {
-                            Some(self.convert_math_field_to_box(
+                            let nucleus_box = self.convert_math_field_to_box(
                                 field,
                                 &current_style,
-                            ))
-                        }
-                        None => None,
-                    };
+                            );
 
-                    let (nucleus_height, nucleus_depth) =
-                        match translated_nucleus {
-                            None => (Dimen::zero(), Dimen::zero()),
-                            Some(ref tex_box) => {
-                                (*tex_box.height(), *tex_box.depth())
-                            }
-                        };
+                            let height = *nucleus_box.height();
+                            let depth = *nucleus_box.depth();
+
+                            (
+                                vec![HorizontalListElem::Box {
+                                    tex_box: nucleus_box,
+                                    shift: Dimen::zero(),
+                                }],
+                                false,
+                                height,
+                                depth,
+                            )
+                        }
+                        None => (vec![], false, Dimen::zero(), Dimen::zero()),
+                    };
 
                     let font = &MATH_FONTS
                         [&(get_font_style_for_math_style(&current_style), 2)];
@@ -543,8 +571,16 @@ impl<'a> Parser<'a> {
                         })
                         .unwrap();
 
-                    let mut sup_shift = nucleus_height - sup_drop;
-                    let mut sub_shift = nucleus_depth + sub_drop;
+                    let mut sup_shift = if nucleus_is_symbol {
+                        Dimen::zero()
+                    } else {
+                        nucleus_height - sup_drop
+                    };
+                    let mut sub_shift = if nucleus_is_symbol {
+                        Dimen::zero()
+                    } else {
+                        nucleus_depth + sub_drop
+                    };
 
                     // TODO(xymostech): Pull this from \scriptspace
                     let scriptspace = Dimen::from_unit(0.5, Unit::Point);
@@ -631,13 +667,7 @@ impl<'a> Parser<'a> {
                         (None, None) => None,
                     };
 
-                    let mut translation = Vec::new();
-                    if let Some(tex_box) = translated_nucleus {
-                        translation.push(HorizontalListElem::Box {
-                            tex_box,
-                            shift: Dimen::zero(),
-                        });
-                    }
+                    let mut translation = translated_nucleus;
                     if let Some(list_elem) = sub_sup_translation {
                         translation.push(list_elem);
                     }
@@ -1098,7 +1128,7 @@ mod tests {
     fn it_produces_single_characters_from_single_atom_math_lists() {
         assert_math_list_converts_to_horizontal_list(
             &[r"a%"],
-            &[r"\font\teni=cmmi10\teni \hbox{a}%"],
+            &[r"\font\teni=cmmi10\teni a%"],
         );
     }
 
@@ -1106,7 +1136,7 @@ mod tests {
     fn it_produces_multiple_characters_from_multiple_ord_math_lists() {
         assert_math_list_converts_to_horizontal_list(
             &[r"ab%"],
-            &[r"\font\teni=cmmi10\teni \hbox{a}\hbox{b}%"],
+            &[r"\font\teni=cmmi10\teni ab%"],
         );
     }
 
@@ -1140,20 +1170,13 @@ mod tests {
                 r"\def\,{\hskip 3pt}%",
                 r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
                 r"\def\;{\hskip 5pt plus 5pt}%",
-                r"\def\o{\hbox{o}}%",
-                r"\def\p{\hbox{p}}%",
-                r"\def\b{\hbox{b}}%",
-                r"\def\r{\hbox{r}}%",
-                r"\def\n{\hbox{n}}%",
-                r"\def\c{\hbox{c}}%",
-                r"\def\t{\hbox{t}}%",
-                r"\o\o\,\p\,\o\>\b\>\o\;\r\;\o\n\o\c\o\t\,\o\,%",
-                r"\p\,\p\;\r\;\p\n\p\c\,\p\t\,\p\,\o\>%",
-                r"\b\>\n\o\>\b\>\o\;%",
-                r"\r\r\;\n\r\c\;\r\t\,\r\;%",
-                r"\n\n\c\n\t\,\n%",
-                r"\c\c\t\,\c%",
-                r"\t\,\t%",
+                r"oo\,p\,o\>b\>o\;r\;onocot\,o\,%",
+                r"p\,p\;r\;pnpc\,pt\,p\,o\>%",
+                r"b\>no\>b\>o\;%",
+                r"rr\;nrc\;rt\,r\;%",
+                r"nncnt\,n%",
+                r"cct\,c%",
+                r"t\,t%",
             ],
         );
     }
@@ -1181,16 +1204,12 @@ mod tests {
                 r"\def\,{\hskip 3pt}%",
                 r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
                 r"\def\;{\hskip 5pt plus 5pt}%",
-                r"\def\o{\hbox{o}}%",
-                r"\def\b{\hbox{b}}%",
-                r"\def\r{\hbox{r}}%",
-                r"\def\p{\hbox{p}}%",
-                r"\o\;\r\p\,\o\>\b\>%",
-                r"\o\;\r\p\,\o\>\b%",
+                r"o\;rp\,o\>b\>%",
+                r"o\;rp\,o\>b%",
                 r"\sevenrm%",
-                r"\o\r\p\o\b%",
+                r"orpob%",
                 r"\fiverm%",
-                r"\o\r\p\o\b%",
+                r"orpob%",
             ],
         );
     }
@@ -1208,10 +1227,10 @@ mod tests {
                 r"\font\teni=cmmi10%",
                 r"\font\seveni=cmmi7%",
                 r"\font\fivei=cmmi5%",
-                r"\hbox{\teni a}%",
-                r"\hbox{\teni a}%",
-                r"\hbox{\seveni a}%",
-                r"\hbox{\fivei a}%",
+                r"\teni a%",
+                r"\teni a%",
+                r"\seveni a%",
+                r"\fivei a%",
             ],
         );
     }
@@ -1273,10 +1292,7 @@ mod tests {
     fn it_converts_math_field_nuclei_to_boxes() {
         assert_math_list_converts_to_horizontal_list(
             &[r"a{bc}d%"],
-            &[
-                r"\font\teni=cmmi10\teni%",
-                r"\hbox{a}\hbox{\hbox{b}\hbox{c}}\hbox{d}%",
-            ],
+            &[r"\font\teni=cmmi10\teni%", r"a\hbox{bc}d%"],
         );
     }
 
@@ -1311,7 +1327,7 @@ mod tests {
                 r"\count0=\wd0%",
                 r"\advance\count0 by 32768%",
                 r"\wd0=\count0 sp%",
-                r"\hbox{\teni a}\raise 237825sp \box0%",
+                r"\teni a\raise 237825sp \box0%",
             ],
         );
 
@@ -1325,11 +1341,11 @@ mod tests {
                 r"\count0=\wd0%",
                 r"\advance\count0 by 32768%",
                 r"\wd0=\count0 sp%",
-                r"\setbox1=\hbox{\hbox{\seveni b}\raise 197774sp \box0}%",
+                r"\setbox1=\hbox{\seveni b\raise 197774sp \box0}%",
                 r"\count1=\wd1%",
                 r"\advance\count1 by 32768%",
                 r"\wd1=\count1 sp%",
-                r"\hbox{\teni a}\raise 237825sp \box1%",
+                r"\teni a\raise 237825sp \box1%",
             ],
         );
     }
@@ -1359,7 +1375,7 @@ mod tests {
                 r"\count0=\wd0%",
                 r"\advance\count0 by 32768%",
                 r"\wd0=\count0 sp%",
-                r"\hbox{\teni a}\lower 98303sp \box0%",
+                r"\teni a\lower 98303sp \box0%",
             ],
         );
 
@@ -1373,11 +1389,11 @@ mod tests {
                 r"\count0=\wd0%",
                 r"\advance\count0 by 32768%",
                 r"\wd0=\count0 sp%",
-                r"\setbox1=\hbox{\hbox{\seveni b}\lower 65536sp \box0}%",
+                r"\setbox1=\hbox{\seveni b\lower 65536sp \box0}%",
                 r"\count1=\wd1%",
                 r"\advance\count1 by 32768%",
                 r"\wd1=\count1 sp%",
-                r"\hbox{\teni a}\lower 98303sp \box1%",
+                r"\teni a\lower 98303sp \box1%",
             ],
         );
     }
@@ -1394,18 +1410,16 @@ mod tests {
                 r"\count0=\wd0%",
                 r"\advance\count0 by 32768%",
                 r"\wd0=\count0 sp%",
-                r"\setbox1=\hbox{\hbox{\seveni b}\lower 65536sp \box0}%",
+                r"\setbox1=\hbox{\seveni b\lower 65536sp \box0}%",
                 r"\count1=\wd1%",
                 r"\advance\count1 by 32768%",
                 r"\wd1=\count1 sp%",
-                r"\hbox{\teni a}\raise 237825sp \box1%",
+                r"\teni a\raise 237825sp \box1%",
             ],
         );
     }
 
     #[test]
-    // Currently fails because single char nuclei aren't handled correctly
-    #[ignore]
     fn it_converts_superscripts_in_subscripts() {
         assert_math_list_converts_to_horizontal_list(
             &[r"a_{b^c}%"],
@@ -1417,11 +1431,11 @@ mod tests {
                 r"\count0=\wd0%",
                 r"\advance\count0 by 32768%",
                 r"\wd0=\count0 sp%",
-                r"\setbox1=\hbox{\hbox{\seveni b}\raise 131071sp \box0}%",
+                r"\setbox1=\hbox{\seveni b\raise 131071sp \box0}%",
                 r"\count1=\wd1%",
                 r"\advance\count1 by 32768%",
                 r"\wd1=\count1 sp%",
-                r"\hbox{\teni a}\lower 98303sp \box1%",
+                r"\teni a\lower 98303sp \box1%",
             ],
         );
     }

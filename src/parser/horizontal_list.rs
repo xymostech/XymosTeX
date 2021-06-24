@@ -239,6 +239,13 @@ mod tests {
         };
     }
 
+    lazy_static! {
+        static ref CMMI10: Font = Font {
+            font_name: "cmmi10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        };
+    }
+
     fn assert_parses_to_with_restricted(
         lines: &[&str],
         expected_toks: &[HorizontalListElem],
@@ -625,40 +632,30 @@ mod tests {
 
     #[test]
     fn it_parses_math_shifts() {
-        with_parser(
-            &[r"\font\x=cmmi10\hbox{\x a}\hbox{\x b}$ab$%"],
-            |parser| {
-                parser.parse_assignment();
-                let box_a = parser.parse_box().unwrap();
-                let box_b = parser.parse_box().unwrap();
-
-                assert_eq!(
-                    parser.parse_horizontal_list(false, false),
-                    &[
-                        HorizontalListElem::Box {
-                            tex_box: box_a,
-                            shift: Dimen::zero()
-                        },
-                        HorizontalListElem::Box {
-                            tex_box: box_b,
-                            shift: Dimen::zero()
-                        },
-                    ]
-                );
-            },
-        );
+        with_parser(&[r"$ab$%"], |parser| {
+            assert_eq!(
+                parser.parse_horizontal_list(false, false),
+                &[
+                    HorizontalListElem::Char {
+                        chr: 'a',
+                        font: CMMI10.clone()
+                    },
+                    HorizontalListElem::Char {
+                        chr: 'b',
+                        font: CMMI10.clone()
+                    },
+                ]
+            );
+        });
     }
 
     #[test]
     fn it_adds_grouping_around_math_lists() {
         with_parser(
             &[
-                r"\hbox{2}%",
                 r"\count0=1 \number\count0 $\count0=2 \number\count0$\number\count0%",
             ],
             |parser| {
-                let box_2 = parser.parse_box().unwrap();
-
                 assert_eq!(
                     parser.parse_horizontal_list(false, false),
                     &[
@@ -666,9 +663,9 @@ mod tests {
                             chr: '1',
                             font: CMR10.clone(),
                         },
-                        HorizontalListElem::Box {
-                            tex_box: box_2,
-                            shift: Dimen::zero()
+                        HorizontalListElem::Char {
+                            chr: '2',
+                            font: CMR10.clone(),
                         },
                         HorizontalListElem::Char {
                             chr: '1',

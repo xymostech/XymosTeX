@@ -61,7 +61,6 @@ impl MathSymbol {
 #[derive(Debug, PartialEq)]
 pub enum MathField {
     Symbol(MathSymbol),
-    #[allow(dead_code)]
     TeXBox(TeXBox),
     MathList(MathList),
 }
