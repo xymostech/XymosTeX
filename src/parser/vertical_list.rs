@@ -2,6 +2,7 @@ use crate::category::Category;
 use crate::dimension::{Dimen, Unit};
 use crate::glue::Glue;
 use crate::list::VerticalListElem;
+use crate::parser::assignment::SpecialVariables;
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -43,6 +44,7 @@ impl<'a> Parser<'a> {
     fn parse_vertical_list_elem(
         &mut self,
         group_level: &mut usize,
+        prev_depth: &mut Dimen,
         internal: bool,
     ) -> Option<VerticalListElem> {
         let expanded_token = self.peek_expanded_token();
@@ -61,13 +63,21 @@ impl<'a> Parser<'a> {
             Some(Token::Char(_, cat)) => match cat {
                 Category::Space => {
                     self.lex_expanded_token();
-                    self.parse_vertical_list_elem(group_level, internal)
+                    self.parse_vertical_list_elem(
+                        group_level,
+                        prev_depth,
+                        internal,
+                    )
                 }
                 Category::BeginGroup => {
                     self.lex_expanded_token();
                     *group_level += 1;
                     self.state.push_state();
-                    self.parse_vertical_list_elem(group_level, internal)
+                    self.parse_vertical_list_elem(
+                        group_level,
+                        prev_depth,
+                        internal,
+                    )
                 }
                 Category::EndGroup => {
                     if *group_level == 0 {
@@ -80,7 +90,11 @@ impl<'a> Parser<'a> {
                         self.lex_expanded_token();
                         *group_level -= 1;
                         self.state.pop_state();
-                        self.parse_vertical_list_elem(group_level, internal)
+                        self.parse_vertical_list_elem(
+                            group_level,
+                            prev_depth,
+                            internal,
+                        )
                     }
                 }
                 _ => panic!("unimplemented"),
@@ -95,7 +109,7 @@ impl<'a> Parser<'a> {
             Some(ref tok) if self.state.is_token_equal_to_prim(tok, "par") => {
                 // \par is completely ignored
                 self.lex_expanded_token();
-                self.parse_vertical_list_elem(group_level, internal)
+                self.parse_vertical_list_elem(group_level, prev_depth, internal)
             }
             Some(ref tok)
                 if self.state.is_token_equal_to_prim(tok, "vskip") =>
@@ -115,7 +129,11 @@ impl<'a> Parser<'a> {
                         shift: shift * -1,
                     })
                 } else {
-                    self.parse_vertical_list_elem(group_level, internal)
+                    self.parse_vertical_list_elem(
+                        group_level,
+                        prev_depth,
+                        internal,
+                    )
                 }
             }
             Some(ref tok)
@@ -126,13 +144,23 @@ impl<'a> Parser<'a> {
                 if let Some(tex_box) = self.parse_box() {
                     Some(VerticalListElem::Box { tex_box, shift })
                 } else {
-                    self.parse_vertical_list_elem(group_level, internal)
+                    self.parse_vertical_list_elem(
+                        group_level,
+                        prev_depth,
+                        internal,
+                    )
                 }
             }
             _ => {
                 if self.is_assignment_head() {
-                    self.parse_assignment();
-                    self.parse_vertical_list_elem(group_level, internal)
+                    self.parse_assignment(Some(SpecialVariables {
+                        prev_depth: Some(prev_depth),
+                    }));
+                    self.parse_vertical_list_elem(
+                        group_level,
+                        prev_depth,
+                        internal,
+                    )
                 } else if self.is_next_expanded_token_in_set_of_primitives(&[
                     "indent", "noindent",
                 ]) {
@@ -149,7 +177,11 @@ impl<'a> Parser<'a> {
                             shift: Dimen::zero(),
                         })
                     } else {
-                        self.parse_vertical_list_elem(group_level, internal)
+                        self.parse_vertical_list_elem(
+                            group_level,
+                            prev_depth,
+                            internal,
+                        )
                     }
                 } else {
                     panic!("unimplemented");
@@ -165,7 +197,6 @@ impl<'a> Parser<'a> {
         let mut result = Vec::new();
 
         // The depth of the most recent box.
-        // TODO(xymostech): Store this in the \prevdepth parameter
         let mut prev_depth = Dimen::from_unit(-1000.0, Unit::Point);
 
         // TODO(xymostech): Store these as \baselineskip, \lineskiplimit,
@@ -177,9 +208,11 @@ impl<'a> Parser<'a> {
         let topskip = Glue::from_dimen(Dimen::from_unit(10.0, Unit::Point));
 
         let mut group_level = 0;
-        while let Some(elem) =
-            self.parse_vertical_list_elem(&mut group_level, internal)
-        {
+        while let Some(elem) = self.parse_vertical_list_elem(
+            &mut group_level,
+            &mut prev_depth,
+            internal,
+        ) {
             // Handle box elements specially so we can add interline glue
             if let VerticalListElem::Box {
                 ref tex_box,
@@ -514,8 +547,8 @@ mod tests {
                 r"\box2",
             ],
             |parser| {
-                parser.parse_assignment();
-                parser.parse_assignment();
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
 
                 let box0 = parser.state.get_box(0).unwrap();
                 let box1 = parser.state.get_box(1).unwrap();
@@ -562,8 +595,8 @@ mod tests {
                 r"\noindent g\par%",
             ],
             |parser| {
-                parser.parse_assignment();
-                parser.parse_assignment();
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
 
                 let box0 = parser.state.get_box(0).unwrap();
                 let box1 = parser.state.get_box(1).unwrap();
@@ -612,10 +645,10 @@ mod tests {
                 r"\indent g\par%",
             ],
             |parser| {
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
 
                 let box0 = parser.state.get_box(0).unwrap();
                 let box1 = parser.state.get_box(1).unwrap();
@@ -666,12 +699,12 @@ mod tests {
                 r"\hskip 1pt\par%",
             ],
             |parser| {
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
 
                 let box1 = parser.state.get_box(1).unwrap();
                 let box2 = parser.state.get_box(2).unwrap();
@@ -738,13 +771,13 @@ mod tests {
                 r"\copy2%",
             ],
             |parser| {
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
 
                 assert_eq!(
                     parser.parse_vertical_list(true),
@@ -849,6 +882,59 @@ mod tests {
                         tex_box: abox,
                         shift: Dimen::zero(),
                     },]
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_allows_prev_depth_assignments() {
+        with_parser(&[r"\prevdepth=2pt%", r"\vskip 2pt%"], |parser| {
+            parser.parse_vertical_list(true);
+        });
+    }
+
+    #[test]
+    fn it_uses_updated_prev_depth_values() {
+        with_parser(
+            &[
+                r"\setbox0=\hbox{}%",
+                r"\dp0=5pt%",
+                r"\setbox1=\hbox{}%",
+                r"\ht1=5pt%",
+                r"\dp1=8pt%",
+                r"\setbox2=\hbox{}%",
+                r"\ht2=5pt%",
+                r"\copy0%",
+                r"\prevdepth=3pt%",
+                r"\copy1%",
+                r"\prevdepth=-1000pt%",
+                r"\copy2%",
+            ],
+            |parser| {
+                assert_eq!(
+                    parser.parse_vertical_list(true),
+                    &[
+                        VerticalListElem::Box {
+                            tex_box: parser.state.get_box(0).unwrap(),
+                            shift: Dimen::zero()
+                        },
+                        // prevdepth=3pt instead of the original 5pt
+                        // 12pt - 3pt - 5pt = 4pt of interline glue
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(4.0, Unit::Point)
+                        )),
+                        VerticalListElem::Box {
+                            tex_box: parser.state.get_box(1).unwrap(),
+                            shift: Dimen::zero()
+                        },
+                        // no interline glue because prevdepth was set to
+                        // -1000pt
+                        VerticalListElem::Box {
+                            tex_box: parser.state.get_box(2).unwrap(),
+                            shift: Dimen::zero()
+                        },
+                    ]
                 );
             },
         );

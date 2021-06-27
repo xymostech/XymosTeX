@@ -240,7 +240,7 @@ mod tests {
 
         // Now with an expanded space
         with_parser(&["\\def\\x{ }%", "a a\\x aa%"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             assert_eq!(
                 parser.lex_expanded_token(),
@@ -288,7 +288,7 @@ mod tests {
 
         // Testing multiple optional expanded spaces
         with_parser(&["\\def\\x{ }%", "aa a \\x a\\x\\x a%"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             assert_eq!(
                 parser.lex_expanded_token(),
@@ -372,7 +372,7 @@ mod tests {
     #[test]
     fn it_fetches_renamed_tokens() {
         with_parser(&[r"\let\bgroup={%", r"\bgroup"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             let unreplaced = parser.lex_unexpanded_token();
             assert_eq!(

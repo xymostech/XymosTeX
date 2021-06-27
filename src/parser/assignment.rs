@@ -14,6 +14,10 @@ enum AtClause {
     At(Dimen),
 }
 
+pub struct SpecialVariables<'a> {
+    pub prev_depth: Option<&'a mut Dimen>,
+}
+
 impl<'a> Parser<'a> {
     fn is_variable_assignment_head(&mut self) -> bool {
         self.is_integer_variable_head() || self.is_dimen_variable_head()
@@ -52,6 +56,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn is_intimate_assignment_head(&mut self) -> bool {
+        self.is_next_expanded_token_in_set_of_primitives(&["prevdepth"])
+    }
+
+    fn is_global_assignment_head(&mut self) -> bool {
+        self.is_intimate_assignment_head()
+    }
+
     fn is_simple_assignment_head(&mut self) -> bool {
         self.is_let_assignment_head()
             || self.is_variable_assignment_head()
@@ -61,6 +73,7 @@ impl<'a> Parser<'a> {
             || self.is_code_assignment_head()
             || self.is_font_assignment_head()
             || self.is_fontdef_assignment_head()
+            || self.is_global_assignment_head()
     }
 
     fn is_assignment_prefix(&mut self) -> bool {
@@ -296,7 +309,46 @@ impl<'a> Parser<'a> {
         self.state.set_current_font(global, &font);
     }
 
-    fn parse_simple_assignment(&mut self, global: bool) {
+    fn parse_intimate_assignment(
+        &mut self,
+        maybe_special_vars: Option<SpecialVariables>,
+    ) {
+        let tok = self.lex_expanded_token().unwrap();
+
+        if self.state.is_token_equal_to_prim(&tok, "prevdepth") {
+            self.parse_equals_expanded();
+            let dimen = self.parse_dimen();
+
+            if let Some(special_vars) = maybe_special_vars {
+                if let Some(prev_depth) = special_vars.prev_depth {
+                    *prev_depth = dimen;
+                } else {
+                    panic!("Invalid prevdepth assignment");
+                }
+            } else {
+                panic!("Invalid prevdepth assignment");
+            }
+        } else {
+            panic!("unimplemented");
+        }
+    }
+
+    fn parse_global_assignment(
+        &mut self,
+        special_vars: Option<SpecialVariables>,
+    ) {
+        if self.is_intimate_assignment_head() {
+            self.parse_intimate_assignment(special_vars)
+        } else {
+            panic!("unimplemented");
+        }
+    }
+
+    fn parse_simple_assignment(
+        &mut self,
+        global: bool,
+        special_vars: Option<SpecialVariables>,
+    ) {
         if self.is_variable_assignment_head() {
             self.parse_variable_assignment(global)
         } else if self.is_let_assignment_head() {
@@ -313,21 +365,27 @@ impl<'a> Parser<'a> {
             self.parse_font_assignment(global)
         } else if self.is_fontdef_assignment_head() {
             self.parse_fontdef_assignment(global)
+        } else if self.is_global_assignment_head() {
+            self.parse_global_assignment(special_vars)
         } else {
             panic!("unimplemented");
         }
     }
 
-    fn parse_assignment_global(&mut self, global: bool) {
+    fn parse_assignment_global(
+        &mut self,
+        global: bool,
+        special_vars: Option<SpecialVariables>,
+    ) {
         if self.is_macro_assignment_head() {
             self.parse_macro_assignment(global)
         } else if self.is_simple_assignment_head() {
-            self.parse_simple_assignment(global)
+            self.parse_simple_assignment(global, special_vars)
         } else {
             let tok = self.lex_expanded_token().unwrap();
             if self.state.is_token_equal_to_prim(&tok, "global") {
                 if self.is_assignment_head() {
-                    self.parse_assignment_global(true);
+                    self.parse_assignment_global(true, special_vars);
                 } else {
                     panic!("Non-assignment head found after \\global");
                 }
@@ -337,8 +395,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_assignment(&mut self) {
-        self.parse_assignment_global(false);
+    pub fn parse_assignment(&mut self, special_vars: Option<SpecialVariables>) {
+        self.parse_assignment_global(false, special_vars);
     }
 }
 
@@ -354,7 +412,7 @@ mod tests {
     #[test]
     fn it_assigns_macros() {
         with_parser(&["\\def\\a #1x{#1y#1}%"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             assert_eq!(
                 *parser
@@ -387,7 +445,7 @@ mod tests {
         with_parser(&["\\global\\def\\a{x}%"], |parser| {
             parser.state.push_state();
             assert!(parser.is_assignment_head());
-            parser.parse_assignment();
+            parser.parse_assignment(None);
             assert_eq!(parser.lex_unexpanded_token(), None);
             parser.state.pop_state();
 
@@ -410,7 +468,7 @@ mod tests {
     #[test]
     fn it_assigns_lets_for_characters() {
         with_parser(&["\\let\\a=b%"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             assert_eq!(
                 parser.state.get_renamed_token(&Token::ControlSequence(
@@ -424,8 +482,8 @@ mod tests {
     #[test]
     fn it_assigns_lets_for_previously_defined_macros() {
         with_parser(&["\\def\\a{x}%", "\\let\\b=\\a%"], |parser| {
-            parser.parse_assignment();
-            parser.parse_assignment();
+            parser.parse_assignment(None);
+            parser.parse_assignment(None);
 
             assert_eq!(
                 *parser
@@ -447,7 +505,7 @@ mod tests {
     fn it_doesnt_assign_lets_for_active_tokens() {
         with_parser(&["\\let\\a=@%"], |parser| {
             parser.state.set_category(false, '@', Category::Active);
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             assert_eq!(
                 parser.state.get_renamed_token(&Token::ControlSequence(
@@ -461,7 +519,7 @@ mod tests {
     #[test]
     fn it_assigns_lets_for_primitives() {
         with_parser(&["\\let\\a=\\def%"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             assert!(parser.state.is_token_equal_to_prim(
                 &Token::ControlSequence("a".to_string()),
@@ -473,8 +531,8 @@ mod tests {
     #[test]
     fn it_lets_let_be_let() {
         with_parser(&["\\let\\a=\\let%", "\\a\\x=y%"], |parser| {
-            parser.parse_assignment();
-            parser.parse_assignment();
+            parser.parse_assignment(None);
+            parser.parse_assignment(None);
 
             assert_eq!(
                 parser.state.get_renamed_token(&Token::ControlSequence(
@@ -488,8 +546,8 @@ mod tests {
     #[test]
     fn it_lets_def_be_let() {
         with_parser(&["\\let\\a=\\def%", "\\a\\x #1{#1}%"], |parser| {
-            parser.parse_assignment();
-            parser.parse_assignment();
+            parser.parse_assignment(None);
+            parser.parse_assignment(None);
 
             assert_eq!(
                 *parser
@@ -508,7 +566,7 @@ mod tests {
     fn it_sets_global_lets() {
         with_parser(&["\\global\\let\\a=b%"], |parser| {
             parser.state.push_state();
-            parser.parse_assignment();
+            parser.parse_assignment(None);
             parser.state.pop_state();
 
             assert_eq!(
@@ -525,9 +583,9 @@ mod tests {
         with_parser(
             &["\\count0=2%", "\\count100 -12345%", "\\count10=\\count100%"],
             |parser| {
-                parser.parse_assignment();
-                parser.parse_assignment();
-                parser.parse_assignment();
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
 
                 assert_eq!(parser.state.get_count(0), 2);
                 assert_eq!(parser.state.get_count(100), -12345);
@@ -540,7 +598,7 @@ mod tests {
     fn it_sets_count_variables_globally() {
         with_parser(&["\\global\\count0=2%"], |parser| {
             parser.state.push_state();
-            parser.parse_assignment();
+            parser.parse_assignment(None);
             parser.state.pop_state();
 
             assert_eq!(parser.state.get_count(0), 2);
@@ -558,22 +616,22 @@ mod tests {
                 "\\divide\\count0 by\\count1%",
             ],
             |parser| {
-                parser.parse_assignment();
-                parser.parse_assignment();
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
 
                 assert_eq!(parser.state.get_count(0), 150);
                 assert_eq!(parser.state.get_count(1), 5);
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
                 assert_eq!(parser.state.get_count(0), 157);
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
                 assert_eq!(parser.state.get_count(1), 10);
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
                 assert_eq!(parser.state.get_count(0), 15);
             },
         );
@@ -583,7 +641,7 @@ mod tests {
     fn it_sets_boxes() {
         with_parser(&["\\setbox123=\\hbox{a}%"], |parser| {
             assert!(parser.is_assignment_head());
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             assert!(parser.state.get_box(123).is_some());
         });
@@ -595,13 +653,13 @@ mod tests {
             &[r"\setbox0=\hbox{a}%", r"\wd0=2pt%", r"\ht0=3pt%"],
             |parser| {
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert_eq!(
                     parser.state.with_box(0, |tex_box| *tex_box.width()),
@@ -626,15 +684,15 @@ mod tests {
             ],
             |parser| {
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 let x = parser.parse_unexpanded_control_sequence();
                 let y = parser.parse_unexpanded_control_sequence();
@@ -662,10 +720,10 @@ mod tests {
             &[r#"\mathcode`*="2203%"#, r#"\mathcode`<="313C%"#],
             |parser| {
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert_eq!(
                     parser.state.get_math_code('*'),
@@ -689,13 +747,13 @@ mod tests {
             ],
             |parser| {
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert_eq!(
                     parser.state.get_fontdef(&Token::ControlSequence(
@@ -733,8 +791,8 @@ mod tests {
     #[test]
     fn it_expands_macros_in_font_assignment() {
         with_parser(&[r"\def\y{10}%", r"\font\z=cmr\y%"], |parser| {
-            parser.parse_assignment();
-            parser.parse_assignment();
+            parser.parse_assignment(None);
+            parser.parse_assignment(None);
 
             assert_eq!(
                 parser
@@ -752,8 +810,8 @@ mod tests {
     #[should_panic(expected = "Invalid font name: cmr")]
     fn it_does_not_expand_the_assigned_font_name_in_font_assignment() {
         with_parser(&[r"\def\x{10}%", r"\font\x=cmr\x%"], |parser| {
-            parser.parse_assignment();
-            parser.parse_assignment();
+            parser.parse_assignment(None);
+            parser.parse_assignment(None);
         });
     }
 
@@ -769,9 +827,9 @@ mod tests {
             ],
             |parser| {
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert_eq!(
                     parser.state.get_current_font(),
@@ -782,9 +840,9 @@ mod tests {
                 );
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert_eq!(
                     parser.state.get_current_font(),
@@ -795,9 +853,9 @@ mod tests {
                 );
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert_eq!(
                     parser.state.get_current_font(),
@@ -808,9 +866,9 @@ mod tests {
                 );
 
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
                 assert!(parser.is_assignment_head());
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert_eq!(
                     parser.state.get_current_font(),
@@ -821,5 +879,30 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn it_assigns_prevdepth_values() {
+        with_parser(&[r"\prevdepth=2pt%"], |parser| {
+            let mut prev_depth = Dimen::zero();
+
+            let special_variables = SpecialVariables {
+                prev_depth: Some(&mut prev_depth),
+            };
+
+            assert!(parser.is_assignment_head());
+            parser.parse_assignment(Some(special_variables));
+
+            assert_eq!(prev_depth, Dimen::from_unit(2.0, Unit::Point));
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid prevdepth assignment")]
+    fn it_fails_to_assign_prevdepth_values_with_unassigned_special_variable() {
+        with_parser(&[r"\prevdepth=2pt%"], |parser| {
+            parser
+                .parse_assignment(Some(SpecialVariables { prev_depth: None }));
+        });
     }
 }

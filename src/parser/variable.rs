@@ -50,7 +50,7 @@ mod tests {
         with_parser(
             &["\\let\\x=\\count%", "\\count0%", "\\count255%", "\\x255%"],
             |parser| {
-                parser.parse_assignment();
+                parser.parse_assignment(None);
 
                 assert!(parser.is_integer_variable_head());
                 assert_eq!(

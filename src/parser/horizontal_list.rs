@@ -158,7 +158,7 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 if self.is_assignment_head() {
-                    self.parse_assignment();
+                    self.parse_assignment(None);
                     self.parse_horizontal_list_elem(group_level, restricted)
                 } else if self.is_box_head() {
                     let maybe_tex_box = self.parse_box();
@@ -554,8 +554,8 @@ mod tests {
     #[test]
     fn it_adds_indentation() {
         with_parser(&[r"\setbox0=\hbox{}%", r"\wd0=20pt%", "a%"], |parser| {
-            parser.parse_assignment();
-            parser.parse_assignment();
+            parser.parse_assignment(None);
+            parser.parse_assignment(None);
 
             assert_eq!(
                 parser.parse_horizontal_list(false, true),

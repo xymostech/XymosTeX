@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn it_parses_coerced_dimens() {
         with_parser(&[r"\setbox0=\hbox{g}%", r"\wd0%", r"-\ht0%"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             let metrics = parser
                 .state

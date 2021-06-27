@@ -53,6 +53,7 @@ const ALL_PRIMITIVES: &[&str] = &[
     "lower",
     "moveleft",
     "moveright",
+    "prevdepth",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {

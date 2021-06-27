@@ -382,7 +382,7 @@ impl<'a> Parser<'a> {
                     self.parse_math_subscript(last_atom)
                 }));
             } else if self.is_assignment_head() {
-                self.parse_assignment();
+                self.parse_assignment(None);
             } else if self.is_style_change_head() {
                 let style_change = self.parse_style_change();
                 current_list.push(MathListElem::StyleChange(style_change));
@@ -770,7 +770,7 @@ mod tests {
     #[test]
     fn it_parses_math_symbols_from_chardefs() {
         with_parser(&[r"\let\x=z%", r"\x%"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             assert_eq!(
                 parser.parse_math_symbol(),

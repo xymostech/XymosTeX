@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn it_prints_numbers() {
         with_parser(&["\\count1=-100 %", "\\number\\count1%"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
             assert_eq!(
                 parser.lex_expanded_token(),
                 Some(Token::Char('-', Category::Other))

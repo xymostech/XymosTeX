@@ -663,7 +663,7 @@ mod tests {
     #[test]
     fn it_parses_boxes_from_box_registers() {
         with_parser(&[r"\setbox0=\hbox{a}%", r"\box0", r"\box0"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
 
@@ -679,7 +679,7 @@ mod tests {
     #[test]
     fn it_parses_copied_boxes_from_box_registers() {
         with_parser(&[r"\setbox0=\hbox{a}%", r"\copy0", r"\box0"], |parser| {
-            parser.parse_assignment();
+            parser.parse_assignment(None);
 
             assert!(parser.is_box_head());
             let copied_box = parser.parse_box().unwrap();
@@ -777,7 +777,7 @@ mod tests {
                 let metrics =
                     parser.state.get_metrics_for_font(&CMR10).unwrap();
 
-                parser.parse_assignment();
+                parser.parse_assignment(None);
                 let vbox = parser.parse_box().unwrap();
 
                 assert_eq!(*vbox.height(), Dimen::from_unit(20.0, Unit::Point));
@@ -801,8 +801,8 @@ mod tests {
                 r"\setbox1=\hbox{1\hbox{12}1\vbox{12}1}%",
             ],
             |parser| {
-                parser.parse_assignment();
-                parser.parse_assignment();
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
 
                 assert_eq!(parser.state.get_box(0), parser.state.get_box(1),);
             },
