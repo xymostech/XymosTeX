@@ -1,12 +1,12 @@
 use std::cmp::max;
 use std::collections::HashMap;
 
-use crate::boxes::{HorizontalBox, TeXBox};
+use crate::boxes::{HorizontalBox, TeXBox, VerticalBox};
 use crate::category::Category;
 use crate::dimension::{Dimen, SpringDimen, Unit};
 use crate::font::Font;
 use crate::glue::Glue;
-use crate::list::HorizontalListElem;
+use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::math_code::MathCode;
 use crate::math_list::{
     AtomKind, MathAtom, MathField, MathList, MathListElem, MathStyle,
@@ -167,11 +167,11 @@ lazy_static! {
         }),
         ((MathStyle::ScriptStyle, 3), Font {
             font_name: "cmex10".to_string(),
-            scale: Dimen::from_unit(7.0, Unit::Point),
+            scale: Dimen::from_unit(10.0, Unit::Point),
         }),
         ((MathStyle::ScriptScriptStyle, 3), Font {
             font_name: "cmex10".to_string(),
-            scale: Dimen::from_unit(5.0, Unit::Point),
+            scale: Dimen::from_unit(10.0, Unit::Point),
         }),
     ].iter().cloned().collect();
 }
@@ -571,6 +571,9 @@ impl<'a> Parser<'a> {
                         })
                         .unwrap();
 
+                    // The amount that the superscript and subscript will be
+                    // shifted with respect to the nucleus. Called u and v in
+                    // the TeXbook.
                     let mut sup_shift = if nucleus_is_symbol {
                         Dimen::zero()
                     } else {
@@ -661,8 +664,143 @@ impl<'a> Parser<'a> {
                                 shift: sub_shift * -1,
                             })
                         }
-                        (Some(_superscript), Some(_subscript)) => {
-                            panic!("Unimplemented superscript+subscript");
+                        (Some(superscript), Some(subscript)) => {
+                            let mut sup_box = self.convert_math_field_to_box(
+                                superscript,
+                                &current_style.up_arrow(),
+                            );
+                            *sup_box.mut_width() =
+                                *sup_box.width() + scriptspace;
+
+                            let (sup_shift_for_style, sub_2, x_height) = self
+                                .state
+                                .with_metrics_for_font(font, |metrics| {
+                                    let sup_shift_for_style = match current_style {
+                                        MathStyle::DisplayStyle => {
+                                            metrics.get_font_dimension(13)
+                                        }
+                                        MathStyle::DisplayStylePrime => {
+                                            metrics.get_font_dimension(15)
+                                        }
+                                        MathStyle::TextStylePrime => {
+                                            metrics.get_font_dimension(15)
+                                        }
+                                        MathStyle::ScriptStylePrime => {
+                                            metrics.get_font_dimension(15)
+                                        }
+                                        MathStyle::ScriptScriptStylePrime => {
+                                            metrics.get_font_dimension(15)
+                                        }
+                                        _ => metrics.get_font_dimension(14),
+                                    };
+
+                                    (sup_shift_for_style, metrics.get_font_dimension(17), metrics.get_font_dimension(5))
+                                })
+                                .unwrap();
+
+                            sup_shift = max(
+                                max(sup_shift, sup_shift_for_style),
+                                *sup_box.depth() + x_height.abs() / 4,
+                            );
+
+                            let mut sub_box = self.convert_math_field_to_box(
+                                subscript,
+                                &current_style.down_arrow(),
+                            );
+                            *sub_box.mut_width() =
+                                *sub_box.width() + scriptspace;
+
+                            let sup_height = *sup_box.height();
+                            let sup_depth = *sup_box.depth();
+                            let sub_height = *sub_box.height();
+                            let sub_depth = *sub_box.depth();
+
+                            sub_shift = max(sub_shift, sub_2);
+
+                            let ext_font = &MATH_FONTS[&(
+                                get_font_style_for_math_style(&current_style),
+                                3,
+                            )];
+                            let default_rule_thickness = self
+                                .state
+                                .with_metrics_for_font(ext_font, |metrics| {
+                                    metrics.get_font_dimension(8)
+                                })
+                                .unwrap();
+
+                            if (sup_shift - sup_depth)
+                                - (sub_height - sub_shift)
+                                < default_rule_thickness * 4
+                            {
+                                sub_shift = default_rule_thickness * 4
+                                    + sub_height
+                                    - (sup_shift - sup_depth);
+                                assert!(
+                                    (sup_shift - sup_depth)
+                                        - (sub_height - sub_shift)
+                                        == default_rule_thickness * 4
+                                );
+
+                                let final_shift = x_height.abs() * 4 / 5
+                                    - (sup_shift - sup_depth);
+
+                                if final_shift > Dimen::zero() {
+                                    sup_shift = sup_shift + final_shift;
+                                    sub_shift = sub_shift - final_shift;
+                                }
+                            }
+
+                            let skip_dist =
+                                sup_shift + sub_shift - sup_depth - sub_height;
+                            assert!(
+                                sup_height
+                                    + sup_depth
+                                    + skip_dist
+                                    + sub_height
+                                    + sub_depth
+                                    == sup_height
+                                        + sup_shift
+                                        + sub_depth
+                                        + sub_shift
+                            );
+
+                            let max_width =
+                                max(*sup_box.width(), *sub_box.width());
+
+                            let supsub_box = VerticalBox {
+                                // NOTE: The TeXbook says that the height of
+                                // this resulting box should be sup_height +
+                                // sup_shift and the depth should be sub_shift
+                                // + sub_depth. However, experimentally I've
+                                // found that the boxes actually produced have
+                                // the sub_shift included in the height. This
+                                // necessitates that the box be shifted down by
+                                // sub_shift to put the baseline in the correct
+                                // spot, which is implemented below.
+                                height: sup_height + sup_shift + sub_shift,
+                                depth: sub_depth,
+                                width: max_width,
+
+                                list: vec![
+                                    VerticalListElem::Box {
+                                        tex_box: sup_box,
+                                        shift: Dimen::zero(),
+                                    },
+                                    VerticalListElem::VSkip(Glue::from_dimen(
+                                        skip_dist,
+                                    )),
+                                    VerticalListElem::Box {
+                                        tex_box: sub_box,
+                                        shift: Dimen::zero(),
+                                    },
+                                ],
+                                glue_set_ratio: None,
+                            };
+
+                            Some(HorizontalListElem::Box {
+                                tex_box: TeXBox::VerticalBox(supsub_box),
+                                shift: sub_shift * -1,
+                            })
                         }
                         (None, None) => None,
                     };
@@ -1436,6 +1574,76 @@ mod tests {
                 r"\advance\count1 by 32768%",
                 r"\wd1=\count1 sp%",
                 r"\teni a\lower 98303sp \box1%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_converts_superscript_subscript_pairs() {
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a^b_c%"],
+            &[
+                r"\font\teni=cmmi10%",
+                r"\font\seveni=cmmi7%",
+                r"\def\nointerlineskip{\prevdepth=-1000pt}%",
+                r"\def\addscriptspace#1{%",
+                r"  \count0=\wd#1%",
+                r"  \advance\count0 by 32768 %",
+                r"  \wd#1=\count0 sp}%",
+                r"\teni a\lower 162016sp \vbox{%",
+                r"  \setbox0=\hbox{\seveni b}%",
+                r"  \addscriptspace 0%",
+                r"  \box0%",
+                r"  \vskip 202323sp%",
+                r"  \nointerlineskip%",
+                r"  \setbox0=\hbox{\seveni c}%",
+                r"  \addscriptspace 0%",
+                r"  \box0%",
+                r"}%",
+            ],
+        );
+
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a^{b^c_c}_{c^b_b}%"],
+            &[
+                r"\font\teni=cmmi10%",
+                r"\font\seveni=cmmi7%",
+                r"\font\fivei=cmmi5%",
+                r"\def\nointerlineskip{\prevdepth=-1000pt}%",
+                r"\def\addscriptspace#1{%",
+                r"  \count0=\wd#1%",
+                r"  \advance\count0 by 32768 %",
+                r"  \wd#1=\count0 sp}%",
+                r"\teni a\lower 264687sp \vbox{%",
+                r"  \setbox0=\hbox{%",
+                r"    \seveni b%",
+                r"    \lower 131071sp \vbox{%",
+                r"      \setbox1=\hbox{\fivei c}%",
+                r"      \addscriptspace 1%",
+                r"      \copy1%",
+                r"      \vskip 187761sp%",
+                r"      \nointerlineskip%",
+                r"      \box1%",
+                r"    }%",
+                r"  }%",
+                r"  \addscriptspace 0%",
+                r"  \box0%",
+                r"  \vskip 104852sp%",
+                r"  \nointerlineskip%",
+                r"  \setbox0=\hbox{%",
+                r"    \seveni c%",
+                r"    \lower 174393sp \vbox{%",
+                r"      \setbox1=\hbox{\fivei b}%",
+                r"      \addscriptspace 1%",
+                r"      \copy1%",
+                r"      \vskip 104852sp%",
+                r"      \nointerlineskip%",
+                r"      \box1%",
+                r"    }%",
+                r"  }%",
+                r"  \addscriptspace 0%",
+                r"  \box0%",
+                r"}%",
             ],
         );
     }
