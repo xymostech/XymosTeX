@@ -508,10 +508,52 @@ impl<'a> Parser<'a> {
         let mut elems_after_first_pass: Vec<TranslatedMathListElem> =
             Vec::new();
         let mut current_style = start_style.clone();
+        let mut prev_atom_kind = None;
 
         for elem in list {
             match elem {
                 MathListElem::Atom(atom) => {
+                    let atom_kind = match atom.kind {
+                        AtomKind::Ord | AtomKind::Open | AtomKind::Inner => {
+                            atom.kind
+                        }
+                        AtomKind::Bin => match prev_atom_kind {
+                            None => AtomKind::Ord,
+                            Some(AtomKind::Bin) => AtomKind::Ord,
+                            Some(AtomKind::Op) => AtomKind::Ord,
+                            Some(AtomKind::Rel) => AtomKind::Ord,
+                            Some(AtomKind::Open) => AtomKind::Ord,
+                            Some(AtomKind::Punct) => AtomKind::Ord,
+                            _ => AtomKind::Bin,
+                        },
+                        AtomKind::Rel | AtomKind::Close | AtomKind::Punct => {
+                            if prev_atom_kind == Some(AtomKind::Bin) {
+                                let last_atom = elems_after_first_pass
+                                    .iter_mut()
+                                    .rev()
+                                    .find(|item| match item {
+                                        TranslatedMathListElem::Atom(_) => true,
+                                        _ => false,
+                                    })
+                                    .unwrap();
+
+                                match last_atom {
+                                    TranslatedMathListElem::Atom(atom) => {
+                                        assert!(atom.kind == AtomKind::Bin);
+                                        atom.kind = AtomKind::Ord;
+                                    }
+                                    _ => unreachable!(),
+                                }
+                            }
+
+                            atom.kind
+                        }
+                        AtomKind::Op => AtomKind::Op,
+                        k => panic!("Unimplemented atom kind: {:?}", k),
+                    };
+
+                    prev_atom_kind = Some(atom_kind);
+
                     let (
                         translated_nucleus,
                         nucleus_is_symbol,
@@ -811,7 +853,7 @@ impl<'a> Parser<'a> {
                     }
 
                     let translated_atom = TranslatedMathAtom {
-                        kind: atom.kind,
+                        kind: atom_kind,
                         translation,
                     };
 
@@ -1644,6 +1686,42 @@ mod tests {
                 r"  \addscriptspace 0%",
                 r"  \box0%",
                 r"}%",
+            ],
+        );
+    }
+
+    #[test]
+    fn bin_atoms_are_converted_to_ords_in_certain_situations() {
+        // o = ord
+        // p = op
+        // b = bin
+        // r = rel
+        // n = open
+        // c = close
+        // t = punct
+        assert_math_list_converts_to_horizontal_list(
+            &[
+                r#"\mathcode`o="006F%"#,
+                r#"\mathcode`p="1070%"#,
+                r#"\mathcode`b="2062%"#,
+                r#"\mathcode`r="3072%"#,
+                r#"\mathcode`n="406E%"#,
+                r#"\mathcode`c="5063%"#,
+                r#"\mathcode`t="6074%"#,
+                // Bins at the start of a list are converted to ords
+                r"bo%",
+                // Bins following bin, op, rel, open, punct are converted to ords
+                r"bb o pb o rb o nb o tb o%",
+                // Bins before rel, close, punct are converted to ords
+                r"br o bc o bt o%",
+            ],
+            &[
+                r"\def\,{\hskip 3pt}%",
+                r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
+                r"\def\;{\hskip 5pt plus 5pt}%",
+                r"bo%",
+                r"\>b\>bo\,p\,bo\;r\;bonbot\,bo%",
+                r"b\;r\;obcobt\,o%",
             ],
         );
     }
