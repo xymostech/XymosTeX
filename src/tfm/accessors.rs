@@ -1,5 +1,5 @@
 use crate::dimension::{Dimen, Unit};
-use crate::tfm::{CharInfoEntry, TFMFile};
+use crate::tfm::{CharInfoEntry, CharKind, TFMFile};
 
 impl TFMFile {
     pub fn get_design_size(&self) -> f64 {
@@ -54,6 +54,15 @@ impl TFMFile {
             self.header.design_size * self.font_parameters[dimen_number - 1],
             Unit::Point,
         )
+    }
+
+    pub fn get_successor(&self, chr: char) -> char {
+        let char_info = self.get_char_info(chr);
+
+        match char_info.kind {
+            CharKind::CharList { next_char } => next_char as char,
+            _ => chr,
+        }
     }
 }
 

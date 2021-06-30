@@ -524,9 +524,10 @@ impl<'a> Parser<'a> {
             match elem {
                 MathListElem::Atom(atom) => {
                     let atom_kind = match atom.kind {
-                        AtomKind::Ord | AtomKind::Open | AtomKind::Inner => {
-                            atom.kind
-                        }
+                        AtomKind::Ord
+                        | AtomKind::Open
+                        | AtomKind::Inner
+                        | AtomKind::Op => atom.kind,
                         AtomKind::Bin => match prev_atom_kind {
                             None => AtomKind::Ord,
                             Some(AtomKind::Bin) => AtomKind::Ord,
@@ -558,7 +559,6 @@ impl<'a> Parser<'a> {
 
                             atom.kind
                         }
-                        AtomKind::Op => AtomKind::Op,
                         k => panic!("Unimplemented atom kind: {:?}", k),
                     };
 
@@ -576,8 +576,32 @@ impl<'a> Parser<'a> {
                                 symbol.family_number,
                             )];
 
+                            let symbol_position = if atom.kind == AtomKind::Op {
+                                match current_style {
+                                    // In DisplayStyle, we fetch the successor
+                                    // for symbol op atoms
+                                    MathStyle::DisplayStyle
+                                    | MathStyle::DisplayStylePrime => self
+                                        .state
+                                        .with_metrics_for_font(
+                                            font,
+                                            |metrics| {
+                                                metrics.get_successor(
+                                                    symbol.position_number
+                                                        as char,
+                                                )
+                                            },
+                                        )
+                                        .unwrap()
+                                        as u8,
+                                    _ => symbol.position_number,
+                                }
+                            } else {
+                                symbol.position_number
+                            };
+
                             let char_elem = HorizontalListElem::Char {
-                                chr: symbol.position_number as char,
+                                chr: symbol_position as char,
                                 font: font.clone(),
                             };
 
@@ -1745,6 +1769,30 @@ mod tests {
                 r"\font\tenex=cmex10%",
                 r"\teni az%",
                 r"\tenex \char80%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_correctly_finds_operator_successors() {
+        assert_math_list_converts_to_horizontal_list(
+            &[
+                // Plain 'a' in cmmi
+                r#"\mathcode`a="1161%"#,
+                // \sum
+                r#"\mathcode`s="1350%"#,
+                // \int
+                r#"\mathcode`i="1352%"#,
+                r"asi \displaystyle asi%",
+            ],
+            &[
+                r"\def\,{\hskip 3pt}%",
+                r"\font\teni=cmmi10%",
+                r"\font\tenex=cmex10%",
+                // normal a, small \sum, small \int
+                r"\teni a\,\tenex \char80\,\char82\,%",
+                // normal a, big \sum, big \int
+                r"\teni a\,\tenex \char88\,\char90%",
             ],
         );
     }

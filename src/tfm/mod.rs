@@ -12,7 +12,7 @@ struct TFMHeader {
 enum CharKind {
     Vanilla,
     LigKern { ligkern_index: usize },
-    CharList { next_char: usize },
+    CharList { next_char: u8 },
     Extensible { ext_recipe_index: usize },
 }
 

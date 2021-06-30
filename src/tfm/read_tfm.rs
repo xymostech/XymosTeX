@@ -132,7 +132,7 @@ impl TFMFile {
                 ligkern_index: remainder as usize,
             },
             2 => CharKind::CharList {
-                next_char: remainder as usize,
+                next_char: remainder,
             },
             3 => CharKind::Extensible {
                 ext_recipe_index: remainder as usize,

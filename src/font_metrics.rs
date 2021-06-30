@@ -63,6 +63,10 @@ impl FontMetrics {
     pub fn get_font_dimension(&self, dimen_number: usize) -> Dimen {
         self.scale_dimen(self.tfm_file.get_font_dimension(dimen_number))
     }
+
+    pub fn get_successor(&self, chr: char) -> char {
+        self.tfm_file.get_successor(chr)
+    }
 }
 
 #[cfg(test)]
@@ -128,5 +132,28 @@ mod tests {
             twentypt_metrics.get_font_dimension(5),
             Dimen::from_scaled_points(282168 * 2)
         );
+    }
+
+    #[test]
+    fn it_correctly_gets_successors() {
+        let cmr_metrics = FontMetrics::from_font(&Font {
+            font_name: "cmr10".to_string(),
+            scale: Dimen::from_unit(20.0, Unit::Point),
+        })
+        .unwrap();
+        let cmex_metrics = FontMetrics::from_font(&Font {
+            font_name: "cmex10".to_string(),
+            scale: Dimen::from_unit(10.0, Unit::Point),
+        })
+        .unwrap();
+
+        // i is a vanilla character
+        assert_eq!(cmr_metrics.get_successor('i'), 'i');
+        // a has a lig-kern program
+        assert_eq!(cmr_metrics.get_successor('a'), 'a');
+        // \sum has a real successor
+        assert_eq!(cmex_metrics.get_successor(0x50 as char), 0x58 as char);
+        // \uparrow has an extension recipe
+        assert_eq!(cmex_metrics.get_successor(0x78 as char), 0x78 as char);
     }
 }
