@@ -34,7 +34,9 @@ impl<'a> Parser<'a> {
             _ => {}
         }
 
-        if self.state.is_token_equal_to_prim(tok, "hskip") {
+        if self.state.is_token_equal_to_prim(tok, "hskip")
+            || self.state.is_token_equal_to_prim(tok, "char")
+        {
             return true;
         }
 
@@ -697,6 +699,7 @@ mod tests {
                 r"@\par%",
                 r"$a$\par%",
                 r"\hskip 1pt\par%",
+                r"\char 97\par%",
             ],
             |parser| {
                 parser.parse_assignment(None);
@@ -720,12 +723,15 @@ mod tests {
                 let interline_glue3 = Dimen::from_unit(12.0, Unit::Point)
                     - *box3.depth()
                     - *box4.height();
+                let interline_glue4 = Dimen::from_unit(12.0, Unit::Point)
+                    - *box4.depth()
+                    - *box1.height();
 
                 assert_eq!(
                     parser.parse_vertical_list(true),
                     &[
                         VerticalListElem::Box {
-                            tex_box: box1,
+                            tex_box: box1.clone(),
                             shift: Dimen::zero()
                         },
                         VerticalListElem::VSkip(Glue::from_dimen(
@@ -747,6 +753,13 @@ mod tests {
                         )),
                         VerticalListElem::Box {
                             tex_box: box4,
+                            shift: Dimen::zero()
+                        },
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            interline_glue4
+                        )),
+                        VerticalListElem::Box {
+                            tex_box: box1,
                             shift: Dimen::zero()
                         },
                     ]

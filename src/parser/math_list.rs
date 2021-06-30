@@ -195,9 +195,11 @@ enum TranslatedMathListElem {
 impl<'a> Parser<'a> {
     fn is_character_head(&mut self) -> bool {
         let expanded_token = self.peek_expanded_token();
+
         match self.replace_renamed_token(expanded_token) {
             Some(Token::Char(_, Category::Letter)) => true,
             Some(Token::Char(_, Category::Other)) => true,
+            Some(tok) => self.state.is_token_equal_to_prim(&tok, "char"),
             _ => false,
         }
     }
@@ -208,7 +210,15 @@ impl<'a> Parser<'a> {
 
         let ch: char = match expanded_renamed_token {
             Some(Token::Char(ch, _)) => ch,
-            _ => panic!(),
+            Some(tok) => {
+                if self.state.is_token_equal_to_prim(&tok, "char") {
+                    let char_number = self.parse_8bit_number();
+                    char_number as char
+                } else {
+                    panic!("invalid char token head");
+                }
+            }
+            _ => panic!("invalid char token head"),
         };
 
         self.state.get_math_code(ch)
@@ -1722,6 +1732,19 @@ mod tests {
                 r"bo%",
                 r"\>b\>bo\,p\,bo\;r\;bonbot\,bo%",
                 r"b\;r\;obcobt\,o%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_parses_explicit_char_symbols() {
+        assert_math_list_converts_to_horizontal_list(
+            &[r#"\mathcode`s="0350%"#, r"\char97 \char122%", r"\char115%"],
+            &[
+                r"\font\teni=cmmi10%",
+                r"\font\tenex=cmex10%",
+                r"\teni az%",
+                r"\tenex \char80%",
             ],
         );
     }

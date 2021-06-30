@@ -156,6 +156,15 @@ impl<'a> Parser<'a> {
                     self.parse_horizontal_list_elem(group_level, restricted)
                 }
             }
+            Some(ref tok) if self.state.is_token_equal_to_prim(tok, "char") => {
+                self.lex_expanded_token();
+                let char_number = self.parse_8bit_number();
+
+                ElemResult::Elem(HorizontalListElem::Char {
+                    chr: char_number as char,
+                    font: self.state.get_current_font(),
+                })
+            }
             _ => {
                 if self.is_assignment_head() {
                     self.parse_assignment(None);
@@ -791,5 +800,32 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn it_parses_explicit_char_commands() {
+        with_parser(&[r"\char0 \char33 \char97 \char127%"], |parser| {
+            assert_eq!(
+                parser.parse_horizontal_list(false, false),
+                &[
+                    HorizontalListElem::Char {
+                        chr: 0 as char,
+                        font: CMR10.clone(),
+                    },
+                    HorizontalListElem::Char {
+                        chr: '!',
+                        font: CMR10.clone(),
+                    },
+                    HorizontalListElem::Char {
+                        chr: 'a',
+                        font: CMR10.clone(),
+                    },
+                    HorizontalListElem::Char {
+                        chr: 127 as char,
+                        font: CMR10.clone(),
+                    },
+                ]
+            );
+        });
     }
 }
