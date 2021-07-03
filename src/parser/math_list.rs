@@ -576,8 +576,8 @@ impl<'a> Parser<'a> {
                                 symbol.family_number,
                             )];
 
-                            let symbol_position = if atom.kind == AtomKind::Op {
-                                match current_style {
+                            let char_elem = if atom.kind == AtomKind::Op {
+                                let position_number = match current_style {
                                     // In DisplayStyle, we fetch the successor
                                     // for symbol op atoms
                                     MathStyle::DisplayStyle
@@ -595,14 +595,48 @@ impl<'a> Parser<'a> {
                                         .unwrap()
                                         as u8,
                                     _ => symbol.position_number,
+                                };
+
+                                let elem = HorizontalListElem::Char {
+                                    chr: position_number as char,
+                                    font: font.clone(),
+                                };
+
+                                let boxed_elem = self
+                                    .add_to_natural_layout_horizontal_box(
+                                        HorizontalBox::empty(),
+                                        elem,
+                                    );
+
+                                let sym_font = &MATH_FONTS[&(
+                                    get_font_style_for_math_style(
+                                        &current_style,
+                                    ),
+                                    2,
+                                )];
+                                let axis_height = self
+                                    .state
+                                    .with_metrics_for_font(
+                                        sym_font,
+                                        |metrics| {
+                                            metrics.get_font_dimension(22)
+                                        },
+                                    )
+                                    .unwrap();
+
+                                let shift = axis_height
+                                    - (boxed_elem.height - boxed_elem.depth)
+                                        / 2;
+
+                                HorizontalListElem::Box {
+                                    tex_box: TeXBox::HorizontalBox(boxed_elem),
+                                    shift,
                                 }
                             } else {
-                                symbol.position_number
-                            };
-
-                            let char_elem = HorizontalListElem::Char {
-                                chr: symbol_position as char,
-                                font: font.clone(),
+                                HorizontalListElem::Char {
+                                    chr: symbol.position_number as char,
+                                    font: font.clone(),
+                                }
                             };
 
                             (
@@ -1384,8 +1418,9 @@ mod tests {
                 r"\def\,{\hskip 3pt}%",
                 r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
                 r"\def\;{\hskip 5pt plus 5pt}%",
-                r"oo\,p\,o\>b\>o\;r\;onocot\,o\,%",
-                r"p\,p\;r\;pnpc\,pt\,p\,o\>%",
+                r"\def\p{\raise 86472sp \hbox{p}}%",
+                r"oo\,\p\,o\>b\>o\;r\;onocot\,o\,%",
+                r"\p\,\p\;r\;\p n\p c\,\p t\,\p\,o\>%",
                 r"b\>no\>b\>o\;%",
                 r"rr\;nrc\;rt\,r\;%",
                 r"nncnt\,n%",
@@ -1753,8 +1788,9 @@ mod tests {
                 r"\def\,{\hskip 3pt}%",
                 r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
                 r"\def\;{\hskip 5pt plus 5pt}%",
+                r"\def\p{\raise 86472sp \hbox{p}}%",
                 r"bo%",
-                r"\>b\>bo\,p\,bo\;r\;bonbot\,bo%",
+                r"\>b\>bo\,\p\,bo\;r\;bonbot\,bo%",
                 r"b\;r\;obcobt\,o%",
             ],
         );
@@ -1780,19 +1816,46 @@ mod tests {
                 // Plain 'a' in cmmi
                 r#"\mathcode`a="1161%"#,
                 // \sum
-                r#"\mathcode`s="1350%"#,
+                r#"\mathchardef\sum="1350%"#,
                 // \int
-                r#"\mathcode`i="1352%"#,
-                r"asi \displaystyle asi%",
+                r#"\mathchardef\int="1352%"#,
+                r"a\sum\int \displaystyle a\sum\int%",
             ],
             &[
                 r"\def\,{\hskip 3pt}%",
                 r"\font\teni=cmmi10%",
                 r"\font\tenex=cmex10%",
-                // normal a, small \sum, small \int
-                r"\teni a\,\tenex \char80\,\char82\,%",
-                // normal a, big \sum, big \int
-                r"\teni a\,\tenex \char88\,\char90%",
+                // normal a
+                r"\raise 22756sp \hbox{\teni a}\,%",
+                // small \sum
+                r"\raise 491524sp \hbox{\tenex \char80}\,%",
+                // small \int
+                r"\raise 527932sp \hbox{\tenex \char82}\,%",
+                // normal a
+                r"\raise 22756sp \hbox{\teni a}\,%",
+                // big \sum
+                r"\raise 622596sp \hbox{\tenex \char88}\,%",
+                // big \int
+                r"\raise 892025sp \hbox{\tenex \char90}%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_raises_op_atoms_to_the_baseline() {
+        assert_math_list_converts_to_horizontal_list(
+            &[
+                // \sum as an ord
+                r#"\mathchardef\sumord="0350%"#,
+                // \sum as an op
+                r#"\mathchardef\sumop="1350%"#,
+                r"\sumord \sumop%",
+            ],
+            &[
+                r"\def\,{\hskip 3pt}%",
+                r"\font\tenex=cmex10%",
+                r"\tenex \char80\,%",
+                r"\raise 491524sp \hbox{\tenex \char80}%",
             ],
         );
     }
