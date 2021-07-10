@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::boxes::{HorizontalBox, TeXBox, VerticalBox};
 use crate::category::Category;
-use crate::dimension::{Dimen, SpringDimen, Unit};
+use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
 use crate::font::Font;
 use crate::glue::Glue;
 use crate::list::{HorizontalListElem, VerticalListElem};
@@ -467,6 +467,41 @@ impl<'a> Parser<'a> {
         } else {
             panic!("Invalid atom type pair: {:?}/{:?}", left_type, right_type);
         }
+    }
+
+    pub fn rebox_box_to_width(
+        &mut self,
+        tex_box: TeXBox,
+        width: Dimen,
+    ) -> TeXBox {
+        if *tex_box.width() == width {
+            return tex_box;
+        }
+
+        let mut inner_elems = match tex_box {
+            TeXBox::VerticalBox(vbox) => vec![HorizontalListElem::Box {
+                tex_box: TeXBox::VerticalBox(vbox),
+                shift: Dimen::zero(),
+            }],
+            TeXBox::HorizontalBox(hbox) => hbox.list,
+        };
+
+        let hfil = Glue {
+            space: Dimen::zero(),
+            stretch: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.0)),
+            shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.0)),
+        };
+
+        inner_elems.insert(0, HorizontalListElem::HSkip(hfil.clone()));
+        inner_elems.push(HorizontalListElem::HSkip(hfil));
+
+        let hbox = self
+            .combine_horizontal_list_into_horizontal_box_with_layout(
+                inner_elems,
+                &BoxLayout::Fixed(width),
+            );
+
+        TeXBox::HorizontalBox(hbox)
     }
 
     fn convert_math_field_to_box(
@@ -974,6 +1009,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::boxes::{GlueSetRatio, GlueSetRatioKind};
     use crate::testing::with_parser;
 
     fn assert_math_list_converts_to_horizontal_list(
@@ -1857,6 +1893,127 @@ mod tests {
                 r"\tenex \char80\,%",
                 r"\raise 491524sp \hbox{\tenex \char80}%",
             ],
+        );
+    }
+
+    #[test]
+    fn it_reboxes_boxes_to_widths() {
+        with_parser(
+            &[
+                r"\def\hfil{\hskip 0pt plus 1fil minus 1fil}%",
+                r"\def\hfill{\hskip 0pt plus 1fill minus 1fill}%",
+                r"\setbox0=\hbox to 5pt{a}%",
+                r"\hbox{\copy0}%",
+                r"\hbox to 10pt{\copy0\hfil}%",
+                r"\hbox{\copy0\hfil}%",
+                r"\hbox{\copy0\hfill}%",
+                r"\setbox1=\vbox{\noindent a}%",
+                r"\wd1=5pt%",
+                // result boxes
+                r"\hbox to 10pt{\hfil\copy0\hfil}%",
+                r"\hbox to 10pt{\hfil\copy0\hfil\hfil}%",
+                r"\hbox to 10pt{\hfil\copy0\hfill\hfil}%",
+                r"\hbox to 10pt{\hfil\copy1\hfil}%",
+            ],
+            |parser| {
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                let five_pt_box = parser.parse_box().unwrap();
+                let ten_pt_box_with_hfil = parser.parse_box().unwrap();
+                let box_with_hfil = parser.parse_box().unwrap();
+                let box_with_hfill = parser.parse_box().unwrap();
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                let vbox = parser.state.get_box_copy(1).unwrap();
+
+                let ten_pt = Dimen::from_unit(10.0, Unit::Point);
+
+                // 5pt box is expanded to 10pt
+                let five_pt_box_reboxed_to_ten_pt =
+                    parser.rebox_box_to_width(five_pt_box, ten_pt);
+                assert_eq!(
+                    five_pt_box_reboxed_to_ten_pt,
+                    parser.parse_box().unwrap()
+                );
+                assert_eq!(*five_pt_box_reboxed_to_ten_pt.width(), ten_pt);
+                assert_eq!(
+                    match five_pt_box_reboxed_to_ten_pt {
+                        TeXBox::HorizontalBox(hbox) => hbox.glue_set_ratio,
+                        _ => panic!("Not a horizontal box!"),
+                    },
+                    Some(GlueSetRatio::from(
+                        GlueSetRatioKind::from_fil_kind(&FilKind::Fil),
+                        2.5
+                    )),
+                );
+
+                // 10pt box isn't changed at all when reboxed to 10pt
+                let ten_pt_box_with_hfil_reboxed_to_ten_pt = parser
+                    .rebox_box_to_width(ten_pt_box_with_hfil.clone(), ten_pt);
+                assert_eq!(*ten_pt_box_with_hfil.width(), ten_pt);
+                assert_eq!(
+                    ten_pt_box_with_hfil_reboxed_to_ten_pt,
+                    ten_pt_box_with_hfil
+                );
+                assert_eq!(
+                    *ten_pt_box_with_hfil_reboxed_to_ten_pt.width(),
+                    ten_pt
+                );
+
+                // boxes with hfil and hfill in them are expanded to 5pt
+                let box_with_hfil_reboxed_to_ten_pt =
+                    parser.rebox_box_to_width(box_with_hfil, ten_pt);
+                assert_eq!(
+                    box_with_hfil_reboxed_to_ten_pt,
+                    parser.parse_box().unwrap()
+                );
+                assert_eq!(*box_with_hfil_reboxed_to_ten_pt.width(), ten_pt);
+                assert_eq!(
+                    match box_with_hfil_reboxed_to_ten_pt {
+                        TeXBox::HorizontalBox(hbox) => hbox.glue_set_ratio,
+                        _ => panic!("Not a horizontal box!"),
+                    },
+                    Some(GlueSetRatio::from(
+                        GlueSetRatioKind::from_fil_kind(&FilKind::Fil),
+                        5.0 / 3.0
+                    )),
+                );
+
+                let box_with_hfill_reboxed_to_ten_pt =
+                    parser.rebox_box_to_width(box_with_hfill, ten_pt);
+                assert_eq!(
+                    box_with_hfill_reboxed_to_ten_pt,
+                    parser.parse_box().unwrap()
+                );
+                assert_eq!(*box_with_hfill_reboxed_to_ten_pt.width(), ten_pt);
+                assert_eq!(
+                    match box_with_hfill_reboxed_to_ten_pt {
+                        TeXBox::HorizontalBox(hbox) => hbox.glue_set_ratio,
+                        _ => panic!("Not a horizontal box!"),
+                    },
+                    Some(GlueSetRatio::from(
+                        GlueSetRatioKind::from_fil_kind(&FilKind::Fill),
+                        5.0
+                    )),
+                );
+
+                // vboxes aren't unboxed and are just surrounded by \hfil
+                let vbox_reboxed_to_ten_pt =
+                    parser.rebox_box_to_width(vbox, ten_pt);
+                assert_eq!(vbox_reboxed_to_ten_pt, parser.parse_box().unwrap());
+                assert_eq!(*vbox_reboxed_to_ten_pt.width(), ten_pt);
+                assert_eq!(
+                    match vbox_reboxed_to_ten_pt {
+                        TeXBox::HorizontalBox(hbox) => hbox.glue_set_ratio,
+                        _ => panic!("Not a horizontal box!"),
+                    },
+                    Some(GlueSetRatio::from(
+                        GlueSetRatioKind::from_fil_kind(&FilKind::Fil),
+                        2.5
+                    )),
+                );
+            },
         );
     }
 }
