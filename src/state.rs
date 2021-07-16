@@ -55,6 +55,12 @@ const ALL_PRIMITIVES: &[&str] = &[
     "moveright",
     "prevdepth",
     "char",
+    "over",
+    "atop",
+    "above",
+    "overwithdelims",
+    "atopwithdelims",
+    "abovewithdelims",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {

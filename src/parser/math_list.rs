@@ -9,8 +9,8 @@ use crate::glue::Glue;
 use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::math_code::MathCode;
 use crate::math_list::{
-    AtomKind, MathAtom, MathField, MathList, MathListElem, MathStyle,
-    MathSymbol,
+    AtomKind, GeneralizedFraction, MathAtom, MathDelimiter, MathField,
+    MathList, MathListElem, MathStyle, MathSymbol,
 };
 use crate::parser::boxes::BoxLayout;
 use crate::parser::Parser;
@@ -362,8 +362,36 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn is_generalized_fraction_head(&mut self) -> bool {
+        self.is_next_expanded_token_in_set_of_primitives(&[
+            "over",
+            "atop",
+            "above",
+            "overwithdelims",
+            "atopwithdelims",
+            "abovewithdelims",
+        ])
+    }
+
+    fn parse_generalized_fraction_params(
+        &mut self,
+    ) -> (Option<MathDelimiter>, Option<MathDelimiter>, Dimen) {
+        let tok = self.lex_expanded_token().unwrap();
+
+        if self.state.is_token_equal_to_prim(&tok, "atop") {
+            (None, None, Dimen::zero())
+        } else {
+            panic!("unimplemented");
+        }
+    }
+
     pub fn parse_math_list(&mut self) -> MathList {
         let mut current_list = Vec::new();
+
+        // Keep track of whether there's been a generalized fraction operation
+        // within this math list by storing the intermediate numerator of the
+        // list as well as the generalized fraction parameters here.
+        let mut list_fraction = None;
 
         loop {
             if self.is_math_symbol_head() {
@@ -401,6 +429,25 @@ impl<'a> Parser<'a> {
                     current_list
                         .push(MathListElem::Atom(MathAtom::from_box(tex_box)));
                 }
+            } else if self.is_generalized_fraction_head() {
+                if list_fraction.is_some() {
+                    panic!("Ambiguous generalized fraction");
+                }
+
+                let (
+                    gen_frac_left_delim,
+                    gen_frac_right_delim,
+                    gen_frac_height,
+                ) = self.parse_generalized_fraction_params();
+
+                list_fraction = Some(GeneralizedFraction {
+                    left_delim: gen_frac_left_delim,
+                    right_delim: gen_frac_right_delim,
+                    bar_height: gen_frac_height,
+                    numerator: current_list,
+                    denominator: vec![],
+                });
+                current_list = vec![];
             } else {
                 match self.peek_expanded_token() {
                     Some(Token::Char(_, Category::BeginGroup)) => {
@@ -420,7 +467,13 @@ impl<'a> Parser<'a> {
             }
         }
 
-        current_list
+        match list_fraction {
+            None => current_list,
+            Some(mut fraction) => {
+                fraction.denominator = current_list;
+                vec![MathListElem::GeneralizedFraction(fraction)]
+            }
+        }
     }
 
     fn get_skip_for_atom_pair(
@@ -2015,5 +2068,89 @@ mod tests {
                 );
             },
         );
+    }
+
+    #[test]
+    fn it_parses_basic_generalized_fractions() {
+        let a_code = MathCode::from_number(0x7161);
+        let b_code = MathCode::from_number(0x7162);
+        let c_code = MathCode::from_number(0x7163);
+
+        with_parser(&[r"a\atop b%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![MathListElem::GeneralizedFraction(GeneralizedFraction {
+                    left_delim: None,
+                    right_delim: None,
+                    bar_height: Dimen::zero(),
+                    numerator: vec![MathListElem::Atom(
+                        MathAtom::from_math_code(&a_code)
+                    ),],
+                    denominator: vec![MathListElem::Atom(
+                        MathAtom::from_math_code(&b_code)
+                    ),],
+                })]
+            );
+        });
+
+        with_parser(&[r"{a\atop b} \atop c%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![MathListElem::GeneralizedFraction(GeneralizedFraction {
+                    left_delim: None,
+                    right_delim: None,
+                    bar_height: Dimen::zero(),
+                    numerator: vec![MathListElem::Atom(
+                        MathAtom::from_math_list(vec![
+                            MathListElem::GeneralizedFraction(
+                                GeneralizedFraction {
+                                    left_delim: None,
+                                    right_delim: None,
+                                    bar_height: Dimen::zero(),
+                                    numerator: vec![MathListElem::Atom(
+                                        MathAtom::from_math_code(&a_code)
+                                    ),],
+                                    denominator: vec![MathListElem::Atom(
+                                        MathAtom::from_math_code(&b_code)
+                                    ),],
+                                }
+                            )
+                        ])
+                    ),],
+                    denominator: vec![MathListElem::Atom(
+                        MathAtom::from_math_code(&c_code)
+                    ),],
+                })]
+            );
+        });
+
+        with_parser(&[r"abc \atop abc%"], |parser| {
+            assert_eq!(
+                parser.parse_math_list(),
+                vec![MathListElem::GeneralizedFraction(GeneralizedFraction {
+                    left_delim: None,
+                    right_delim: None,
+                    bar_height: Dimen::zero(),
+                    numerator: vec![
+                        MathListElem::Atom(MathAtom::from_math_code(&a_code)),
+                        MathListElem::Atom(MathAtom::from_math_code(&b_code)),
+                        MathListElem::Atom(MathAtom::from_math_code(&c_code)),
+                    ],
+                    denominator: vec![
+                        MathListElem::Atom(MathAtom::from_math_code(&a_code)),
+                        MathListElem::Atom(MathAtom::from_math_code(&b_code)),
+                        MathListElem::Atom(MathAtom::from_math_code(&c_code)),
+                    ],
+                })]
+            );
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Ambiguous generalized fraction")]
+    fn it_fails_on_ambiguous_generalized_fractions() {
+        with_parser(&[r"a \atop b \atop c%"], |parser| {
+            parser.parse_math_list();
+        });
     }
 }

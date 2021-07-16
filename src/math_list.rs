@@ -205,9 +205,11 @@ pub struct MathDelimiter {
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub struct GeneralizedFraction {
-    left_delim: Option<MathDelimiter>,
-    right_delim: Option<MathDelimiter>,
-    bar_height: Dimen,
+    pub left_delim: Option<MathDelimiter>,
+    pub right_delim: Option<MathDelimiter>,
+    pub bar_height: Dimen,
+    pub numerator: MathList,
+    pub denominator: MathList,
 }
 
 #[allow(dead_code)]
