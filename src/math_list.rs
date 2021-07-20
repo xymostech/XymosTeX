@@ -132,16 +132,16 @@ impl MathAtom {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash, PartialOrd, Ord)]
 pub enum MathStyle {
-    DisplayStyle,
-    DisplayStylePrime,
-    TextStyle,
-    TextStylePrime,
-    ScriptStyle,
-    ScriptStylePrime,
-    ScriptScriptStyle,
     ScriptScriptStylePrime,
+    ScriptScriptStyle,
+    ScriptStylePrime,
+    ScriptStyle,
+    TextStylePrime,
+    TextStyle,
+    DisplayStylePrime,
+    DisplayStyle,
 }
 
 impl MathStyle {

@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::cmp::{max, Ordering};
 use std::collections::HashMap;
 
 use crate::boxes::{HorizontalBox, TeXBox, VerticalBox};
@@ -985,6 +985,24 @@ impl<'a> Parser<'a> {
         translation
     }
 
+    fn generate_delimiter_box(
+        &mut self,
+        maybe_delim: Option<MathDelimiter>,
+        _min_size: Dimen,
+    ) -> TeXBox {
+        match maybe_delim {
+            None => {
+                let mut empty_hbox = HorizontalBox::empty();
+                // TODO(xymostech): This should come from \nulldelimiterspace
+                empty_hbox.width = Dimen::from_unit(1.2, Unit::Point);
+                TeXBox::HorizontalBox(empty_hbox)
+            }
+            Some(_delim) => {
+                panic!("unimplemented");
+            }
+        }
+    }
+
     pub fn convert_math_list_to_horizontal_list(
         &mut self,
         list: MathList,
@@ -1056,6 +1074,207 @@ impl<'a> Parser<'a> {
                     let translated_atom = TranslatedMathAtom {
                         kind: atom_kind,
                         translation: atom_translation,
+                    };
+
+                    elems_after_first_pass
+                        .push(TranslatedMathListElem::Atom(translated_atom));
+                }
+                MathListElem::GeneralizedFraction(GeneralizedFraction {
+                    left_delim,
+                    right_delim,
+                    bar_height,
+                    numerator,
+                    denominator,
+                }) => {
+                    let numerator_style = match &current_style {
+                        MathStyle::DisplayStyle => MathStyle::TextStyle,
+                        MathStyle::DisplayStylePrime => {
+                            MathStyle::TextStylePrime
+                        }
+                        other_style => other_style.up_arrow(),
+                    };
+
+                    let denominator_style = match &current_style {
+                        MathStyle::DisplayStyle => MathStyle::TextStylePrime,
+                        MathStyle::DisplayStylePrime => {
+                            MathStyle::TextStylePrime
+                        }
+                        other_style => other_style.down_arrow(),
+                    };
+
+                    let translated_numerator = self
+                        .convert_math_list_to_horizontal_list(
+                            numerator,
+                            numerator_style,
+                        );
+                    let translated_denominator = self
+                        .convert_math_list_to_horizontal_list(
+                            denominator,
+                            denominator_style,
+                        );
+
+                    let mut numerator_box = TeXBox::HorizontalBox(self.combine_horizontal_list_into_horizontal_box_with_layout(translated_numerator, &BoxLayout::Natural));
+                    let mut denominator_box = TeXBox::HorizontalBox(self.combine_horizontal_list_into_horizontal_box_with_layout(translated_denominator, &BoxLayout::Natural));
+
+                    match numerator_box.width().cmp(denominator_box.width()) {
+                        Ordering::Greater => {
+                            denominator_box = self.rebox_box_to_width(
+                                denominator_box,
+                                *numerator_box.width(),
+                            );
+                        }
+                        Ordering::Less => {
+                            numerator_box = self.rebox_box_to_width(
+                                numerator_box,
+                                *denominator_box.width(),
+                            );
+                        }
+                        _ => {}
+                    }
+
+                    let sym_font = &MATH_FONTS
+                        [&(get_font_style_for_math_style(&current_style), 2)];
+
+                    let (mut numerator_shift, mut denominator_shift) = self
+                        .state
+                        .with_metrics_for_font(sym_font, |metrics| {
+                            if current_style > MathStyle::TextStyle {
+                                (
+                                    metrics.get_font_dimension(8),
+                                    metrics.get_font_dimension(11),
+                                )
+                            } else if bar_height == Dimen::zero() {
+                                (
+                                    metrics.get_font_dimension(10),
+                                    metrics.get_font_dimension(12),
+                                )
+                            } else {
+                                (
+                                    metrics.get_font_dimension(9),
+                                    metrics.get_font_dimension(12),
+                                )
+                            }
+                        })
+                        .unwrap();
+
+                    let ex_font = &MATH_FONTS
+                        [&(get_font_style_for_math_style(&current_style), 3)];
+
+                    let stack = if bar_height == Dimen::zero() {
+                        let default_rule_thickness = self
+                            .state
+                            .with_metrics_for_font(ex_font, |metrics| {
+                                metrics.get_font_dimension(8)
+                            })
+                            .unwrap();
+
+                        let minimum_clearance =
+                            if current_style > MathStyle::TextStyle {
+                                default_rule_thickness * 7
+                            } else {
+                                default_rule_thickness * 3
+                            };
+
+                        let actual_clearance = (numerator_shift
+                            - *numerator_box.depth())
+                            - (*denominator_box.height() - denominator_shift);
+
+                        if actual_clearance < minimum_clearance {
+                            let extra_clearance =
+                                (minimum_clearance - actual_clearance) / 2;
+                            numerator_shift = numerator_shift + extra_clearance;
+                            denominator_shift =
+                                denominator_shift + extra_clearance;
+                        }
+
+                        let kern_size = numerator_shift + denominator_shift
+                            - *numerator_box.depth()
+                            - *denominator_box.height();
+
+                        assert!(
+                            *numerator_box.height()
+                                + *numerator_box.depth()
+                                + kern_size
+                                + *denominator_box.height()
+                                + *denominator_box.depth()
+                                == *numerator_box.height()
+                                    + numerator_shift
+                                    + denominator_shift
+                                    + *denominator_box.depth()
+                        );
+
+                        let stack = VerticalBox {
+                            height: *numerator_box.height() + numerator_shift,
+                            depth: *denominator_box.depth() + denominator_shift,
+                            width: *numerator_box.width(),
+
+                            list: vec![
+                                VerticalListElem::Box {
+                                    tex_box: numerator_box,
+                                    shift: Dimen::zero(),
+                                },
+                                VerticalListElem::VSkip(Glue::from_dimen(
+                                    kern_size,
+                                )),
+                                VerticalListElem::Box {
+                                    tex_box: denominator_box,
+                                    shift: Dimen::zero(),
+                                },
+                            ],
+                            glue_set_ratio: None,
+                        };
+                        HorizontalListElem::Box {
+                            tex_box: TeXBox::VerticalBox(stack),
+                            shift: Dimen::zero(),
+                        }
+                    } else {
+                        panic!("unimplemented");
+                    };
+
+                    let min_delim_size = self
+                        .state
+                        .with_metrics_for_font(sym_font, |metrics| {
+                            if current_style > MathStyle::TextStyle {
+                                metrics.get_font_dimension(20)
+                            } else {
+                                metrics.get_font_dimension(21)
+                            }
+                        })
+                        .unwrap();
+
+                    let left_delim_box =
+                        self.generate_delimiter_box(left_delim, min_delim_size);
+                    let right_delim_box = self
+                        .generate_delimiter_box(right_delim, min_delim_size);
+
+                    let axis_height = self
+                        .state
+                        .with_metrics_for_font(sym_font, |metrics| {
+                            metrics.get_font_dimension(22)
+                        })
+                        .unwrap();
+
+                    let left_shift = axis_height
+                        - (*left_delim_box.height() - *left_delim_box.depth())
+                            / 2;
+                    let right_shift = axis_height
+                        - (*right_delim_box.height()
+                            - *right_delim_box.depth())
+                            / 2;
+
+                    let translated_atom = TranslatedMathAtom {
+                        kind: AtomKind::Ord,
+                        translation: vec![
+                            HorizontalListElem::Box {
+                                tex_box: left_delim_box,
+                                shift: left_shift,
+                            },
+                            stack,
+                            HorizontalListElem::Box {
+                                tex_box: right_delim_box,
+                                shift: right_shift,
+                            },
+                        ],
                     };
 
                     elems_after_first_pass
@@ -2197,5 +2416,107 @@ mod tests {
         with_parser(&[r"a \atop b \atop c%"], |parser| {
             parser.parse_math_list();
         });
+    }
+
+    #[test]
+    fn it_converts_atop_to_centered_vertical_boxes() {
+        assert_math_list_converts_to_horizontal_list(
+            &[r"a \atop b%"],
+            &[
+                r"\def\hfil{\hskip 0pt plus 1fil minus 1fil}%",
+                r"\def\nointerlineskip{\prevdepth=-1000pt}%",
+                r"\font\seveni=cmmi7%",
+                r"\setbox0=\hbox{}%",
+                r"\wd0=1.2pt%",
+                r"\setbox1=\hbox{\seveni a}%",
+                r"\setbox2=\hbox to\number\wd1 sp{\hfil \seveni b\hfil}%",
+                r"\setbox3=\vbox{%",
+                r"  \box1%",
+                r"  \vskip 198221sp%",
+                r"  \nointerlineskip%",
+                r"  \box2%",
+                r"}%",
+                r"\ht3=488321sp%",
+                r"\dp3=225995sp%",
+                r"\raise2.5pt\copy0%",
+                r"\box3%",
+                r"\raise2.5pt\copy0%",
+            ],
+        );
+
+        assert_math_list_converts_to_horizontal_list(
+            &[r"{a \atop b} \atop c%"],
+            &[
+                r"\def\hfil{\hskip 0pt plus 1fil minus 1fil}%",
+                r"\def\nointerlineskip{\prevdepth=-1000pt}%",
+                r"\font\seveni=cmmi7%",
+                r"\font\fivei=cmmi5%",
+                r"\setbox0=\hbox{}%",
+                r"\wd0=1.2pt%",
+                r"\setbox1=\hbox{\fivei a}%",
+                r"\setbox2=\hbox to\number\wd1 sp{\hfil \fivei b\hfil}%",
+                r"\setbox3=\vbox{%",
+                r"  \box1%",
+                r"  \vskip 146520sp%",
+                r"  \nointerlineskip%",
+                r"  \box2%",
+                r"}%",
+                r"\ht3=357250sp%",
+                r"\dp3=157909sp%",
+                r"\setbox4=\hbox{\hbox{%",
+                r"  \raise 1.75pt\copy0%",
+                r"  \box3%",
+                r"  \raise 1.75pt\copy0%",
+                r"}}%",
+                r"\setbox5=\hbox to\number\wd4 sp{\hfil \seveni c\hfil}%",
+                r"\setbox6=\vbox{%",
+                r"  \box4%",
+                r"  \vskip 161371sp%",
+                r"  \nointerlineskip%",
+                r"  \box5%",
+                r"}%",
+                r"\ht6=648053sp%",
+                r"\dp6=225995sp%",
+                r"\raise 2.5pt\copy0%",
+                r"\box6%",
+                r"\raise 2.5pt\copy0%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_adds_correct_space_around_fractions() {
+        assert_math_list_converts_to_horizontal_list(
+            &[r#"\mathcode`+="202B%"#, r"a + {a \atop b} + c%"],
+            &[
+                r"\def\hfil{\hskip 0pt plus 1fil minus 1fil}%",
+                r"\def\nointerlineskip{\prevdepth=-1000pt}%",
+                r"\font\tenrm=cmr10%",
+                r"\font\teni=cmmi10%",
+                r"\font\seveni=cmmi7%",
+                r"\setbox0=\hbox{}%",
+                r"\wd0=1.2pt%",
+                r"\setbox1=\hbox{\seveni a}%",
+                r"\setbox2=\hbox to\number\wd1 sp{\hfil \seveni b\hfil}%",
+                r"\setbox3=\vbox{%",
+                r"  \box1%",
+                r"  \vskip 198221sp%",
+                r"  \nointerlineskip%",
+                r"  \box2%",
+                r"}%",
+                r"\ht3=488321sp%",
+                r"\dp3=225995sp%",
+                r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
+                r"\teni a%",
+                r#"\>\tenrm \char"2B"#,
+                r"\>\hbox{%",
+                r"  \raise 2.5pt\copy0%",
+                r"  \box3",
+                r"  \raise 2.5pt\copy0%",
+                r"}%",
+                r#"\>\tenrm \char"2B"#,
+                r"\>\teni c%",
+            ],
+        );
     }
 }
