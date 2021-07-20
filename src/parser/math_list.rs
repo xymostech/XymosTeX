@@ -176,6 +176,13 @@ lazy_static! {
     ].iter().cloned().collect();
 }
 
+struct TranslatedNucleus {
+    translation: Vec<HorizontalListElem>,
+    nucleus_is_symbol: bool,
+    effective_height: Dimen,
+    effective_depth: Dimen,
+}
+
 // This represents the translation of a given MathAtom into horizontal list
 // elems.
 struct TranslatedMathAtom {
@@ -598,6 +605,386 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn translate_op_atom_nucleus(
+        &mut self,
+        nucleus: Option<MathField>,
+        current_style: &MathStyle,
+    ) -> TranslatedNucleus {
+        match nucleus {
+            Some(MathField::Symbol(symbol)) => {
+                let font = &MATH_FONTS[&(
+                    get_font_style_for_math_style(current_style),
+                    symbol.family_number,
+                )];
+
+                let position_number = match current_style {
+                    // In DisplayStyle, we fetch the successor
+                    // for symbol op atoms
+                    MathStyle::DisplayStyle | MathStyle::DisplayStylePrime => {
+                        self.state
+                            .with_metrics_for_font(font, |metrics| {
+                                metrics.get_successor(
+                                    symbol.position_number as char,
+                                )
+                            })
+                            .unwrap() as u8
+                    }
+                    _ => symbol.position_number,
+                };
+
+                let elem = HorizontalListElem::Char {
+                    chr: position_number as char,
+                    font: font.clone(),
+                };
+
+                let boxed_elem = self.add_to_natural_layout_horizontal_box(
+                    HorizontalBox::empty(),
+                    elem,
+                );
+
+                let sym_font = &MATH_FONTS
+                    [&(get_font_style_for_math_style(&current_style), 2)];
+                let axis_height = self
+                    .state
+                    .with_metrics_for_font(sym_font, |metrics| {
+                        metrics.get_font_dimension(22)
+                    })
+                    .unwrap();
+
+                let shift =
+                    axis_height - (boxed_elem.height - boxed_elem.depth) / 2;
+
+                let char_elem = HorizontalListElem::Box {
+                    tex_box: TeXBox::HorizontalBox(boxed_elem),
+                    shift,
+                };
+
+                TranslatedNucleus {
+                    translation: vec![char_elem],
+                    nucleus_is_symbol: true,
+                    effective_height: Dimen::zero(),
+                    effective_depth: Dimen::zero(),
+                }
+            }
+            Some(field) => {
+                let nucleus_box =
+                    self.convert_math_field_to_box(field, &current_style);
+
+                let height = *nucleus_box.height();
+                let depth = *nucleus_box.depth();
+
+                TranslatedNucleus {
+                    translation: vec![HorizontalListElem::Box {
+                        tex_box: nucleus_box,
+                        shift: Dimen::zero(),
+                    }],
+                    nucleus_is_symbol: false,
+                    effective_height: height,
+                    effective_depth: depth,
+                }
+            }
+            None => TranslatedNucleus {
+                translation: vec![],
+                nucleus_is_symbol: false,
+                effective_height: Dimen::zero(),
+                effective_depth: Dimen::zero(),
+            },
+        }
+    }
+
+    fn translate_atom_nucleus(
+        &mut self,
+        nucleus: Option<MathField>,
+        current_style: &MathStyle,
+    ) -> TranslatedNucleus {
+        match nucleus {
+            Some(MathField::Symbol(symbol)) => {
+                let font = &MATH_FONTS[&(
+                    get_font_style_for_math_style(current_style),
+                    symbol.family_number,
+                )];
+
+                let char_elem = HorizontalListElem::Char {
+                    chr: symbol.position_number as char,
+                    font: font.clone(),
+                };
+
+                TranslatedNucleus {
+                    translation: vec![char_elem],
+                    nucleus_is_symbol: true,
+                    effective_height: Dimen::zero(),
+                    effective_depth: Dimen::zero(),
+                }
+            }
+            Some(field) => {
+                let nucleus_box =
+                    self.convert_math_field_to_box(field, &current_style);
+
+                let height = *nucleus_box.height();
+                let depth = *nucleus_box.depth();
+
+                TranslatedNucleus {
+                    translation: vec![HorizontalListElem::Box {
+                        tex_box: nucleus_box,
+                        shift: Dimen::zero(),
+                    }],
+                    nucleus_is_symbol: false,
+                    effective_height: height,
+                    effective_depth: depth,
+                }
+            }
+            None => TranslatedNucleus {
+                translation: vec![],
+                nucleus_is_symbol: false,
+                effective_height: Dimen::zero(),
+                effective_depth: Dimen::zero(),
+            },
+        }
+    }
+
+    fn add_superscripts_and_subscripts_to_atom_with_translated_nucleus(
+        &mut self,
+        superscript: Option<MathField>,
+        subscript: Option<MathField>,
+        translated_nucleus: TranslatedNucleus,
+        current_style: &MathStyle,
+    ) -> Vec<HorizontalListElem> {
+        let font =
+            &MATH_FONTS[&(get_font_style_for_math_style(&current_style), 2)];
+
+        let (sup_drop, sub_drop) = self
+            .state
+            .with_metrics_for_font(font, |metrics| {
+                let sup_drop = metrics.get_font_dimension(18);
+                let sub_drop = metrics.get_font_dimension(19);
+
+                (sup_drop, sub_drop)
+            })
+            .unwrap();
+
+        // The amount that the superscript and subscript will be
+        // shifted with respect to the nucleus. Called u and v in
+        // the TeXbook.
+        let mut sup_shift = if translated_nucleus.nucleus_is_symbol {
+            Dimen::zero()
+        } else {
+            translated_nucleus.effective_height - sup_drop
+        };
+        let mut sub_shift = if translated_nucleus.nucleus_is_symbol {
+            Dimen::zero()
+        } else {
+            translated_nucleus.effective_depth + sub_drop
+        };
+
+        // TODO(xymostech): Pull this from \scriptspace
+        let scriptspace = Dimen::from_unit(0.5, Unit::Point);
+
+        let sub_sup_translation = match (superscript, subscript) {
+            (Some(superscript), None) => {
+                let mut sup_box = self.convert_math_field_to_box(
+                    superscript,
+                    &current_style.up_arrow(),
+                );
+                *sup_box.mut_width() = *sup_box.width() + scriptspace;
+
+                let (sup_shift_for_style, x_height) = self
+                    .state
+                    .with_metrics_for_font(font, |metrics| {
+                        let sup_shift_for_style = match current_style {
+                            MathStyle::DisplayStyle => {
+                                metrics.get_font_dimension(13)
+                            }
+                            MathStyle::DisplayStylePrime => {
+                                metrics.get_font_dimension(15)
+                            }
+                            MathStyle::TextStylePrime => {
+                                metrics.get_font_dimension(15)
+                            }
+                            MathStyle::ScriptStylePrime => {
+                                metrics.get_font_dimension(15)
+                            }
+                            MathStyle::ScriptScriptStylePrime => {
+                                metrics.get_font_dimension(15)
+                            }
+                            _ => metrics.get_font_dimension(14),
+                        };
+
+                        (sup_shift_for_style, metrics.get_font_dimension(5))
+                    })
+                    .unwrap();
+
+                sup_shift = max(
+                    max(sup_shift, sup_shift_for_style),
+                    *sup_box.depth() + x_height.abs() / 4,
+                );
+
+                Some(HorizontalListElem::Box {
+                    tex_box: sup_box,
+                    shift: sup_shift,
+                })
+            }
+            (None, Some(subscript)) => {
+                let mut sub_box = self.convert_math_field_to_box(
+                    subscript,
+                    &current_style.down_arrow(),
+                );
+                *sub_box.mut_width() = *sub_box.width() + scriptspace;
+
+                let (sub1, x_height) = self
+                    .state
+                    .with_metrics_for_font(font, |metrics| {
+                        (
+                            metrics.get_font_dimension(16),
+                            metrics.get_font_dimension(5),
+                        )
+                    })
+                    .unwrap();
+
+                sub_shift = max(
+                    max(sub_shift, sub1),
+                    *sub_box.height() - x_height.abs() * 4 / 5,
+                );
+
+                Some(HorizontalListElem::Box {
+                    tex_box: sub_box,
+                    shift: sub_shift * -1,
+                })
+            }
+            (Some(superscript), Some(subscript)) => {
+                let mut sup_box = self.convert_math_field_to_box(
+                    superscript,
+                    &current_style.up_arrow(),
+                );
+                *sup_box.mut_width() = *sup_box.width() + scriptspace;
+
+                let (sup_shift_for_style, sub_2, x_height) = self
+                    .state
+                    .with_metrics_for_font(font, |metrics| {
+                        let sup_shift_for_style = match current_style {
+                            MathStyle::DisplayStyle => {
+                                metrics.get_font_dimension(13)
+                            }
+                            MathStyle::DisplayStylePrime => {
+                                metrics.get_font_dimension(15)
+                            }
+                            MathStyle::TextStylePrime => {
+                                metrics.get_font_dimension(15)
+                            }
+                            MathStyle::ScriptStylePrime => {
+                                metrics.get_font_dimension(15)
+                            }
+                            MathStyle::ScriptScriptStylePrime => {
+                                metrics.get_font_dimension(15)
+                            }
+                            _ => metrics.get_font_dimension(14),
+                        };
+
+                        (
+                            sup_shift_for_style,
+                            metrics.get_font_dimension(17),
+                            metrics.get_font_dimension(5),
+                        )
+                    })
+                    .unwrap();
+
+                sup_shift = max(
+                    max(sup_shift, sup_shift_for_style),
+                    *sup_box.depth() + x_height.abs() / 4,
+                );
+
+                let mut sub_box = self.convert_math_field_to_box(
+                    subscript,
+                    &current_style.down_arrow(),
+                );
+                *sub_box.mut_width() = *sub_box.width() + scriptspace;
+
+                let sup_height = *sup_box.height();
+                let sup_depth = *sup_box.depth();
+                let sub_height = *sub_box.height();
+                let sub_depth = *sub_box.depth();
+
+                sub_shift = max(sub_shift, sub_2);
+
+                let ext_font = &MATH_FONTS
+                    [&(get_font_style_for_math_style(&current_style), 3)];
+                let default_rule_thickness = self
+                    .state
+                    .with_metrics_for_font(ext_font, |metrics| {
+                        metrics.get_font_dimension(8)
+                    })
+                    .unwrap();
+
+                if (sup_shift - sup_depth) - (sub_height - sub_shift)
+                    < default_rule_thickness * 4
+                {
+                    sub_shift = default_rule_thickness * 4 + sub_height
+                        - (sup_shift - sup_depth);
+                    assert!(
+                        (sup_shift - sup_depth) - (sub_height - sub_shift)
+                            == default_rule_thickness * 4
+                    );
+
+                    let final_shift =
+                        x_height.abs() * 4 / 5 - (sup_shift - sup_depth);
+
+                    if final_shift > Dimen::zero() {
+                        sup_shift = sup_shift + final_shift;
+                        sub_shift = sub_shift - final_shift;
+                    }
+                }
+
+                let skip_dist = sup_shift + sub_shift - sup_depth - sub_height;
+                assert!(
+                    sup_height + sup_depth + skip_dist + sub_height + sub_depth
+                        == sup_height + sup_shift + sub_depth + sub_shift
+                );
+
+                let max_width = max(*sup_box.width(), *sub_box.width());
+
+                let supsub_box = VerticalBox {
+                    // NOTE: The TeXbook says that the height of
+                    // this resulting box should be sup_height +
+                    // sup_shift and the depth should be sub_shift
+                    // + sub_depth. However, experimentally I've
+                    // found that the boxes actually produced have
+                    // the sub_shift included in the height. This
+                    // necessitates that the box be shifted down by
+                    // sub_shift to put the baseline in the correct
+                    // spot, which is implemented below.
+                    height: sup_height + sup_shift + sub_shift,
+                    depth: sub_depth,
+                    width: max_width,
+
+                    list: vec![
+                        VerticalListElem::Box {
+                            tex_box: sup_box,
+                            shift: Dimen::zero(),
+                        },
+                        VerticalListElem::VSkip(Glue::from_dimen(skip_dist)),
+                        VerticalListElem::Box {
+                            tex_box: sub_box,
+                            shift: Dimen::zero(),
+                        },
+                    ],
+                    glue_set_ratio: None,
+                };
+
+                Some(HorizontalListElem::Box {
+                    tex_box: TeXBox::VerticalBox(supsub_box),
+                    shift: sub_shift * -1,
+                })
+            }
+            (None, None) => None,
+        };
+
+        let mut translation = translated_nucleus.translation;
+        if let Some(list_elem) = sub_sup_translation {
+            translation.push(list_elem);
+        }
+
+        translation
+    }
+
     pub fn convert_math_list_to_horizontal_list(
         &mut self,
         list: MathList,
@@ -652,365 +1039,23 @@ impl<'a> Parser<'a> {
 
                     prev_atom_kind = Some(atom_kind);
 
-                    let (
-                        translated_nucleus,
-                        nucleus_is_symbol,
-                        nucleus_height,
-                        nucleus_depth,
-                    ) = match atom.nucleus {
-                        Some(MathField::Symbol(symbol)) => {
-                            let font = &MATH_FONTS[&(
-                                get_font_style_for_math_style(&current_style),
-                                symbol.family_number,
-                            )];
-
-                            let char_elem = if atom.kind == AtomKind::Op {
-                                let position_number = match current_style {
-                                    // In DisplayStyle, we fetch the successor
-                                    // for symbol op atoms
-                                    MathStyle::DisplayStyle
-                                    | MathStyle::DisplayStylePrime => self
-                                        .state
-                                        .with_metrics_for_font(
-                                            font,
-                                            |metrics| {
-                                                metrics.get_successor(
-                                                    symbol.position_number
-                                                        as char,
-                                                )
-                                            },
-                                        )
-                                        .unwrap()
-                                        as u8,
-                                    _ => symbol.position_number,
-                                };
-
-                                let elem = HorizontalListElem::Char {
-                                    chr: position_number as char,
-                                    font: font.clone(),
-                                };
-
-                                let boxed_elem = self
-                                    .add_to_natural_layout_horizontal_box(
-                                        HorizontalBox::empty(),
-                                        elem,
-                                    );
-
-                                let sym_font = &MATH_FONTS[&(
-                                    get_font_style_for_math_style(
-                                        &current_style,
-                                    ),
-                                    2,
-                                )];
-                                let axis_height = self
-                                    .state
-                                    .with_metrics_for_font(
-                                        sym_font,
-                                        |metrics| {
-                                            metrics.get_font_dimension(22)
-                                        },
-                                    )
-                                    .unwrap();
-
-                                let shift = axis_height
-                                    - (boxed_elem.height - boxed_elem.depth)
-                                        / 2;
-
-                                HorizontalListElem::Box {
-                                    tex_box: TeXBox::HorizontalBox(boxed_elem),
-                                    shift,
-                                }
-                            } else {
-                                HorizontalListElem::Char {
-                                    chr: symbol.position_number as char,
-                                    font: font.clone(),
-                                }
-                            };
-
-                            (
-                                vec![char_elem],
-                                true,
-                                Dimen::zero(),
-                                Dimen::zero(),
-                            )
-                        }
-                        Some(field) => {
-                            let nucleus_box = self.convert_math_field_to_box(
-                                field,
-                                &current_style,
-                            );
-
-                            let height = *nucleus_box.height();
-                            let depth = *nucleus_box.depth();
-
-                            (
-                                vec![HorizontalListElem::Box {
-                                    tex_box: nucleus_box,
-                                    shift: Dimen::zero(),
-                                }],
-                                false,
-                                height,
-                                depth,
-                            )
-                        }
-                        None => (vec![], false, Dimen::zero(), Dimen::zero()),
-                    };
-
-                    let font = &MATH_FONTS
-                        [&(get_font_style_for_math_style(&current_style), 2)];
-
-                    let (sup_drop, sub_drop) = self
-                        .state
-                        .with_metrics_for_font(font, |metrics| {
-                            let sup_drop = metrics.get_font_dimension(18);
-                            let sub_drop = metrics.get_font_dimension(19);
-
-                            (sup_drop, sub_drop)
-                        })
-                        .unwrap();
-
-                    // The amount that the superscript and subscript will be
-                    // shifted with respect to the nucleus. Called u and v in
-                    // the TeXbook.
-                    let mut sup_shift = if nucleus_is_symbol {
-                        Dimen::zero()
+                    let translated_nucleus = if atom.kind == AtomKind::Op {
+                        self.translate_op_atom_nucleus(
+                            atom.nucleus,
+                            &current_style,
+                        )
                     } else {
-                        nucleus_height - sup_drop
-                    };
-                    let mut sub_shift = if nucleus_is_symbol {
-                        Dimen::zero()
-                    } else {
-                        nucleus_depth + sub_drop
+                        self.translate_atom_nucleus(
+                            atom.nucleus,
+                            &current_style,
+                        )
                     };
 
-                    // TODO(xymostech): Pull this from \scriptspace
-                    let scriptspace = Dimen::from_unit(0.5, Unit::Point);
-
-                    let sub_sup_translation = match (
-                        atom.superscript,
-                        atom.subscript,
-                    ) {
-                        (Some(superscript), None) => {
-                            let mut sup_box = self.convert_math_field_to_box(
-                                superscript,
-                                &current_style.up_arrow(),
-                            );
-                            *sup_box.mut_width() =
-                                *sup_box.width() + scriptspace;
-
-                            let (sup_shift_for_style, x_height) = self
-                                .state
-                                .with_metrics_for_font(font, |metrics| {
-                                    let sup_shift_for_style = match current_style {
-                                        MathStyle::DisplayStyle => {
-                                            metrics.get_font_dimension(13)
-                                        }
-                                        MathStyle::DisplayStylePrime => {
-                                            metrics.get_font_dimension(15)
-                                        }
-                                        MathStyle::TextStylePrime => {
-                                            metrics.get_font_dimension(15)
-                                        }
-                                        MathStyle::ScriptStylePrime => {
-                                            metrics.get_font_dimension(15)
-                                        }
-                                        MathStyle::ScriptScriptStylePrime => {
-                                            metrics.get_font_dimension(15)
-                                        }
-                                        _ => metrics.get_font_dimension(14),
-                                    };
-
-                                    (sup_shift_for_style, metrics.get_font_dimension(5))
-                                })
-                                .unwrap();
-
-                            sup_shift = max(
-                                max(sup_shift, sup_shift_for_style),
-                                *sup_box.depth() + x_height.abs() / 4,
-                            );
-
-                            Some(HorizontalListElem::Box {
-                                tex_box: sup_box,
-                                shift: sup_shift,
-                            })
-                        }
-                        (None, Some(subscript)) => {
-                            let mut sub_box = self.convert_math_field_to_box(
-                                subscript,
-                                &current_style.down_arrow(),
-                            );
-                            *sub_box.mut_width() =
-                                *sub_box.width() + scriptspace;
-
-                            let (sub1, x_height) = self
-                                .state
-                                .with_metrics_for_font(font, |metrics| {
-                                    (
-                                        metrics.get_font_dimension(16),
-                                        metrics.get_font_dimension(5),
-                                    )
-                                })
-                                .unwrap();
-
-                            sub_shift = max(
-                                max(sub_shift, sub1),
-                                *sub_box.height() - x_height.abs() * 4 / 5,
-                            );
-
-                            Some(HorizontalListElem::Box {
-                                tex_box: sub_box,
-                                shift: sub_shift * -1,
-                            })
-                        }
-                        (Some(superscript), Some(subscript)) => {
-                            let mut sup_box = self.convert_math_field_to_box(
-                                superscript,
-                                &current_style.up_arrow(),
-                            );
-                            *sup_box.mut_width() =
-                                *sup_box.width() + scriptspace;
-
-                            let (sup_shift_for_style, sub_2, x_height) = self
-                                .state
-                                .with_metrics_for_font(font, |metrics| {
-                                    let sup_shift_for_style = match current_style {
-                                        MathStyle::DisplayStyle => {
-                                            metrics.get_font_dimension(13)
-                                        }
-                                        MathStyle::DisplayStylePrime => {
-                                            metrics.get_font_dimension(15)
-                                        }
-                                        MathStyle::TextStylePrime => {
-                                            metrics.get_font_dimension(15)
-                                        }
-                                        MathStyle::ScriptStylePrime => {
-                                            metrics.get_font_dimension(15)
-                                        }
-                                        MathStyle::ScriptScriptStylePrime => {
-                                            metrics.get_font_dimension(15)
-                                        }
-                                        _ => metrics.get_font_dimension(14),
-                                    };
-
-                                    (sup_shift_for_style, metrics.get_font_dimension(17), metrics.get_font_dimension(5))
-                                })
-                                .unwrap();
-
-                            sup_shift = max(
-                                max(sup_shift, sup_shift_for_style),
-                                *sup_box.depth() + x_height.abs() / 4,
-                            );
-
-                            let mut sub_box = self.convert_math_field_to_box(
-                                subscript,
-                                &current_style.down_arrow(),
-                            );
-                            *sub_box.mut_width() =
-                                *sub_box.width() + scriptspace;
-
-                            let sup_height = *sup_box.height();
-                            let sup_depth = *sup_box.depth();
-                            let sub_height = *sub_box.height();
-                            let sub_depth = *sub_box.depth();
-
-                            sub_shift = max(sub_shift, sub_2);
-
-                            let ext_font = &MATH_FONTS[&(
-                                get_font_style_for_math_style(&current_style),
-                                3,
-                            )];
-                            let default_rule_thickness = self
-                                .state
-                                .with_metrics_for_font(ext_font, |metrics| {
-                                    metrics.get_font_dimension(8)
-                                })
-                                .unwrap();
-
-                            if (sup_shift - sup_depth)
-                                - (sub_height - sub_shift)
-                                < default_rule_thickness * 4
-                            {
-                                sub_shift = default_rule_thickness * 4
-                                    + sub_height
-                                    - (sup_shift - sup_depth);
-                                assert!(
-                                    (sup_shift - sup_depth)
-                                        - (sub_height - sub_shift)
-                                        == default_rule_thickness * 4
-                                );
-
-                                let final_shift = x_height.abs() * 4 / 5
-                                    - (sup_shift - sup_depth);
-
-                                if final_shift > Dimen::zero() {
-                                    sup_shift = sup_shift + final_shift;
-                                    sub_shift = sub_shift - final_shift;
-                                }
-                            }
-
-                            let skip_dist =
-                                sup_shift + sub_shift - sup_depth - sub_height;
-                            assert!(
-                                sup_height
-                                    + sup_depth
-                                    + skip_dist
-                                    + sub_height
-                                    + sub_depth
-                                    == sup_height
-                                        + sup_shift
-                                        + sub_depth
-                                        + sub_shift
-                            );
-
-                            let max_width =
-                                max(*sup_box.width(), *sub_box.width());
-
-                            let supsub_box = VerticalBox {
-                                // NOTE: The TeXbook says that the height of
-                                // this resulting box should be sup_height +
-                                // sup_shift and the depth should be sub_shift
-                                // + sub_depth. However, experimentally I've
-                                // found that the boxes actually produced have
-                                // the sub_shift included in the height. This
-                                // necessitates that the box be shifted down by
-                                // sub_shift to put the baseline in the correct
-                                // spot, which is implemented below.
-                                height: sup_height + sup_shift + sub_shift,
-                                depth: sub_depth,
-                                width: max_width,
-
-                                list: vec![
-                                    VerticalListElem::Box {
-                                        tex_box: sup_box,
-                                        shift: Dimen::zero(),
-                                    },
-                                    VerticalListElem::VSkip(Glue::from_dimen(
-                                        skip_dist,
-                                    )),
-                                    VerticalListElem::Box {
-                                        tex_box: sub_box,
-                                        shift: Dimen::zero(),
-                                    },
-                                ],
-                                glue_set_ratio: None,
-                            };
-
-                            Some(HorizontalListElem::Box {
-                                tex_box: TeXBox::VerticalBox(supsub_box),
-                                shift: sub_shift * -1,
-                            })
-                        }
-                        (None, None) => None,
-                    };
-
-                    let mut translation = translated_nucleus;
-                    if let Some(list_elem) = sub_sup_translation {
-                        translation.push(list_elem);
-                    }
+                    let atom_translation = self.add_superscripts_and_subscripts_to_atom_with_translated_nucleus(atom.superscript, atom.subscript, translated_nucleus, &current_style);
 
                     let translated_atom = TranslatedMathAtom {
                         kind: atom_kind,
-                        translation,
+                        translation: atom_translation,
                     };
 
                     elems_after_first_pass
