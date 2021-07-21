@@ -749,18 +749,28 @@ impl<'a> Parser<'a> {
         translated_nucleus: TranslatedNucleus,
         current_style: &MathStyle,
     ) -> Vec<HorizontalListElem> {
-        let font =
-            &MATH_FONTS[&(get_font_style_for_math_style(&current_style), 2)];
+        let sup_sym_font = &MATH_FONTS
+            [&(get_font_style_for_math_style(&current_style.up_arrow()), 2)];
+        let sub_sym_font = &MATH_FONTS[&(
+            get_font_style_for_math_style(&current_style.down_arrow()),
+            2,
+        )];
 
-        let (sup_drop, sub_drop) = self
+        let sup_drop = self
             .state
-            .with_metrics_for_font(font, |metrics| {
-                let sup_drop = metrics.get_font_dimension(18);
-                let sub_drop = metrics.get_font_dimension(19);
-
-                (sup_drop, sub_drop)
+            .with_metrics_for_font(sup_sym_font, |metrics| {
+                metrics.get_font_dimension(18)
             })
             .unwrap();
+        let sub_drop = self
+            .state
+            .with_metrics_for_font(sub_sym_font, |metrics| {
+                metrics.get_font_dimension(19)
+            })
+            .unwrap();
+
+        let sym_font =
+            &MATH_FONTS[&(get_font_style_for_math_style(&current_style), 2)];
 
         // The amount that the superscript and subscript will be
         // shifted with respect to the nucleus. Called u and v in
@@ -789,7 +799,7 @@ impl<'a> Parser<'a> {
 
                 let (sup_shift_for_style, x_height) = self
                     .state
-                    .with_metrics_for_font(font, |metrics| {
+                    .with_metrics_for_font(sym_font, |metrics| {
                         let sup_shift_for_style = match current_style {
                             MathStyle::DisplayStyle => {
                                 metrics.get_font_dimension(13)
@@ -832,7 +842,7 @@ impl<'a> Parser<'a> {
 
                 let (sub1, x_height) = self
                     .state
-                    .with_metrics_for_font(font, |metrics| {
+                    .with_metrics_for_font(sym_font, |metrics| {
                         (
                             metrics.get_font_dimension(16),
                             metrics.get_font_dimension(5),
@@ -859,7 +869,7 @@ impl<'a> Parser<'a> {
 
                 let (sup_shift_for_style, sub_2, x_height) = self
                     .state
-                    .with_metrics_for_font(font, |metrics| {
+                    .with_metrics_for_font(sym_font, |metrics| {
                         let sup_shift_for_style = match current_style {
                             MathStyle::DisplayStyle => {
                                 metrics.get_font_dimension(13)
@@ -1961,7 +1971,7 @@ mod tests {
                 r"\count0=\wd0%",
                 r"\advance\count0 by 32768%",
                 r"\wd0=\count0 sp%",
-                r"\hbox{ab}\raise 237825sp \box0%",
+                r"\hbox{ab}\raise 293093sp \box0%",
             ],
         );
     }
@@ -2516,6 +2526,35 @@ mod tests {
                 r"}%",
                 r#"\>\tenrm \char"2B"#,
                 r"\>\teni c%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_adds_appropriate_space_between_superscripts_and_subscripts_with_large_nuclei(
+    ) {
+        assert_math_list_converts_to_horizontal_list(
+            &[r"\setbox0=\hbox{}%", r"\ht0=10pt%", r"\box0^a_b%"],
+            &[
+                r"\font\seveni=cmmi7%",
+                r"\def\nointerlineskip{\prevdepth=-1000pt}%",
+                r"\def\addscriptspace#1{%",
+                r"  \count0=\wd#1%",
+                r"  \advance\count0 by 32768 %",
+                r"  \wd#1=\count0 sp}%",
+                r"\setbox0=\hbox{}%",
+                r"\ht0=10pt%",
+                r"\box0%",
+                r"\lower 162016sp \vbox{%",
+                r"  \setbox0=\hbox{\seveni a}%",
+                r"  \addscriptspace 0%",
+                r"  \box0%",
+                r"  \vskip 336781sp%",
+                r"  \nointerlineskip%",
+                r"  \setbox0=\hbox{\seveni b}%",
+                r"  \addscriptspace 0%",
+                r"  \box0%",
+                r"}%",
             ],
         );
     }
