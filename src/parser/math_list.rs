@@ -3,9 +3,9 @@ use std::collections::HashMap;
 
 use crate::boxes::{HorizontalBox, TeXBox, VerticalBox};
 use crate::category::Category;
-use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
+use crate::dimension::{Dimen, FilDimen, FilKind, MuDimen, SpringDimen, Unit};
 use crate::font::Font;
-use crate::glue::Glue;
+use crate::glue::{Glue, MuGlue};
 use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::math_code::MathCode;
 use crate::math_list::{
@@ -488,24 +488,23 @@ impl<'a> Parser<'a> {
         left_type: &AtomKind,
         right_type: &AtomKind,
         style: &MathStyle,
-    ) -> Option<Glue> {
+    ) -> Option<MuGlue> {
         // TODO: These should come from the state variables \thinmuskip,
         // \mediummuskip, and \thickmuskip.
-        // TODO: These should be MuGlue, not plain Glue
-        let thinskip = Glue {
-            space: Dimen::from_unit(3.0, Unit::Point),
-            stretch: SpringDimen::Dimen(Dimen::zero()),
-            shrink: SpringDimen::Dimen(Dimen::zero()),
+        let thinskip = MuGlue {
+            space: MuDimen::new(3.0),
+            stretch: MuDimen::zero(),
+            shrink: MuDimen::zero(),
         };
-        let mediumskip = Glue {
-            space: Dimen::from_unit(4.0, Unit::Point),
-            stretch: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
-            shrink: SpringDimen::Dimen(Dimen::from_unit(4.0, Unit::Point)),
+        let mediumskip = MuGlue {
+            space: MuDimen::new(4.0),
+            stretch: MuDimen::new(2.0),
+            shrink: MuDimen::new(4.0),
         };
-        let thickskip = Glue {
-            space: Dimen::from_unit(5.0, Unit::Point),
-            stretch: SpringDimen::Dimen(Dimen::from_unit(5.0, Unit::Point)),
-            shrink: SpringDimen::Dimen(Dimen::zero()),
+        let thickskip = MuGlue {
+            space: MuDimen::new(5.0),
+            stretch: MuDimen::new(5.0),
+            shrink: MuDimen::zero(),
         };
 
         if let Some(space) = INTER_ATOM_SPACING.get(&(*left_type, *right_type))
@@ -1309,11 +1308,25 @@ impl<'a> Parser<'a> {
             match elem {
                 TranslatedMathListElem::Atom(atom) => {
                     if let Some(last_atom_kind) = maybe_last_atom_kind {
-                        if let Some(skip) = self.get_skip_for_atom_pair(
+                        if let Some(muskip) = self.get_skip_for_atom_pair(
                             &last_atom_kind,
                             &atom.kind,
                             &current_style,
                         ) {
+                            let sym_font = &MATH_FONTS[&(
+                                get_font_style_for_math_style(&current_style),
+                                2,
+                            )];
+
+                            let quad = self
+                                .state
+                                .with_metrics_for_font(sym_font, |metrics| {
+                                    metrics.get_font_dimension(6)
+                                })
+                                .unwrap();
+
+                            let skip = muskip.to_glue(quad);
+
                             resulting_horizontal_list
                                 .push(HorizontalListElem::HSkip(skip));
                         }
@@ -1778,9 +1791,9 @@ mod tests {
                 r"tt%",
             ],
             &[
-                r"\def\,{\hskip 3pt}%",
-                r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
-                r"\def\;{\hskip 5pt plus 5pt}%",
+                r"\def\,{\hskip 109224sp}%",
+                r"\def\>{\hskip 145632sp plus 72816sp minus 145632sp}%",
+                r"\def\;{\hskip 182040sp plus 182040sp}%",
                 r"\def\p{\raise 86472sp \hbox{p}}%",
                 r"oo\,\p\,o\>b\>o\;r\;onocot\,o\,%",
                 r"\p\,\p\;r\;\p n\p c\,\p t\,\p\,o\>%",
@@ -1813,9 +1826,9 @@ mod tests {
             &[
                 r"\font\sevenrm=cmr7%",
                 r"\font\fiverm=cmr5%",
-                r"\def\,{\hskip 3pt}%",
-                r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
-                r"\def\;{\hskip 5pt plus 5pt}%",
+                r"\def\,{\hskip 109224sp}%",
+                r"\def\>{\hskip 145632sp plus 72816sp minus 145632sp}%",
+                r"\def\;{\hskip 182040sp plus 182040sp}%",
                 r"o\;rp\,o\>b\>%",
                 r"o\;rp\,o\>b%",
                 r"\sevenrm%",
@@ -2148,9 +2161,9 @@ mod tests {
                 r"br o bc o bt o%",
             ],
             &[
-                r"\def\,{\hskip 3pt}%",
-                r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
-                r"\def\;{\hskip 5pt plus 5pt}%",
+                r"\def\,{\hskip 109224sp}%",
+                r"\def\>{\hskip 145632sp plus 72816sp minus 145632sp}%",
+                r"\def\;{\hskip 182040sp plus 182040sp}%",
                 r"\def\p{\raise 86472sp \hbox{p}}%",
                 r"bo%",
                 r"\>b\>bo\,\p\,bo\;r\;bonbot\,bo%",
@@ -2185,7 +2198,7 @@ mod tests {
                 r"a\sum\int \displaystyle a\sum\int%",
             ],
             &[
-                r"\def\,{\hskip 3pt}%",
+                r"\def\,{\hskip 109224sp}%",
                 r"\font\teni=cmmi10%",
                 r"\font\tenex=cmex10%",
                 // normal a
@@ -2215,7 +2228,7 @@ mod tests {
                 r"\sumord \sumop%",
             ],
             &[
-                r"\def\,{\hskip 3pt}%",
+                r"\def\,{\hskip 109224sp}%",
                 r"\font\tenex=cmex10%",
                 r"\tenex \char80\,%",
                 r"\raise 491524sp \hbox{\tenex \char80}%",
@@ -2516,7 +2529,7 @@ mod tests {
                 r"}%",
                 r"\ht3=488321sp%",
                 r"\dp3=225995sp%",
-                r"\def\>{\hskip 4pt plus 2pt minus 4pt}%",
+                r"\def\>{\hskip 145632sp plus 72816sp minus 145632sp}%",
                 r"\teni a%",
                 r#"\>\tenrm \char"2B"#,
                 r"\>\hbox{%",
@@ -2555,6 +2568,31 @@ mod tests {
                 r"  \addscriptspace 0%",
                 r"  \box0%",
                 r"}%",
+            ],
+        );
+    }
+
+    #[test]
+    fn muskips_are_converted_to_hskips_taking_style_into_effect() {
+        assert_math_list_converts_to_horizontal_list(
+            &[
+                // We use an operator because the skips between ords and
+                // operators don't disappear in script and scriptscriptstyle
+                r#"\mathcode`+="102B%"#,
+                r"\textstyle a+b%",
+                r"\scriptstyle a+b%",
+                r"\scriptscriptstyle a+b%",
+            ],
+            &[
+                r"\font\tenrm=cmr10%",
+                r"\font\teni=cmmi10%",
+                r"\font\sevenrm=cmr7%",
+                r"\font\seveni=cmmi7%",
+                r"\font\fiverm=cmr5%",
+                r"\font\fivei=cmmi5%",
+                r"\teni a\hskip109224sp \hbox{\tenrm +}\hskip109224sp b%",
+                r"\seveni a\hskip89505sp \hbox{\sevenrm +}\hskip89505sp b%",
+                r"\fivei a\hskip80403sp \hbox{\fiverm +}\hskip80403sp b%",
             ],
         );
     }

@@ -1,6 +1,6 @@
 use std::ops::{Add, Sub};
 
-use crate::dimension::{Dimen, SpringDimen};
+use crate::dimension::{Dimen, MuDimen, SpringDimen};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Glue {
@@ -45,5 +45,22 @@ impl Sub for Glue {
         other.stretch = other.stretch * -1;
         other.shrink = other.shrink * -1;
         self + other
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct MuGlue {
+    pub space: MuDimen,
+    pub stretch: MuDimen,
+    pub shrink: MuDimen,
+}
+
+impl MuGlue {
+    pub fn to_glue(&self, quad: Dimen) -> Glue {
+        Glue {
+            space: self.space.to_dimen(quad),
+            stretch: SpringDimen::Dimen(self.stretch.to_dimen(quad)),
+            shrink: SpringDimen::Dimen(self.shrink.to_dimen(quad)),
+        }
     }
 }

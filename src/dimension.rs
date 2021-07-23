@@ -243,6 +243,31 @@ impl Mul<i32> for SpringDimen {
     }
 }
 
+/// Represents a math dimension in terms of a number of 1/65536 of an mu. These
+///  are converted to em in math modes by dividing by 18.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MuDimen(i32);
+
+impl MuDimen {
+    pub fn zero() -> MuDimen {
+        MuDimen(0)
+    }
+
+    pub fn new(num: f64) -> MuDimen {
+        MuDimen((num * 65536.0) as i32)
+    }
+
+    /// Given the value of the quad dimension from a given font, converts the
+    /// MuDimen into a plain Dimen
+    pub fn to_dimen(&self, quad: Dimen) -> Dimen {
+        // Doing dimen * (self.0, 655536 * 18) would produce a result of higher
+        // quality, but we perform this multiplication in multiple steps
+        // because TeX itself loses some precision when doing this conversion.
+        let dimen = quad / 18;
+        dimen * (self.0, 65536)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
