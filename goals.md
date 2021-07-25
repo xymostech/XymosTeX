@@ -46,7 +46,7 @@ Because the DVI file format isn't rigorous about how certain commands are used (
 
 ## Stage 5: Math Parsing
 
-**Status**: In Progress
+**Status**: Done!
 **Difficulty**: Medium
 **Condition for success**: generate a DVI from [a TeX file with basic a complicated math expressions](examples/math.tex) that is content-identical to [the DVI produced by TeX run on the same file](examples/math.dvi).
 

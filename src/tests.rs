@@ -84,11 +84,11 @@ j
     );
 }
 
-/// This test ensure that we pass the stage #4 goals.
-#[test]
-fn it_matches_real_tex_output() {
-    let dvitest_contents = include_str!("../examples/dvitest.tex");
-    let lines = dvitest_contents.split('\n').collect::<Vec<&str>>();
+fn assert_tex_file_converts_to_dvi(
+    tex_file_contents: &str,
+    dvi_contents: &[u8],
+) {
+    let lines = tex_file_contents.split('\n').collect::<Vec<&str>>();
 
     let mut file_writer = DVIFileWriter::new();
     file_writer.start(
@@ -107,9 +107,50 @@ fn it_matches_real_tex_output() {
     let test_file = file_writer.to_file();
     let test_pages = interpret_dvi_file(test_file);
 
-    let real_dvi: &[u8] = include_bytes!("../examples/dvitest.dvi");
-    let real_file = DVIFile::new(real_dvi).unwrap();
+    let real_file = DVIFile::new(dvi_contents).unwrap();
     let real_pages = interpret_dvi_file(real_file);
 
+    for (test_page, real_page) in test_pages.iter().zip(real_pages.iter()) {
+        for (key, val) in real_page.iter() {
+            match test_page.get(key) {
+                Some(_) => {}
+                None => {
+                    println!(
+                        "Extra key/value in real page: {:?} {:?}",
+                        key, val
+                    );
+                }
+            }
+        }
+
+        for (key, val) in test_page.iter() {
+            match real_page.get(key) {
+                Some(_) => {}
+                None => {
+                    println!(
+                        "Extra key/value in test page: {:?}, {:?}",
+                        key, val
+                    );
+                }
+            }
+        }
+    }
+
     assert_eq!(test_pages, real_pages);
+}
+
+#[test]
+fn it_passes_stage_4_goals() {
+    assert_tex_file_converts_to_dvi(
+        include_str!("../examples/dvitest.tex"),
+        include_bytes!("../examples/dvitest.dvi"),
+    );
+}
+
+#[test]
+fn it_passes_stage_5_goals() {
+    assert_tex_file_converts_to_dvi(
+        include_str!("../examples/math.tex"),
+        include_bytes!("../examples/math.dvi"),
+    );
 }

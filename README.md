@@ -8,9 +8,9 @@ This project is an attempt to build an implementation of TeX in Rust. The overal
 
 ## Status
 
-Currently, XymosTeX has reached the point where is it Turing complete (that is, it implements things like macro expansion, conditionals, assignments), can interpret basic horizontal and vertical boxes, and can generate a DVI file with the result.
+Currently, XymosTeX has reached the point where is it Turing complete (that is, it implements things like macro expansion, conditionals, assignments), can interpret basic horizontal and vertical boxes, can interpret basic math experssions, and can generate a DVI file with the result.
 
-The next body of work will be parsing math expressions, performing paragraph breaking, and performing page breaking.
+The next body of work will be performing paragraph breaking and performing page breaking.
 
 ## Trying it
 
@@ -31,8 +31,7 @@ $ open texput.pdf
 
 ![Image of Hello World!](readme-images/hello-world.png)
 
-
-The most fun and impressive thing that XymosTeX can do is calculate primes for you:
+One fun and impressive thing that XymosTeX can do is calculate primes for you:
 
 ```
 $ cargo run --release < examples/primes.tex
@@ -41,6 +40,17 @@ $ open texput.pdf
 ```
 
 ![Image of the first 10 primes](readme-images/primes.png)
+
+XymosTeX can also render some math expressions, with a little help defining the
+symbols:
+
+```
+$ cargo run --release < examples/basicmath.tex
+$ dvipdf texput.dvi
+$ open texput.pdf
+```
+
+![Image of the pythagorean theorem, a squared plus b squared equals c squared, and Euler's Identity, e raised to the power of i times pi plus 1 equals 0](readme-images/math.png)
 
 ## Contributing
 
