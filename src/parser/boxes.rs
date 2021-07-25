@@ -326,7 +326,7 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
-    use crate::dimension::{Dimen, Unit};
+    use crate::dimension::{Dimen, FilDimen, FilKind, Unit};
     use crate::font::Font;
     use crate::testing::with_parser;
 
@@ -805,6 +805,112 @@ mod tests {
                 parser.parse_assignment(None);
 
                 assert_eq!(parser.state.get_box(0), parser.state.get_box(1),);
+            },
+        );
+    }
+
+    #[test]
+    fn it_rounds_glue_set_ratio_to_the_nearest_65536th() {
+        with_parser(
+            &[
+                r"\setbox0=\hbox to1sp{\hskip 0pt plus 2fil}%",
+                r"\setbox1=\hbox to500sp{\hskip 0pt plus 1000fil}%",
+                r"\setbox2=\hbox to500sp{\hskip 0pt plus 1001fil}%",
+                r"\setbox3=\hbox to1500sp{\hskip 0pt plus 1000fil}%",
+            ],
+            |parser| {
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+
+                assert_eq!(
+                    parser.state.get_box(0),
+                    Some(TeXBox::HorizontalBox(HorizontalBox {
+                        height: Dimen::zero(),
+                        depth: Dimen::zero(),
+                        width: Dimen::from_unit(1.0, Unit::ScaledPoint),
+
+                        list: vec![HorizontalListElem::HSkip(Glue {
+                            space: Dimen::zero(),
+                            stretch: SpringDimen::FilDimen(FilDimen::new(
+                                FilKind::Fil,
+                                2.0
+                            )),
+                            shrink: SpringDimen::Dimen(Dimen::zero()),
+                        }),],
+                        glue_set_ratio: Some(GlueSetRatio::from(
+                            GlueSetRatioKind::Fil,
+                            1.0 / 65536.0
+                        )),
+                    }))
+                );
+
+                assert_eq!(
+                    parser.state.get_box(1),
+                    Some(TeXBox::HorizontalBox(HorizontalBox {
+                        height: Dimen::zero(),
+                        depth: Dimen::zero(),
+                        width: Dimen::from_unit(500.0, Unit::ScaledPoint),
+
+                        list: vec![HorizontalListElem::HSkip(Glue {
+                            space: Dimen::zero(),
+                            stretch: SpringDimen::FilDimen(FilDimen::new(
+                                FilKind::Fil,
+                                1000.0
+                            )),
+                            shrink: SpringDimen::Dimen(Dimen::zero()),
+                        }),],
+                        glue_set_ratio: Some(GlueSetRatio::from(
+                            GlueSetRatioKind::Fil,
+                            1.0 / 65536.0
+                        )),
+                    }))
+                );
+
+                assert_eq!(
+                    parser.state.get_box(2),
+                    Some(TeXBox::HorizontalBox(HorizontalBox {
+                        height: Dimen::zero(),
+                        depth: Dimen::zero(),
+                        width: Dimen::from_unit(500.0, Unit::ScaledPoint),
+
+                        list: vec![HorizontalListElem::HSkip(Glue {
+                            space: Dimen::zero(),
+                            stretch: SpringDimen::FilDimen(FilDimen::new(
+                                FilKind::Fil,
+                                1001.0
+                            )),
+                            shrink: SpringDimen::Dimen(Dimen::zero()),
+                        }),],
+                        glue_set_ratio: Some(GlueSetRatio::from(
+                            GlueSetRatioKind::Fil,
+                            0.0
+                        )),
+                    }))
+                );
+
+                assert_eq!(
+                    parser.state.get_box(3),
+                    Some(TeXBox::HorizontalBox(HorizontalBox {
+                        height: Dimen::zero(),
+                        depth: Dimen::zero(),
+                        width: Dimen::from_unit(1500.0, Unit::ScaledPoint),
+
+                        list: vec![HorizontalListElem::HSkip(Glue {
+                            space: Dimen::zero(),
+                            stretch: SpringDimen::FilDimen(FilDimen::new(
+                                FilKind::Fil,
+                                1000.0
+                            )),
+                            shrink: SpringDimen::Dimen(Dimen::zero()),
+                        }),],
+                        glue_set_ratio: Some(GlueSetRatio::from(
+                            GlueSetRatioKind::Fil,
+                            2.0 / 65536.0
+                        )),
+                    }))
+                );
             },
         );
     }

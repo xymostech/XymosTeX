@@ -38,7 +38,7 @@ impl GlueSetRatio {
     pub fn from(kind: GlueSetRatioKind, ratio: f64) -> GlueSetRatio {
         GlueSetRatio {
             kind,
-            stretch: (ratio * 65536.0) as i32,
+            stretch: (ratio * 65536.0).round() as i32,
         }
     }
 
