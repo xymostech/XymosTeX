@@ -52,19 +52,27 @@ Because the DVI file format isn't rigorous about how certain commands are used (
 
 For this stage, I will be working on both parsing and interpreting of math basic math expressions. For parsing, I will need to handle parsing the math expressions into a math list, which has some oddities like `\atop` and `^`/`_` which will hopefully ensure that the parsing works. Then, I will need to run the routine for turning a math list into a horizontal list. Once that is done, I will be able to use the existing horizontal list infrastructure to fully typeset and output the math into a DVI file.
 
-## Stage 6: Paragraph & Line Breaking
+## Stage 6: Line Breaking
+
+**Status**: In progress
+**Difficulty**: Medium
+**Condition for success**: generate a DVI from [a TeX file with basic paragraphs to be rendered](examples/paragraphs.tex) that is content-identical to [the DVI produced by TeX run on the same file (with very minor differences)](examples/paragraphs.dvi).
+
+For this stage, I will be implementing the TeX line-breaking algorithm which splits horizontal lists into lines of a given width. In addition to the main algorithm, I will also implementing some of the extra features of the line-breaking algorithm, such as discretionary breaks and configurable tolerance and spaceskip. Also, I'm going to implement active characters so I can faithfully implement ties (`~`).
+
+## Stage 7: Paragraph Breaking?
 
 **Status**: Not yet started
-**Difficulty**: Hard
+**Difficulty**: Maybe Hard
 **Condition for success**: ???
 
-## Stage 7: ???
+## Stage 8: ???
 
 **Status**: Not yet started
 **Difficulty**: ??? (Probably hard)
 **Condition for success**: ???
 
-## Stage 8: trip.tex
+## Stage ?: trip.tex
 
 **Status**: Not yet started
 **Difficulty**: Hard

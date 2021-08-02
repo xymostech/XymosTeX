@@ -10,7 +10,7 @@ This project is an attempt to build an implementation of TeX in Rust. The overal
 
 Currently, XymosTeX has reached the point where is it Turing complete (that is, it implements things like macro expansion, conditionals, assignments), can interpret basic horizontal and vertical boxes, can interpret basic math experssions, and can generate a DVI file with the result.
 
-The next body of work will be performing paragraph breaking and performing page breaking.
+The next body of work will be performing paragraph breaking and page breaking.
 
 ## Trying it
 

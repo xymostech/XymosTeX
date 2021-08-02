@@ -1,0 +1,74 @@
+% When running in plain TeX, add these to produce similar output:
+% \nopagenumbers
+% \language=255
+% \pretolerance=-1
+
+\def\break{\penalty-10000}
+\def\nobreak{\penalty10000}
+\catcode`~=13
+\def~{\nobreak\ }
+
+\hsize=300pt
+\parskip=1pt
+\tolerance=200
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Egestas erat imperdiet sed euismod. Et ligula ullamcorper malesuada proin libero nunc consequat interdum varius. Aliquam id diam maecenas ultricies mi. Egestas maecenas pharetra convallis posuere morbi leo. Interdum posuere lorem ipsum dolor sit amet consectetur adipiscing. Id diam vel quam elementum.
+
+\hsize=250pt
+\tolerance=100
+Leo integer malesuada nunc vel risus commodo vi\-ver\-ra maecenas. Eleifend donec pretium vulputate sa\-pien sa\-gittis aliquam. Convallis posuere morbi leo urna molestie at. In ante metus dictum at tempor commodo ul\-lam\-cor\-per. Nunc lobortis mattis aliquam faucibus pu\-rus. Com\-mo\-do sed egestas egestas fringilla. Egestas frin\-gilla pha\-sel\-lus faucibus scelerisque eleifend.
+
+\tolerance=10000
+Leo integer malesuada nunc vel risus commodo vi\-ver\-ra maecenas. Eleifend donec pretium vulputate sa\-pien sa\-gittis aliquam. Convallis posuere morbi leo urna molestie at. In ante metus dictum at tempor commodo ul\-lam\-cor\-per. Nunc lobortis mattis aliquam faucibus pu\-rus. Com\-mo\-do sed egestas egestas fringilla. Egestas frin\-gilla pha\-sel\-lus faucibus scelerisque eleifend.
+
+\tolerance=100
+\spaceskip=3pt plus 20pt minus 2pt % Since \hsize is so small, we allow spaces to stretch much more than usual to get things to fit
+\hsize=100pt
+
+% Should look like
+%               Hello       world
+% hello       world      hello
+% world hello world hello
+% world hello world
+Hello world\break% Always breaks here because penalty is <=-10000
+hello world hello % Breaks here because the next space is a ~, which has \penalty10000
+world~hello world hello world hello world.
+
+% Should look like
+%         hello world hello
+% world hello world left
+% right hello world hello
+% together hello world
+hello world hello\break\nobreak% The \nobreak is ignored because it is after the other penalty
+world hello wor \discretionary{left}{right}{together} % This discretionary break is split into left and right
+hello world hello %
+\discretionary{left}{right}{together} hello world. % The discretionary break here isn't split
+
+% Should look like
+%           hello world hello
+% hello world hello world
+%
+% hello world hello.
+hello world hello\penalty-50
+\hskip100pt \penalty-9999 % despite this glue being exactly \hsize, this and the \penalty-9999 are removed because they are after the break at \penalty-50
+hello world hello world\penalty-50
+\hskip100pt \break % because the penalty here is -10000, this must be a break, so the \hsize glue is left in as a blank line
+hello world hello.
+
+% Should look like
+%           hello world hello
+% hello world hello world.
+hello world hello \hskip10pt \nobreak % the 10pt glue and penalty here are discarded because the break happens at the space before it
+hello world hello world.
+
+% Should look like
+%      hello world hello
+% world hello wor a+b
+% world hello wor a+b=
+% c hello world.
+\spaceskip=3pt plus 10pt minus 1pt
+hello world hello
+world hello wor $a+b$\hskip100pt % Break after a math equation. We see that the skip is at the math-off because the \skip is discarded
+world hello wor $a+b=c$ % Break within a math equation
+hello world.
+
+\end
