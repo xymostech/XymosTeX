@@ -21,8 +21,10 @@ struct DVIStateStack {
 
     // spacing amounts
     w: i32,
+    #[allow(dead_code)]
     x: i32,
     y: i32,
+    #[allow(dead_code)]
     z: i32,
 }
 

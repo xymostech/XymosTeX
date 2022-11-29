@@ -266,7 +266,7 @@ impl<'a> Parser<'a> {
             // We expect a { after the box specification
             match self.lex_expanded_token() {
                 Some(Token::Char(_, Category::BeginGroup)) => (),
-                _ => panic!("Expected { when parsing box"),
+                _ => panic!("{}", "Expected { when parsing box"),
             }
 
             self.state.push_state();
@@ -278,7 +278,7 @@ impl<'a> Parser<'a> {
             // And there should always be a } after the horizontal list
             match self.lex_expanded_token() {
                 Some(Token::Char(_, Category::EndGroup)) => (),
-                _ => panic!("Expected } when parsing box"),
+                _ => panic!("{}", "Expected } when parsing box"),
             }
 
             Some(TeXBox::HorizontalBox(hbox))
@@ -288,7 +288,7 @@ impl<'a> Parser<'a> {
             // We expect a { after the box specification
             match self.lex_expanded_token() {
                 Some(Token::Char(_, Category::BeginGroup)) => (),
-                _ => panic!("Expected { when parsing box"),
+                _ => panic!("{}", "Expected { when parsing box"),
             }
 
             self.state.push_state();
@@ -300,7 +300,7 @@ impl<'a> Parser<'a> {
             // And there should always be a } after the horizontal list
             match self.lex_expanded_token() {
                 Some(Token::Char(_, Category::EndGroup)) => (),
-                _ => panic!("Expected } when parsing box"),
+                _ => panic!("{}", "Expected } when parsing box"),
             }
 
             Some(TeXBox::VerticalBox(vbox))

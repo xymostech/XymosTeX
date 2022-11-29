@@ -86,7 +86,7 @@ impl<'a> Parser<'a> {
                         if internal {
                             None
                         } else {
-                            panic!("Too many }'s!");
+                            panic!("{}", "Too many }'s!");
                         }
                     } else {
                         self.lex_expanded_token();
