@@ -236,24 +236,22 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
+    use once_cell::sync::Lazy;
+
     use crate::dimension::{FilDimen, FilKind};
     use crate::font::Font;
     use crate::math_code::MathCode;
     use crate::testing::with_parser;
 
-    lazy_static! {
-        static ref CMR10: Font = Font {
-            font_name: "cmr10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        };
-    }
+    static CMR10: Lazy<Font> = Lazy::new(|| Font {
+        font_name: "cmr10".to_string(),
+        scale: Dimen::from_unit(10.0, Unit::Point),
+    });
 
-    lazy_static! {
-        static ref CMMI10: Font = Font {
-            font_name: "cmmi10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        };
-    }
+    static CMMI10: Lazy<Font> = Lazy::new(|| Font {
+        font_name: "cmmi10".to_string(),
+        scale: Dimen::from_unit(10.0, Unit::Point),
+    });
 
     fn assert_parses_to_with_restricted(
         lines: &[&str],

@@ -326,16 +326,16 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
+    use once_cell::sync::Lazy;
+
     use crate::dimension::{Dimen, FilDimen, FilKind, Unit};
     use crate::font::Font;
     use crate::testing::with_parser;
 
-    lazy_static! {
-        static ref CMR10: Font = Font {
-            font_name: "cmr10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        };
-    }
+    static CMR10: Lazy<Font> = Lazy::new(|| Font {
+        font_name: "cmr10".to_string(),
+        scale: Dimen::from_unit(10.0, Unit::Point),
+    });
 
     #[test]
     fn it_parses_boxes_with_characters() {

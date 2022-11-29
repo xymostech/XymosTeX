@@ -1,8 +1,5 @@
 #![deny(clippy::all)]
 
-#[macro_use]
-extern crate lazy_static;
-
 mod box_to_dvi;
 mod boxes;
 mod category;

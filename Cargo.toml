@@ -18,5 +18,5 @@ name = "interpret"
 path = "src/interpret.rs"
 
 [dependencies]
-kpathsea = "0.2.2"
-lazy_static = "1.3.0"
+kpathsea = "0.2.3"
+once_cell = "1.16.0"

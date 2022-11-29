@@ -1,3 +1,4 @@
+use once_cell::sync::Lazy;
 use std::cmp::{max, Ordering};
 use std::collections::HashMap;
 
@@ -25,48 +26,85 @@ enum InterAtomSpacing {
     ThickSkipNonScript,
 }
 
-lazy_static! {
-    static ref INTER_ATOM_SPACING: HashMap<(AtomKind, AtomKind), InterAtomSpacing> = [
+static INTER_ATOM_SPACING: Lazy<
+    HashMap<(AtomKind, AtomKind), InterAtomSpacing>,
+> = Lazy::new(|| {
+    [
         // 0 1 (2) (3) 0 0 0 (1)
         ((AtomKind::Ord, AtomKind::Ord), InterAtomSpacing::None),
         ((AtomKind::Ord, AtomKind::Op), InterAtomSpacing::ThinSkip),
-        ((AtomKind::Ord, AtomKind::Bin), InterAtomSpacing::MediumSkipNonScript),
-        ((AtomKind::Ord, AtomKind::Rel), InterAtomSpacing::ThickSkipNonScript),
+        (
+            (AtomKind::Ord, AtomKind::Bin),
+            InterAtomSpacing::MediumSkipNonScript,
+        ),
+        (
+            (AtomKind::Ord, AtomKind::Rel),
+            InterAtomSpacing::ThickSkipNonScript,
+        ),
         ((AtomKind::Ord, AtomKind::Open), InterAtomSpacing::None),
         ((AtomKind::Ord, AtomKind::Close), InterAtomSpacing::None),
         ((AtomKind::Ord, AtomKind::Punct), InterAtomSpacing::None),
-        ((AtomKind::Ord, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
-
+        (
+            (AtomKind::Ord, AtomKind::Inner),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
         // 1 1 * (3) 0 0 0 (1)
         ((AtomKind::Op, AtomKind::Ord), InterAtomSpacing::ThinSkip),
         ((AtomKind::Op, AtomKind::Op), InterAtomSpacing::ThinSkip),
         //((AtomKind::Op, AtomKind::Bin), InterAtomSpacing::None),
-        ((AtomKind::Op, AtomKind::Rel), InterAtomSpacing::ThickSkipNonScript),
+        (
+            (AtomKind::Op, AtomKind::Rel),
+            InterAtomSpacing::ThickSkipNonScript,
+        ),
         ((AtomKind::Op, AtomKind::Open), InterAtomSpacing::None),
         ((AtomKind::Op, AtomKind::Close), InterAtomSpacing::None),
         ((AtomKind::Op, AtomKind::Punct), InterAtomSpacing::None),
-        ((AtomKind::Op, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
-
+        (
+            (AtomKind::Op, AtomKind::Inner),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
         // (2) (2) * * (2) * * (2)
-        ((AtomKind::Bin, AtomKind::Ord), InterAtomSpacing::MediumSkipNonScript),
-        ((AtomKind::Bin, AtomKind::Op), InterAtomSpacing::MediumSkipNonScript),
+        (
+            (AtomKind::Bin, AtomKind::Ord),
+            InterAtomSpacing::MediumSkipNonScript,
+        ),
+        (
+            (AtomKind::Bin, AtomKind::Op),
+            InterAtomSpacing::MediumSkipNonScript,
+        ),
         //((AtomKind::Bin, AtomKind::Bin), InterAtomSpacing::None),
         //((AtomKind::Bin, AtomKind::Rel), InterAtomSpacing::None),
-        ((AtomKind::Bin, AtomKind::Open), InterAtomSpacing::MediumSkipNonScript),
+        (
+            (AtomKind::Bin, AtomKind::Open),
+            InterAtomSpacing::MediumSkipNonScript,
+        ),
         //((AtomKind::Bin, AtomKind::Close), InterAtomSpacing::None),
         //((AtomKind::Bin, AtomKind::Punct), InterAtomSpacing::None),
-        ((AtomKind::Bin, AtomKind::Inner), InterAtomSpacing::MediumSkipNonScript),
-
+        (
+            (AtomKind::Bin, AtomKind::Inner),
+            InterAtomSpacing::MediumSkipNonScript,
+        ),
         // (3) (3) * 0 (3) 0 0 (3)
-        ((AtomKind::Rel, AtomKind::Ord), InterAtomSpacing::ThickSkipNonScript),
-        ((AtomKind::Rel, AtomKind::Op), InterAtomSpacing::ThickSkipNonScript),
+        (
+            (AtomKind::Rel, AtomKind::Ord),
+            InterAtomSpacing::ThickSkipNonScript,
+        ),
+        (
+            (AtomKind::Rel, AtomKind::Op),
+            InterAtomSpacing::ThickSkipNonScript,
+        ),
         //((AtomKind::Rel, AtomKind::Bin), InterAtomSpacing::None),
         ((AtomKind::Rel, AtomKind::Rel), InterAtomSpacing::None),
-        ((AtomKind::Rel, AtomKind::Open), InterAtomSpacing::ThickSkipNonScript),
+        (
+            (AtomKind::Rel, AtomKind::Open),
+            InterAtomSpacing::ThickSkipNonScript,
+        ),
         ((AtomKind::Rel, AtomKind::Close), InterAtomSpacing::None),
         ((AtomKind::Rel, AtomKind::Punct), InterAtomSpacing::None),
-        ((AtomKind::Rel, AtomKind::Inner), InterAtomSpacing::ThickSkipNonScript),
-
+        (
+            (AtomKind::Rel, AtomKind::Inner),
+            InterAtomSpacing::ThickSkipNonScript,
+        ),
         // 0 0 * 0 0 0 0 0
         ((AtomKind::Open, AtomKind::Ord), InterAtomSpacing::None),
         ((AtomKind::Open, AtomKind::Op), InterAtomSpacing::None),
@@ -76,38 +114,86 @@ lazy_static! {
         ((AtomKind::Open, AtomKind::Close), InterAtomSpacing::None),
         ((AtomKind::Open, AtomKind::Punct), InterAtomSpacing::None),
         ((AtomKind::Open, AtomKind::Inner), InterAtomSpacing::None),
-
         // 0 1 (2) (3) 0 0 0 (1)
         ((AtomKind::Close, AtomKind::Ord), InterAtomSpacing::None),
         ((AtomKind::Close, AtomKind::Op), InterAtomSpacing::ThinSkip),
-        ((AtomKind::Close, AtomKind::Bin), InterAtomSpacing::MediumSkipNonScript),
-        ((AtomKind::Close, AtomKind::Rel), InterAtomSpacing::ThickSkipNonScript),
+        (
+            (AtomKind::Close, AtomKind::Bin),
+            InterAtomSpacing::MediumSkipNonScript,
+        ),
+        (
+            (AtomKind::Close, AtomKind::Rel),
+            InterAtomSpacing::ThickSkipNonScript,
+        ),
         ((AtomKind::Close, AtomKind::Open), InterAtomSpacing::None),
         ((AtomKind::Close, AtomKind::Close), InterAtomSpacing::None),
         ((AtomKind::Close, AtomKind::Punct), InterAtomSpacing::None),
-        ((AtomKind::Close, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
-
+        (
+            (AtomKind::Close, AtomKind::Inner),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
         // (1) (1) * (1) (1) (1) (1) (1)
-        ((AtomKind::Punct, AtomKind::Ord), InterAtomSpacing::ThinSkipNonScript),
-        ((AtomKind::Punct, AtomKind::Op), InterAtomSpacing::ThinSkipNonScript),
+        (
+            (AtomKind::Punct, AtomKind::Ord),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
+        (
+            (AtomKind::Punct, AtomKind::Op),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
         //((AtomKind::Punct, AtomKind::Bin), InterAtomSpacing::None),
-        ((AtomKind::Punct, AtomKind::Rel), InterAtomSpacing::ThinSkipNonScript),
-        ((AtomKind::Punct, AtomKind::Open), InterAtomSpacing::ThinSkipNonScript),
-        ((AtomKind::Punct, AtomKind::Close), InterAtomSpacing::ThinSkipNonScript),
-        ((AtomKind::Punct, AtomKind::Punct), InterAtomSpacing::ThinSkipNonScript),
-        ((AtomKind::Punct, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
-
+        (
+            (AtomKind::Punct, AtomKind::Rel),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
+        (
+            (AtomKind::Punct, AtomKind::Open),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
+        (
+            (AtomKind::Punct, AtomKind::Close),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
+        (
+            (AtomKind::Punct, AtomKind::Punct),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
+        (
+            (AtomKind::Punct, AtomKind::Inner),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
         // (1) 1 (2) (3) (1) 0 (1) (1)
-        ((AtomKind::Inner, AtomKind::Ord), InterAtomSpacing::ThinSkipNonScript),
+        (
+            (AtomKind::Inner, AtomKind::Ord),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
         ((AtomKind::Inner, AtomKind::Op), InterAtomSpacing::ThinSkip),
-        ((AtomKind::Inner, AtomKind::Bin), InterAtomSpacing::MediumSkipNonScript),
-        ((AtomKind::Inner, AtomKind::Rel), InterAtomSpacing::ThickSkipNonScript),
-        ((AtomKind::Inner, AtomKind::Open), InterAtomSpacing::ThinSkipNonScript),
+        (
+            (AtomKind::Inner, AtomKind::Bin),
+            InterAtomSpacing::MediumSkipNonScript,
+        ),
+        (
+            (AtomKind::Inner, AtomKind::Rel),
+            InterAtomSpacing::ThickSkipNonScript,
+        ),
+        (
+            (AtomKind::Inner, AtomKind::Open),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
         ((AtomKind::Inner, AtomKind::Close), InterAtomSpacing::None),
-        ((AtomKind::Inner, AtomKind::Punct), InterAtomSpacing::ThinSkipNonScript),
-        ((AtomKind::Inner, AtomKind::Inner), InterAtomSpacing::ThinSkipNonScript),
-    ].iter().cloned().collect();
-}
+        (
+            (AtomKind::Inner, AtomKind::Punct),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
+        (
+            (AtomKind::Inner, AtomKind::Inner),
+            InterAtomSpacing::ThinSkipNonScript,
+        ),
+    ]
+    .iter()
+    .cloned()
+    .collect()
+});
 
 fn get_font_style_for_math_style(style: &MathStyle) -> MathStyle {
     match style {
@@ -122,59 +208,98 @@ fn get_font_style_for_math_style(style: &MathStyle) -> MathStyle {
     }
 }
 
-lazy_static! {
-    // TODO: pull these from \textfont, \scriptfont, and \scriptscriptfont
-    static ref MATH_FONTS: HashMap<(MathStyle, u8), Font> = [
-        ((MathStyle::TextStyle, 0), Font {
-            font_name: "cmr10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        }),
-        ((MathStyle::ScriptStyle, 0), Font {
-            font_name: "cmr7".to_string(),
-            scale: Dimen::from_unit(7.0, Unit::Point),
-        }),
-        ((MathStyle::ScriptScriptStyle, 0), Font {
-            font_name: "cmr5".to_string(),
-            scale: Dimen::from_unit(5.0, Unit::Point),
-        }),
-        ((MathStyle::TextStyle, 1), Font {
-            font_name: "cmmi10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        }),
-        ((MathStyle::ScriptStyle, 1), Font {
-            font_name: "cmmi7".to_string(),
-            scale: Dimen::from_unit(7.0, Unit::Point),
-        }),
-        ((MathStyle::ScriptScriptStyle, 1), Font {
-            font_name: "cmmi5".to_string(),
-            scale: Dimen::from_unit(5.0, Unit::Point),
-        }),
-        ((MathStyle::TextStyle, 2), Font {
-            font_name: "cmsy10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        }),
-        ((MathStyle::ScriptStyle, 2), Font {
-            font_name: "cmsy7".to_string(),
-            scale: Dimen::from_unit(7.0, Unit::Point),
-        }),
-        ((MathStyle::ScriptScriptStyle, 2), Font {
-            font_name: "cmsy5".to_string(),
-            scale: Dimen::from_unit(5.0, Unit::Point),
-        }),
-        ((MathStyle::TextStyle, 3), Font {
-            font_name: "cmex10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        }),
-        ((MathStyle::ScriptStyle, 3), Font {
-            font_name: "cmex10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        }),
-        ((MathStyle::ScriptScriptStyle, 3), Font {
-            font_name: "cmex10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        }),
-    ].iter().cloned().collect();
-}
+// TODO: pull these from \textfont, \scriptfont, and \scriptscriptfont
+static MATH_FONTS: Lazy<HashMap<(MathStyle, u8), Font>> = Lazy::new(|| {
+    [
+        (
+            (MathStyle::TextStyle, 0),
+            Font {
+                font_name: "cmr10".to_string(),
+                scale: Dimen::from_unit(10.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::ScriptStyle, 0),
+            Font {
+                font_name: "cmr7".to_string(),
+                scale: Dimen::from_unit(7.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::ScriptScriptStyle, 0),
+            Font {
+                font_name: "cmr5".to_string(),
+                scale: Dimen::from_unit(5.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::TextStyle, 1),
+            Font {
+                font_name: "cmmi10".to_string(),
+                scale: Dimen::from_unit(10.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::ScriptStyle, 1),
+            Font {
+                font_name: "cmmi7".to_string(),
+                scale: Dimen::from_unit(7.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::ScriptScriptStyle, 1),
+            Font {
+                font_name: "cmmi5".to_string(),
+                scale: Dimen::from_unit(5.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::TextStyle, 2),
+            Font {
+                font_name: "cmsy10".to_string(),
+                scale: Dimen::from_unit(10.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::ScriptStyle, 2),
+            Font {
+                font_name: "cmsy7".to_string(),
+                scale: Dimen::from_unit(7.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::ScriptScriptStyle, 2),
+            Font {
+                font_name: "cmsy5".to_string(),
+                scale: Dimen::from_unit(5.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::TextStyle, 3),
+            Font {
+                font_name: "cmex10".to_string(),
+                scale: Dimen::from_unit(10.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::ScriptStyle, 3),
+            Font {
+                font_name: "cmex10".to_string(),
+                scale: Dimen::from_unit(10.0, Unit::Point),
+            },
+        ),
+        (
+            (MathStyle::ScriptScriptStyle, 3),
+            Font {
+                font_name: "cmex10".to_string(),
+                scale: Dimen::from_unit(10.0, Unit::Point),
+            },
+        ),
+    ]
+    .iter()
+    .cloned()
+    .collect()
+});
 
 struct TranslatedNucleus {
     translation: Vec<HorizontalListElem>,

@@ -285,16 +285,16 @@ impl DVIFileWriter {
 mod tests {
     use super::*;
 
+    use once_cell::sync::Lazy;
+
     use crate::boxes::{GlueSetRatioKind, HorizontalBox, VerticalBox};
     use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
     use crate::glue::Glue;
 
-    lazy_static! {
-        static ref CMR10: Font = Font {
-            font_name: "cmr10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        };
-    }
+    static CMR10: Lazy<Font> = Lazy::new(|| Font {
+        font_name: "cmr10".to_string(),
+        scale: Dimen::from_unit(10.0, Unit::Point),
+    });
 
     #[test]
     fn it_generates_commands_for_chars() {

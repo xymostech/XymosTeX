@@ -1,18 +1,18 @@
+use once_cell::sync::Lazy;
 /// Module for finding paths to useful files
 use std::sync::Mutex;
 
-lazy_static! {
-    // We store a single shared reference to the kpathsea library so that we
-    // don't have to spend the cost of initializing Kpathsea multiple times.
-    // Also, since the kpathsea library isn't thread-safe, we keep a mutex to
-    // ensure we're only ever performing operations in one thread. This will
-    // store None before the library has been initialized, and Some(Kpaths)
-    // once it has been set up.
-    // Having a single shared reference is mostly useful during tests, when we
-    // want many threads all performing work at the same time. The main
-    // executable will probably be single threaded.
-    static ref SHARED_KPATHS: Mutex<Option<kpathsea::Kpaths>> = Mutex::new(None);
-}
+// We store a single shared reference to the kpathsea library so that we
+// don't have to spend the cost of initializing Kpathsea multiple times.
+// Also, since the kpathsea library isn't thread-safe, we keep a mutex to
+// ensure we're only ever performing operations in one thread. This will
+// store None before the library has been initialized, and Some(Kpaths)
+// once it has been set up.
+// Having a single shared reference is mostly useful during tests, when we
+// want many threads all performing work at the same time. The main
+// executable will probably be single threaded.
+static SHARED_KPATHS: Lazy<Mutex<Option<kpathsea::Kpaths>>> =
+    Lazy::new(|| Mutex::new(None));
 
 /// Given a font name (like "cmr10"), returns a path to the font if it can be
 /// found.

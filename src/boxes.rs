@@ -215,16 +215,16 @@ impl TeXBox {
 mod tests {
     use super::*;
 
+    use once_cell::sync::Lazy;
+
     use crate::dimension::Unit;
     use crate::font::Font;
     use crate::glue::Glue;
 
-    lazy_static! {
-        static ref CMR10: Font = Font {
-            font_name: "cmr10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        };
-    }
+    static CMR10: Lazy<Font> = Lazy::new(|| Font {
+        font_name: "cmr10".to_string(),
+        scale: Dimen::from_unit(10.0, Unit::Point),
+    });
 
     #[test]
     fn it_parses_to_chars() {

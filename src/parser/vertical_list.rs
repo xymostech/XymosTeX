@@ -279,17 +279,17 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
 
+    use once_cell::sync::Lazy;
+
     use crate::boxes::{GlueSetRatio, GlueSetRatioKind, TeXBox, VerticalBox};
     use crate::dimension::{FilDimen, FilKind, SpringDimen};
     use crate::font::Font;
     use crate::testing::with_parser;
 
-    lazy_static! {
-        static ref CMR10: Font = Font {
-            font_name: "cmr10".to_string(),
-            scale: Dimen::from_unit(10.0, Unit::Point),
-        };
-    }
+    static CMR10: Lazy<Font> = Lazy::new(|| Font {
+        font_name: "cmr10".to_string(),
+        scale: Dimen::from_unit(10.0, Unit::Point),
+    });
 
     fn assert_parses_to(lines: &[&str], expected_list: &[VerticalListElem]) {
         with_parser(lines, |parser| {
