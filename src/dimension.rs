@@ -1,4 +1,5 @@
 use std::cmp::{Ordering, PartialOrd};
+use std::fmt;
 use std::ops::{Add, Div, Mul, Sub};
 
 static DIMEN_MAX: i32 = (1 << 30) - 1;
@@ -35,7 +36,7 @@ fn get_scale(unit: Unit) -> (f64, f64) {
 }
 
 // Represents a dimension in terms of a number of scaled points.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Dimen(i32);
 
 impl Dimen {
@@ -80,6 +81,14 @@ impl Dimen {
         } else {
             *self
         }
+    }
+}
+
+impl fmt::Debug for Dimen {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Dimen")
+            .field("pts", &format!("{:.3}", self.to_unit(Unit::Point)))
+            .finish()
     }
 }
 
@@ -159,12 +168,25 @@ pub enum FilKind {
     Filll,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct FilDimen(pub FilKind, pub i32);
 
 impl FilDimen {
     pub fn new(kind: FilKind, value: f64) -> Self {
         FilDimen(kind, (value * 65536.0) as i32)
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.1 == 0
+    }
+}
+
+impl fmt::Debug for FilDimen {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FilDimen")
+            .field("kind", &self.0)
+            .field("frac", &format!("{:.3}", (self.1 as f64) / 65536.0))
+            .finish()
     }
 }
 

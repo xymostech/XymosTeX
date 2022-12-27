@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen};
 use crate::glue::Glue;
 use crate::list::{HorizontalListElem, VerticalListElem};
@@ -22,7 +24,7 @@ impl GlueSetRatioKind {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct GlueSetRatio {
     // What kinds of glue should be stretching. For instance, if this is
     // GlueSetRatioKind::Fil then only glues with fil stretch/shrink components
@@ -32,6 +34,18 @@ pub struct GlueSetRatio {
     // 1/65536 of a unit of stretch. Measured in units of pt/pt for finite
     // stretching and pt/<fil/fill/filll> for infinite stretching.
     stretch: i32,
+}
+
+impl fmt::Debug for GlueSetRatio {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GlueSetRatio")
+            .field("kind", &self.kind)
+            .field(
+                "stretch",
+                &format!("{:.3}", (self.stretch as f64) / 65536.0),
+            )
+            .finish()
+    }
 }
 
 impl GlueSetRatio {
