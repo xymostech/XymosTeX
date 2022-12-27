@@ -2,7 +2,7 @@ use once_cell::sync::Lazy;
 use std::cmp::{max, Ordering};
 use std::collections::HashMap;
 
-use crate::boxes::{HorizontalBox, TeXBox, VerticalBox};
+use crate::boxes::{BoxLayout, HorizontalBox, TeXBox, VerticalBox};
 use crate::category::Category;
 use crate::dimension::{Dimen, FilDimen, FilKind, MuDimen, SpringDimen, Unit};
 use crate::font::Font;
@@ -13,7 +13,6 @@ use crate::math_list::{
     AtomKind, GeneralizedFraction, MathAtom, MathDelimiter, MathField,
     MathList, MathListElem, MathStyle, MathSymbol,
 };
-use crate::parser::boxes::BoxLayout;
 use crate::parser::Parser;
 use crate::token::Token;
 
@@ -679,11 +678,11 @@ impl<'a> Parser<'a> {
         inner_elems.insert(0, HorizontalListElem::HSkip(hfil.clone()));
         inner_elems.push(HorizontalListElem::HSkip(hfil));
 
-        let hbox = self
-            .combine_horizontal_list_into_horizontal_box_with_layout(
-                inner_elems,
-                &BoxLayout::Fixed(width),
-            );
+        let hbox = HorizontalBox::create_from_horizontal_list_with_layout(
+            inner_elems,
+            &BoxLayout::Fixed(width),
+            self.state,
+        );
 
         TeXBox::HorizontalBox(hbox)
     }
@@ -718,10 +717,11 @@ impl<'a> Parser<'a> {
             MathField::MathList(list) => {
                 let hlist = self
                     .convert_math_list_to_horizontal_list(list, style.clone());
-                let hbox = self
-                    .combine_horizontal_list_into_horizontal_box_with_layout(
+                let hbox =
+                    HorizontalBox::create_from_horizontal_list_with_layout(
                         hlist,
                         &BoxLayout::Natural,
+                        self.state,
                     );
 
                 TeXBox::HorizontalBox(hbox)
@@ -1247,8 +1247,20 @@ impl<'a> Parser<'a> {
                             denominator_style,
                         );
 
-                    let mut numerator_box = TeXBox::HorizontalBox(self.combine_horizontal_list_into_horizontal_box_with_layout(translated_numerator, &BoxLayout::Natural));
-                    let mut denominator_box = TeXBox::HorizontalBox(self.combine_horizontal_list_into_horizontal_box_with_layout(translated_denominator, &BoxLayout::Natural));
+                    let mut numerator_box = TeXBox::HorizontalBox(
+                        HorizontalBox::create_from_horizontal_list_with_layout(
+                            translated_numerator,
+                            &BoxLayout::Natural,
+                            self.state,
+                        ),
+                    );
+                    let mut denominator_box = TeXBox::HorizontalBox(
+                        HorizontalBox::create_from_horizontal_list_with_layout(
+                            translated_denominator,
+                            &BoxLayout::Natural,
+                            self.state,
+                        ),
+                    );
 
                     match numerator_box.width().cmp(denominator_box.width()) {
                         Ordering::Greater => {

@@ -1,147 +1,15 @@
 use crate::boxes::{
-    GlueSetRatio, GlueSetRatioKind, HorizontalBox, TeXBox, VerticalBox,
+    get_set_dimen_and_ratio, BoxLayout, GlueSetRatio, HorizontalBox, TeXBox,
+    VerticalBox,
 };
 use crate::category::Category;
-use crate::dimension::{Dimen, SpringDimen};
+use crate::dimension::Dimen;
 use crate::glue::Glue;
 use crate::list::HorizontalListElem;
 use crate::parser::Parser;
 use crate::token::Token;
 
-pub enum BoxLayout {
-    Natural,
-    Fixed(Dimen),
-    Spread(Dimen),
-}
-
-// Given the amount of stretch/shrink needed to set a given box and the amount
-// of stretch/shrink available, figure out the glue set ratio.
-fn set_glue(
-    stretch_needed: &Dimen,
-    stretch_available: &SpringDimen,
-) -> GlueSetRatio {
-    match stretch_available {
-        // If we have a finite amount of stretch/shrink available, then we set
-        // a finite glue ratio but have some limits on how much we can
-        // stretch/shrink
-        SpringDimen::Dimen(stretch_dimen) => GlueSetRatio::from(
-            GlueSetRatioKind::Finite,
-            // TODO(xymostech): Ensure this isn't <-1.0
-            // TODO(xymostech): Handle stretch_dimen = 0
-            stretch_needed / stretch_dimen,
-        ),
-
-        // If there's an infinite amount of stretch/shrink available, then we
-        // can stretch/shrink as much as is needed with no limits.
-        SpringDimen::FilDimen(stretch_fil_dimen) => GlueSetRatio::from(
-            GlueSetRatioKind::from_fil_kind(&stretch_fil_dimen.0),
-            // TODO(xymostech): Handle stretch_fil_dimen = 0
-            stretch_needed / stretch_fil_dimen,
-        ),
-    }
-}
-
-/// Based on the layout of a box and the stretchable dimension, return the
-/// resulting true dimension and the needed glue set ratio.
-fn get_set_dimen_and_ratio(
-    glue: Glue,
-    layout: &BoxLayout,
-) -> (Dimen, Option<GlueSetRatio>) {
-    match *layout {
-        // If we just want the box at its natural dimension, we just return the
-        // "space" component of our dimension.
-        BoxLayout::Natural => (glue.space, None),
-
-        BoxLayout::Fixed(final_dimen) => {
-            let natural_dimen = glue.space;
-
-            // If the natural dimension of the box exactly equals the desired
-            // dimension, then we don't need a glue set. This is probably very
-            // unlikely to happen except in unique cases, like when the
-            // dimension is 0.
-            if final_dimen == natural_dimen {
-                (final_dimen, None)
-            } else {
-                // If we need to stretch, calculate the amount we need to
-                // stretch.
-                let stretch_needed = final_dimen - natural_dimen;
-
-                // Figure out if we're stretching or shrinking
-                let stretch_or_shrink = if final_dimen > natural_dimen {
-                    &glue.stretch
-                } else {
-                    &glue.shrink
-                };
-
-                (
-                    // The resulting box dimension is exactly the fixed
-                    // dimension that was desired.
-                    final_dimen,
-                    Some(set_glue(&stretch_needed, stretch_or_shrink)),
-                )
-            }
-        }
-        BoxLayout::Spread(spread_needed) => {
-            // If we're spreading the box, we just need to figure out if
-            // we're stretching or shrinking, since we already know the
-            // amount of spread.
-            let stretch_or_shrink = if spread_needed > Dimen::zero() {
-                &glue.stretch
-            } else {
-                &glue.shrink
-            };
-
-            (
-                // The final dimension is the natural dimension + spread
-                glue.space + spread_needed,
-                Some(set_glue(&spread_needed, stretch_or_shrink)),
-            )
-        }
-    }
-}
-
 impl<'a> Parser<'a> {
-    pub fn combine_horizontal_list_into_horizontal_box_with_layout(
-        &mut self,
-        list: Vec<HorizontalListElem>,
-        layout: &BoxLayout,
-    ) -> HorizontalBox {
-        // Keep track of the max height/depth and the total amount of width of;
-        // the elements in the list.
-        let mut height = Dimen::zero();
-        let mut depth = Dimen::zero();
-        let mut width = Glue::zero();
-
-        for elem in &list {
-            let (elem_height, elem_depth, elem_width) =
-                elem.get_size(self.state);
-
-            // Height and depth are just the maximum of all of the elements.
-            if elem_height > height {
-                height = elem_height;
-            }
-            if elem_depth > depth {
-                depth = elem_depth;
-            }
-
-            // elem.get_size() returns a Glue for the width, so we just add up
-            // all of the glue widths that are in the list.
-            width = width + elem_width;
-        }
-
-        // Figure out the final width and glue set needed.
-        let (set_width, set_ratio) = get_set_dimen_and_ratio(width, layout);
-
-        HorizontalBox {
-            height,
-            depth,
-            width: set_width,
-
-            list,
-            glue_set_ratio: set_ratio,
-        }
-    }
-
     pub fn add_to_natural_layout_horizontal_box(
         &mut self,
         mut hbox: HorizontalBox,
@@ -173,8 +41,8 @@ impl<'a> Parser<'a> {
         indent: bool,
     ) -> HorizontalBox {
         let list = self.parse_horizontal_list(restricted, indent);
-        self.combine_horizontal_list_into_horizontal_box_with_layout(
-            list, layout,
+        HorizontalBox::create_from_horizontal_list_with_layout(
+            list, layout, self.state,
         )
     }
 
@@ -328,7 +196,8 @@ mod tests {
 
     use once_cell::sync::Lazy;
 
-    use crate::dimension::{Dimen, FilDimen, FilKind, Unit};
+    use crate::boxes::GlueSetRatioKind;
+    use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
     use crate::font::Font;
     use crate::testing::with_parser;
 

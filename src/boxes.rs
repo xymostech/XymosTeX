@@ -3,6 +3,7 @@ use std::fmt;
 use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen};
 use crate::glue::Glue;
 use crate::list::{HorizontalListElem, VerticalListElem};
+use crate::state::TeXState;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum GlueSetRatioKind {
@@ -92,6 +93,150 @@ impl GlueSetRatio {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum GlueSetResult {
+    InsufficientShrink,
+    ZeroStretch,
+    ZeroShrink,
+    GlueSetRatio(GlueSetRatio),
+}
+
+impl GlueSetResult {
+    pub fn to_glue_set_ratio(self) -> GlueSetRatio {
+        match self {
+            GlueSetResult::InsufficientShrink => {
+                GlueSetRatio::from(GlueSetRatioKind::Finite, -1.0)
+            }
+            GlueSetResult::ZeroStretch => {
+                GlueSetRatio::from(GlueSetRatioKind::Finite, 0.0)
+            }
+            GlueSetResult::ZeroShrink => {
+                GlueSetRatio::from(GlueSetRatioKind::Finite, 0.0)
+            }
+            GlueSetResult::GlueSetRatio(glue_set_ratio) => glue_set_ratio,
+        }
+    }
+}
+
+// Given the amount of stretch/shrink needed to set a given box and the amount
+// of stretch/shrink available, figure out the glue set ratio.
+fn set_glue_for_positive_stretch(
+    stretch_needed: &Dimen,
+    stretch_available: &SpringDimen,
+) -> GlueSetResult {
+    match stretch_available {
+        // If we have a finite amount of stretch/shrink available, then we set
+        // a finite glue ratio but have some limits on how much we can
+        // stretch/shrink
+        SpringDimen::Dimen(stretch_dimen) => {
+            if stretch_needed == &Dimen::zero() {
+                GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+                    GlueSetRatioKind::Finite,
+                    0.0,
+                ))
+            } else if stretch_dimen == &Dimen::zero() {
+                if stretch_needed < &Dimen::zero() {
+                    GlueSetResult::ZeroShrink
+                } else {
+                    GlueSetResult::ZeroStretch
+                }
+            } else if stretch_needed / stretch_dimen < -1.0 {
+                GlueSetResult::InsufficientShrink
+            } else {
+                GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+                    GlueSetRatioKind::Finite,
+                    stretch_needed / stretch_dimen,
+                ))
+            }
+        }
+
+        // If there's an infinite amount of stretch/shrink available, then we
+        // can stretch/shrink as much as is needed with no limits.
+        SpringDimen::FilDimen(stretch_fil_dimen) => {
+            GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+                GlueSetRatioKind::from_fil_kind(&stretch_fil_dimen.0),
+                if stretch_fil_dimen.is_zero() {
+                    0.0
+                } else {
+                    stretch_needed / stretch_fil_dimen
+                },
+            ))
+        }
+    }
+}
+
+pub fn set_glue_for_spread(spread: &Dimen, glue: &Glue) -> GlueSetResult {
+    // If we're spreading the box, we just need to figure out if
+    // we're stretching or shrinking, since we already know the
+    // amount of spread.
+    let stretch_or_shrink = if spread > &Dimen::zero() {
+        &glue.stretch
+    } else {
+        &glue.shrink
+    };
+
+    set_glue_for_positive_stretch(&spread, stretch_or_shrink)
+}
+
+pub fn set_glue_for_dimen(final_dimen: &Dimen, glue: &Glue) -> GlueSetResult {
+    // If we need to stretch, calculate the amount we need to
+    // stretch.
+    let stretch_needed = *final_dimen - glue.space;
+
+    set_glue_for_spread(&stretch_needed, glue)
+}
+
+pub enum BoxLayout {
+    Natural,
+    Fixed(Dimen),
+    Spread(Dimen),
+}
+
+/// Based on the layout of a box and the stretchable dimension, return the
+/// resulting true dimension and the needed glue set ratio.
+pub fn get_set_dimen_and_ratio(
+    glue: Glue,
+    layout: &BoxLayout,
+) -> (Dimen, Option<GlueSetRatio>) {
+    match *layout {
+        // If we just want the box at its natural dimension, we just return the
+        // "space" component of our dimension.
+        BoxLayout::Natural => (glue.space, None),
+
+        BoxLayout::Fixed(final_dimen) => {
+            let natural_dimen = glue.space;
+
+            // If the natural dimension of the box exactly equals the desired
+            // dimension, then we don't need a glue set. This is probably very
+            // unlikely to happen except in unique cases, like when the
+            // dimension is 0.
+            if final_dimen == natural_dimen {
+                (final_dimen, None)
+            } else {
+                (
+                    // The resulting box dimension is exactly the fixed
+                    // dimension that was desired.
+                    final_dimen,
+                    Some(
+                        set_glue_for_dimen(&final_dimen, &glue)
+                            .to_glue_set_ratio(),
+                    ),
+                )
+            }
+        }
+        BoxLayout::Spread(spread_needed) => {
+            (
+                // The final dimension is the natural dimension + spread
+                glue.space + spread_needed,
+                Some(
+                    set_glue_for_spread(&spread_needed, &glue)
+                        .to_glue_set_ratio(),
+                ),
+            )
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct HorizontalBox {
     pub height: Dimen,
@@ -132,6 +277,46 @@ impl HorizontalBox {
             width: Dimen::zero(),
             list: Vec::new(),
             glue_set_ratio: None,
+        }
+    }
+
+    pub fn create_from_horizontal_list_with_layout(
+        list: Vec<HorizontalListElem>,
+        layout: &BoxLayout,
+        state: &TeXState,
+    ) -> HorizontalBox {
+        // Keep track of the max height/depth and the total amount of width of;
+        // the elements in the list.
+        let mut height = Dimen::zero();
+        let mut depth = Dimen::zero();
+        let mut width = Glue::zero();
+
+        for elem in &list {
+            let (elem_height, elem_depth, elem_width) = elem.get_size(state);
+
+            // Height and depth are just the maximum of all of the elements.
+            if elem_height > height {
+                height = elem_height;
+            }
+            if elem_depth > depth {
+                depth = elem_depth;
+            }
+
+            // elem.get_size() returns a Glue for the width, so we just add up
+            // all of the glue widths that are in the list.
+            width = width + elem_width;
+        }
+
+        // Figure out the final width and glue set needed.
+        let (set_width, set_ratio) = get_set_dimen_and_ratio(width, layout);
+
+        HorizontalBox {
+            height,
+            depth,
+            width: set_width,
+
+            list,
+            glue_set_ratio: set_ratio,
         }
     }
 }
@@ -306,6 +491,119 @@ mod tests {
                 'a', ' ', 'b', ' ', 'c', '\n',
                 'a', ' ', 'b', ' ', 'c', '\n',
             ]
+        );
+    }
+
+    #[test]
+    fn it_limits_glue_shrink_to_negative_one() {
+        let glue = Glue {
+            space: Dimen::from_unit(10.0, Unit::Point),
+            stretch: SpringDimen::Dimen(Dimen::zero()),
+            shrink: SpringDimen::Dimen(Dimen::from_unit(5.0, Unit::Point)),
+        };
+
+        assert_eq!(
+            set_glue_for_dimen(&Dimen::from_unit(10.0, Unit::Point), &glue),
+            GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+                GlueSetRatioKind::Finite,
+                0.0
+            ))
+        );
+
+        assert_eq!(
+            set_glue_for_dimen(&Dimen::from_unit(6.0, Unit::Point), &glue),
+            GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+                GlueSetRatioKind::Finite,
+                -4.0 / 5.0
+            ))
+        );
+
+        assert_eq!(
+            set_glue_for_dimen(&Dimen::from_unit(5.0, Unit::Point), &glue),
+            GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+                GlueSetRatioKind::Finite,
+                -5.0 / 5.0
+            ))
+        );
+
+        assert_eq!(
+            set_glue_for_dimen(&Dimen::from_unit(4.0, Unit::Point), &glue),
+            GlueSetResult::InsufficientShrink,
+        );
+
+        assert_eq!(
+            set_glue_for_dimen(&Dimen::from_unit(4.0, Unit::Point), &glue)
+                .to_glue_set_ratio(),
+            GlueSetRatio::from(GlueSetRatioKind::Finite, -1.0),
+        );
+
+        let infinite_glue = Glue {
+            space: Dimen::from_unit(10.0, Unit::Point),
+            stretch: SpringDimen::Dimen(Dimen::zero()),
+            shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.0)),
+        };
+
+        assert_eq!(
+            set_glue_for_dimen(
+                &Dimen::from_unit(4.0, Unit::Point),
+                &infinite_glue
+            )
+            .to_glue_set_ratio(),
+            GlueSetRatio::from(GlueSetRatioKind::Fil, -6.0),
+        );
+    }
+
+    #[test]
+    fn it_handles_glue_with_zero_shrink_and_stretch() {
+        let fixed_glue = Glue {
+            space: Dimen::from_unit(10.0, Unit::Point),
+            stretch: SpringDimen::Dimen(Dimen::zero()),
+            shrink: SpringDimen::Dimen(Dimen::zero()),
+        };
+
+        assert_eq!(
+            set_glue_for_dimen(
+                &Dimen::from_unit(10.0, Unit::Point),
+                &fixed_glue
+            ),
+            GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+                GlueSetRatioKind::Finite,
+                0.0
+            ))
+        );
+
+        assert_eq!(
+            set_glue_for_dimen(
+                &Dimen::from_unit(9.0, Unit::Point),
+                &fixed_glue
+            ),
+            GlueSetResult::ZeroShrink,
+        );
+
+        assert_eq!(
+            set_glue_for_dimen(
+                &Dimen::from_unit(9.0, Unit::Point),
+                &fixed_glue
+            )
+            .to_glue_set_ratio(),
+            GlueSetRatio::from(GlueSetRatioKind::Finite, 0.0),
+        );
+
+        assert_eq!(
+            set_glue_for_dimen(
+                &Dimen::from_unit(11.0, Unit::Point),
+                &fixed_glue
+            ),
+            GlueSetResult::ZeroStretch,
+        );
+
+        assert_eq!(
+            set_glue_for_dimen(
+                &Dimen::from_unit(11.0, Unit::Point),
+                &fixed_glue
+            )
+            .to_glue_set_ratio(),
+            GlueSetRatio::from(GlueSetRatioKind::Finite, 0.0),
         );
     }
 }
