@@ -91,6 +91,17 @@ impl GlueSetRatio {
             glue.space + self.multiply_spring_dimen(&glue.stretch)
         }
     }
+
+    pub fn get_badness(&self) -> u64 {
+        match self.kind {
+            GlueSetRatioKind::Finite => (100.0
+                * ((self.stretch as f64) / 65536.0).powi(3))
+            .abs()
+            .round()
+            .min(10000.0) as u64,
+            _ => 0,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -102,6 +113,17 @@ pub enum GlueSetResult {
 }
 
 impl GlueSetResult {
+    pub fn get_badness(&self) -> u64 {
+        match self {
+            GlueSetResult::InsufficientShrink => 10000,
+            GlueSetResult::ZeroStretch => 10000,
+            GlueSetResult::ZeroShrink => 10000,
+            GlueSetResult::GlueSetRatio(glue_set_ratio) => {
+                glue_set_ratio.get_badness()
+            }
+        }
+    }
+
     pub fn to_glue_set_ratio(self) -> GlueSetRatio {
         match self {
             GlueSetResult::InsufficientShrink => {

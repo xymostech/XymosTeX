@@ -9,6 +9,7 @@ mod font;
 mod font_metrics;
 mod glue;
 mod lexer;
+mod line_breaking;
 mod list;
 mod makro;
 mod math_code;

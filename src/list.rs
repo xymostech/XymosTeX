@@ -43,6 +43,14 @@ impl HorizontalListElem {
             ),
         }
     }
+
+    pub fn is_discardable(&self) -> bool {
+        match self {
+            HorizontalListElem::Char { .. } => false,
+            HorizontalListElem::HSkip(_) => true,
+            HorizontalListElem::Box { .. } => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

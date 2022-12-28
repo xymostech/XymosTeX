@@ -4,7 +4,7 @@ use crate::token::Token;
 
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
-    state: &'a TeXState,
+    pub state: &'a TeXState,
 
     // Used in expand module to keep track of the next tokens to parse
     upcoming_tokens: Vec<Token>,
