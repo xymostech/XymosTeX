@@ -1,5 +1,5 @@
 use crate::dimension::Dimen;
-use crate::state::TeXState;
+use crate::state::{DimenParameter, TeXState};
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum IntegerVariable {
@@ -27,6 +27,7 @@ pub enum DimenVariable {
     BoxWidth(u8),
     BoxHeight(u8),
     BoxDepth(u8),
+    HSize,
 }
 
 impl DimenVariable {
@@ -41,10 +42,11 @@ impl DimenVariable {
             Self::BoxDepth(index) => state
                 .with_box(*index, |tex_box| *tex_box.depth())
                 .unwrap_or_else(Dimen::zero),
+            Self::HSize => state.get_dimen_parameter(&DimenParameter::HSize),
         }
     }
 
-    pub fn set(&self, state: &TeXState, _global: bool, new_dimen: Dimen) {
+    pub fn set(&self, state: &TeXState, global: bool, new_dimen: Dimen) {
         match self {
             Self::BoxWidth(index) => {
                 state.with_box(*index, |tex_box| {
@@ -61,6 +63,11 @@ impl DimenVariable {
                     *tex_box.mut_depth() = new_dimen
                 });
             }
+            Self::HSize => state.set_dimen_parameter(
+                global,
+                &DimenParameter::HSize,
+                &new_dimen,
+            ),
         }
     }
 }
@@ -161,6 +168,50 @@ mod tests {
         assert_eq!(
             *final_outer_box.mut_width(),
             Dimen::from_unit(3.0, Unit::Point)
+        );
+    }
+
+    #[test]
+    fn it_gets_and_sets_dimen_parameters() {
+        let state = TeXState::new();
+
+        let param_variable = DimenVariable::HSize;
+
+        assert_eq!(
+            param_variable.get(&state),
+            Dimen::from_unit(6.5, Unit::Inch)
+        );
+
+        // Local assignment
+        state.push_state();
+        param_variable.set(&state, false, Dimen::from_unit(10.0, Unit::Point));
+
+        assert_eq!(
+            param_variable.get(&state),
+            Dimen::from_unit(10.0, Unit::Point)
+        );
+
+        state.pop_state();
+
+        assert_eq!(
+            param_variable.get(&state),
+            Dimen::from_unit(6.5, Unit::Inch)
+        );
+
+        // Global assignment
+        state.push_state();
+        param_variable.set(&state, true, Dimen::from_unit(50.0, Unit::Point));
+
+        assert_eq!(
+            param_variable.get(&state),
+            Dimen::from_unit(50.0, Unit::Point)
+        );
+
+        state.pop_state();
+
+        assert_eq!(
+            param_variable.get(&state),
+            Dimen::from_unit(50.0, Unit::Point)
         );
     }
 }

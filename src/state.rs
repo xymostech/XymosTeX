@@ -61,6 +61,7 @@ const ALL_PRIMITIVES: &[&str] = &[
     "overwithdelims",
     "atopwithdelims",
     "abovewithdelims",
+    "hsize",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {
@@ -70,6 +71,11 @@ fn is_primitive(maybe_prim: &str) -> bool {
         }
     }
     false
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DimenParameter {
+    HSize,
 }
 
 #[derive(Clone)]
@@ -102,6 +108,10 @@ pub struct TeXStateInner {
     // except that i32 can also hold the value -2147483648. We should keep
     // close track of that).
     count_registers: [i32; 256],
+
+    // TeX's explicit dimen parameter registers, like \hsize or \parindent.
+    // Missing dimens are treated as zero.
+    dimen_parameter_registers: HashMap<DimenParameter, Dimen>,
 
     // TeX's 256 box registers. The values are designed such that:
     //  * When entering a new group, we don't make a copy of a box by making
@@ -161,6 +171,11 @@ impl TeXStateInner {
             }
         }
 
+        let mut initial_dimen_registers = HashMap::new();
+        // TODO(emily): This is set in plain.tex. Remove this once we run that.
+        initial_dimen_registers
+            .insert(DimenParameter::HSize, Dimen::from_unit(6.5, Unit::Inch));
+
         let mut token_definitions = HashMap::new();
 
         for primitive in ALL_PRIMITIVES {
@@ -175,6 +190,7 @@ impl TeXStateInner {
             math_code_map: initial_math_codes,
             token_definition_map: token_definitions,
             count_registers: [0; 256],
+            dimen_parameter_registers: initial_dimen_registers,
             box_registers: HashMap::new(),
             current_font: Font {
                 // TODO(xymostech): This should initially be "nullfont"
@@ -193,6 +209,22 @@ impl TeXStateInner {
 
     fn set_category(&mut self, ch: char, cat: Category) {
         self.category_map.insert(ch, cat);
+    }
+
+    fn get_dimen_parameter(&self, dimen_parameter: &DimenParameter) -> Dimen {
+        self.dimen_parameter_registers
+            .get(dimen_parameter)
+            .map(|dimen| *dimen)
+            .unwrap_or(Dimen::zero())
+    }
+
+    fn set_dimen_parameter(
+        &mut self,
+        dimen_parameter: &DimenParameter,
+        dimen: &Dimen,
+    ) {
+        self.dimen_parameter_registers
+            .insert(*dimen_parameter, *dimen);
     }
 
     fn get_math_code(&self, ch: char) -> MathCode {
@@ -422,6 +454,8 @@ impl TeXStateStack {
 
     generate_inner_func!(fn get_category(ch: char) -> Category);
     generate_inner_global_func!(fn set_category(global: bool, ch: char, cat: Category));
+    generate_inner_func!(fn get_dimen_parameter(dimen_parameter: &DimenParameter) -> Dimen);
+    generate_inner_global_func!(fn set_dimen_parameter(global: bool, dimen_parameter: &DimenParameter, dimen: &Dimen));
     generate_inner_func!(fn get_math_code(ch: char) -> MathCode);
     generate_inner_global_func!(fn set_math_code(global: bool, ch: char, mathcode: &MathCode));
     generate_inner_func!(fn get_math_chardef(token: &Token) -> Option<MathCode>);
@@ -515,6 +549,8 @@ impl TeXState {
 
     generate_stack_func!(fn get_category(ch: char) -> Category);
     generate_stack_func!(fn set_category(global: bool, ch: char, cat: Category));
+    generate_stack_func!(fn get_dimen_parameter(dimen_parameter: &DimenParameter) -> Dimen);
+    generate_stack_func!(fn set_dimen_parameter(global: bool, dimen_parameter: &DimenParameter, dimen: &Dimen));
     generate_stack_func!(fn get_math_code(ch: char) -> MathCode);
     generate_stack_func!(fn set_math_code(global: bool, ch: char, mathcode: &MathCode));
     generate_stack_func!(fn get_math_chardef(token: &Token) -> Option<MathCode>);

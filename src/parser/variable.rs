@@ -18,7 +18,9 @@ impl<'a> Parser<'a> {
     }
 
     pub fn is_dimen_variable_head(&mut self) -> bool {
-        self.is_next_expanded_token_in_set_of_primitives(&["wd", "ht", "dp"])
+        self.is_next_expanded_token_in_set_of_primitives(&[
+            "wd", "ht", "dp", "hsize",
+        ])
     }
 
     pub fn parse_dimen_variable(&mut self) -> DimenVariable {
@@ -33,6 +35,8 @@ impl<'a> Parser<'a> {
         } else if self.state.is_token_equal_to_prim(&token, "dp") {
             let index = self.parse_8bit_number();
             DimenVariable::BoxDepth(index)
+        } else if self.state.is_token_equal_to_prim(&token, "hsize") {
+            DimenVariable::HSize
         } else {
             panic!("unimplemented");
         }
