@@ -207,6 +207,7 @@ impl TeXStateInner {
         }
     }
 
+    #[cfg(test)]
     fn set_category(&mut self, ch: char, cat: Category) {
         self.category_map.insert(ch, cat);
     }
@@ -453,6 +454,7 @@ impl TeXStateStack {
     }
 
     generate_inner_func!(fn get_category(ch: char) -> Category);
+    #[cfg(test)]
     generate_inner_global_func!(fn set_category(global: bool, ch: char, cat: Category));
     generate_inner_func!(fn get_dimen_parameter(dimen_parameter: &DimenParameter) -> Dimen);
     generate_inner_global_func!(fn set_dimen_parameter(global: bool, dimen_parameter: &DimenParameter, dimen: &Dimen));
@@ -548,6 +550,7 @@ impl TeXState {
     generate_stack_func!(fn pop_state());
 
     generate_stack_func!(fn get_category(ch: char) -> Category);
+    #[cfg(test)]
     generate_stack_func!(fn set_category(global: bool, ch: char, cat: Category));
     generate_stack_func!(fn get_dimen_parameter(dimen_parameter: &DimenParameter) -> Dimen);
     generate_stack_func!(fn set_dimen_parameter(global: bool, dimen_parameter: &DimenParameter, dimen: &Dimen));

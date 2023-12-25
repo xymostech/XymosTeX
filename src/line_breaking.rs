@@ -1,3 +1,4 @@
+#![cfg(test)]
 use crate::boxes::{set_glue_for_dimen, BoxLayout, HorizontalBox, TeXBox};
 use crate::dimension::{Dimen, Unit};
 use crate::glue::Glue;

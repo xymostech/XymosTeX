@@ -92,6 +92,7 @@ impl GlueSetRatio {
         }
     }
 
+    #[cfg(test)]
     pub fn get_badness(&self) -> u64 {
         match self.kind {
             GlueSetRatioKind::Finite => (100.0
@@ -113,6 +114,7 @@ pub enum GlueSetResult {
 }
 
 impl GlueSetResult {
+    #[cfg(test)]
     pub fn get_badness(&self) -> u64 {
         match self {
             GlueSetResult::InsufficientShrink => 10000,
@@ -271,6 +273,7 @@ pub struct HorizontalBox {
 }
 
 impl HorizontalBox {
+    #[cfg(test)]
     pub fn to_chars(&self) -> Vec<char> {
         // Since `to_chars()` is really just for early debugging, this is a
         // special rule for adding a space when we encounter an 'indent' box,
@@ -355,6 +358,7 @@ pub struct VerticalBox {
 }
 
 impl VerticalBox {
+    #[cfg(test)]
     pub fn to_chars(&self) -> Vec<char> {
         self.list
             .iter()
@@ -424,6 +428,7 @@ impl TeXBox {
     // For early testing, we're not actually going to outputting a DVI file
     // with the correctly formatted text. So to test things, we'll just pull
     // out the contents of the box as a list of characters.
+    #[cfg(test)]
     pub fn to_chars(&self) -> Vec<char> {
         match self {
             TeXBox::HorizontalBox(hbox) => hbox.to_chars(),

@@ -1,6 +1,5 @@
 use crate::boxes::{
-    get_set_dimen_and_ratio, BoxLayout, GlueSetRatio, HorizontalBox, TeXBox,
-    VerticalBox,
+    get_set_dimen_and_ratio, BoxLayout, HorizontalBox, TeXBox, VerticalBox,
 };
 use crate::category::Category;
 use crate::dimension::Dimen;
@@ -196,7 +195,7 @@ mod tests {
 
     use once_cell::sync::Lazy;
 
-    use crate::boxes::GlueSetRatioKind;
+    use crate::boxes::{GlueSetRatio, GlueSetRatioKind};
     use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
     use crate::font::Font;
     use crate::testing::with_parser;

@@ -21,6 +21,7 @@ pub struct DVIFileWriter<T: io::Write> {
 
 macro_rules! generate_int_writer_func {
     (fn $func_name:ident($input_type:ident, $from:expr, $to:expr)) => {
+        #[allow(dead_code)]
         fn $func_name(&mut self, value: $input_type) -> io::Result<()> {
             self.writer.write_all(&value.to_be_bytes()[$from..$to])
         }
