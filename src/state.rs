@@ -4,9 +4,10 @@ use std::rc::Rc;
 
 use crate::boxes::TeXBox;
 use crate::category::Category;
-use crate::dimension::{Dimen, Unit};
+use crate::dimension::{Dimen, SpringDimen, Unit};
 use crate::font::Font;
 use crate::font_metrics::FontMetrics;
+use crate::glue::Glue;
 use crate::makro::Macro;
 use crate::math_code::MathCode;
 use crate::token::Token;
@@ -78,6 +79,13 @@ pub enum DimenParameter {
     HSize,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GlueParameter {
+    ParSkip,
+    #[allow(dead_code)]
+    SpaceSkip,
+}
+
 #[derive(Clone)]
 enum TokenDefinition {
     Macro(Rc<Macro>),
@@ -112,6 +120,11 @@ pub struct TeXStateInner {
     // TeX's explicit dimen parameter registers, like \hsize or \parindent.
     // Missing dimens are treated as zero.
     dimen_parameter_registers: HashMap<DimenParameter, Dimen>,
+
+    // TeX's explicit glue parameter registers, like \parskip or \spaceskip
+    // Missing glues are treated as zero.
+    #[allow(dead_code)]
+    glue_parameter_registers: HashMap<GlueParameter, Glue>,
 
     // TeX's 256 box registers. The values are designed such that:
     //  * When entering a new group, we don't make a copy of a box by making
@@ -176,6 +189,16 @@ impl TeXStateInner {
         initial_dimen_registers
             .insert(DimenParameter::HSize, Dimen::from_unit(6.5, Unit::Inch));
 
+        let mut initial_glue_registers = HashMap::new();
+        initial_glue_registers.insert(
+            GlueParameter::ParSkip,
+            Glue {
+                space: Dimen::zero(),
+                stretch: SpringDimen::Dimen(Dimen::from_unit(1.0, Unit::Point)),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            },
+        );
+
         let mut token_definitions = HashMap::new();
 
         for primitive in ALL_PRIMITIVES {
@@ -191,6 +214,7 @@ impl TeXStateInner {
             token_definition_map: token_definitions,
             count_registers: [0; 256],
             dimen_parameter_registers: initial_dimen_registers,
+            glue_parameter_registers: initial_glue_registers,
             box_registers: HashMap::new(),
             current_font: Font {
                 // TODO(xymostech): This should initially be "nullfont"
@@ -226,6 +250,24 @@ impl TeXStateInner {
     ) {
         self.dimen_parameter_registers
             .insert(*dimen_parameter, *dimen);
+    }
+
+    #[cfg(test)]
+    fn get_glue_parameter(&self, glue_parameter: &GlueParameter) -> Glue {
+        self.glue_parameter_registers
+            .get(glue_parameter)
+            .map(|glue| glue.clone())
+            .unwrap_or(Glue::zero())
+    }
+
+    #[cfg(test)]
+    fn set_glue_parameter(
+        &mut self,
+        glue_parameter: &GlueParameter,
+        glue: &Glue,
+    ) {
+        self.glue_parameter_registers
+            .insert(*glue_parameter, glue.clone());
     }
 
     fn get_math_code(&self, ch: char) -> MathCode {
@@ -458,6 +500,10 @@ impl TeXStateStack {
     generate_inner_global_func!(fn set_category(global: bool, ch: char, cat: Category));
     generate_inner_func!(fn get_dimen_parameter(dimen_parameter: &DimenParameter) -> Dimen);
     generate_inner_global_func!(fn set_dimen_parameter(global: bool, dimen_parameter: &DimenParameter, dimen: &Dimen));
+    #[cfg(test)]
+    generate_inner_func!(fn get_glue_parameter(glue_parameter: &GlueParameter) -> Glue);
+    #[cfg(test)]
+    generate_inner_global_func!(fn set_glue_parameter(global: bool, glue_parameter: &GlueParameter, glue: &Glue));
     generate_inner_func!(fn get_math_code(ch: char) -> MathCode);
     generate_inner_global_func!(fn set_math_code(global: bool, ch: char, mathcode: &MathCode));
     generate_inner_func!(fn get_math_chardef(token: &Token) -> Option<MathCode>);
@@ -554,6 +600,10 @@ impl TeXState {
     generate_stack_func!(fn set_category(global: bool, ch: char, cat: Category));
     generate_stack_func!(fn get_dimen_parameter(dimen_parameter: &DimenParameter) -> Dimen);
     generate_stack_func!(fn set_dimen_parameter(global: bool, dimen_parameter: &DimenParameter, dimen: &Dimen));
+    #[cfg(test)]
+    generate_stack_func!(fn get_glue_parameter(glue_parameter: &GlueParameter) -> Glue);
+    #[cfg(test)]
+    generate_stack_func!(fn set_glue_parameter(global: bool, glue_parameter: &GlueParameter, glue: &Glue));
     generate_stack_func!(fn get_math_code(ch: char) -> MathCode);
     generate_stack_func!(fn set_math_code(global: bool, ch: char, mathcode: &MathCode));
     generate_stack_func!(fn get_math_chardef(token: &Token) -> Option<MathCode>);
@@ -973,5 +1023,30 @@ mod tests {
             }),
             Some(1274110073)
         );
+    }
+
+    #[test]
+    fn it_gets_and_sets_glue_parameters_correctly() {
+        let state = TeXState::new();
+
+        let zero = Glue::zero();
+        let one = Glue::from_dimen(Dimen::from_unit(1.0, Unit::Point));
+
+        assert_eq!(
+            state.get_glue_parameter(&GlueParameter::ParSkip),
+            Glue {
+                space: Dimen::zero(),
+                stretch: SpringDimen::Dimen(Dimen::from_unit(1.0, Unit::Point)),
+                shrink: SpringDimen::Dimen(Dimen::zero()),
+            },
+        );
+
+        state.set_glue_parameter(false, &GlueParameter::ParSkip, &one);
+        assert_eq!(state.get_glue_parameter(&GlueParameter::ParSkip), one);
+
+        assert_eq!(state.get_glue_parameter(&GlueParameter::SpaceSkip), zero,);
+
+        state.set_glue_parameter(false, &GlueParameter::SpaceSkip, &one);
+        assert_eq!(state.get_glue_parameter(&GlueParameter::SpaceSkip), one);
     }
 }
