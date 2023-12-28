@@ -1,5 +1,6 @@
-use crate::dimension::Dimen;
-use crate::state::{DimenParameter, TeXState};
+use crate::dimension::{Dimen, SpringDimen};
+use crate::glue::Glue;
+use crate::state::{DimenParameter, GlueParameter, TeXState};
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum IntegerVariable {
@@ -67,6 +68,38 @@ impl DimenVariable {
                 global,
                 &DimenParameter::HSize,
                 &new_dimen,
+            ),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum GlueVariable {
+    ParSkip,
+    SpaceSkip,
+}
+
+impl GlueVariable {
+    pub fn get(&self, state: &TeXState) -> Glue {
+        match self {
+            Self::ParSkip => state.get_glue_parameter(&GlueParameter::ParSkip),
+            Self::SpaceSkip => {
+                state.get_glue_parameter(&GlueParameter::SpaceSkip)
+            }
+        }
+    }
+
+    pub fn set(&self, state: &TeXState, global: bool, new_glue: Glue) {
+        match self {
+            Self::ParSkip => state.set_glue_parameter(
+                global,
+                &GlueParameter::ParSkip,
+                &new_glue,
+            ),
+            Self::SpaceSkip => state.set_glue_parameter(
+                global,
+                &GlueParameter::SpaceSkip,
+                &new_glue,
             ),
         }
     }
@@ -213,5 +246,33 @@ mod tests {
             param_variable.get(&state),
             Dimen::from_unit(50.0, Unit::Point)
         );
+    }
+
+    #[test]
+    fn it_gets_and_sets_glue_parameters() {
+        let state = TeXState::new();
+
+        let parskip_variable = GlueVariable::ParSkip;
+
+        let default_value = Glue {
+            space: Dimen::zero(),
+            stretch: SpringDimen::Dimen(Dimen::from_unit(1.0, Unit::Point)),
+            shrink: SpringDimen::Dimen(Dimen::zero()),
+        };
+        let new_value = Glue::from_dimen(Dimen::from_unit(2.0, Unit::Point));
+
+        assert_eq!(parskip_variable.get(&state), default_value);
+
+        state.push_state();
+        parskip_variable.set(&state, false, new_value.clone());
+        assert_eq!(parskip_variable.get(&state), new_value);
+
+        state.pop_state();
+        assert_eq!(parskip_variable.get(&state), default_value);
+
+        state.push_state();
+        parskip_variable.set(&state, true, new_value.clone());
+        state.pop_state();
+        assert_eq!(parskip_variable.get(&state), new_value);
     }
 }

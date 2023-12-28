@@ -20,7 +20,9 @@ pub struct SpecialVariables<'a> {
 
 impl<'a> Parser<'a> {
     fn is_variable_assignment_head(&mut self) -> bool {
-        self.is_integer_variable_head() || self.is_dimen_variable_head()
+        self.is_integer_variable_head()
+            || self.is_dimen_variable_head()
+            || self.is_glue_variable_head()
     }
 
     fn is_macro_assignment_head(&mut self) -> bool {
@@ -96,6 +98,11 @@ impl<'a> Parser<'a> {
             let variable = self.parse_dimen_variable();
             self.parse_equals_expanded();
             let value = self.parse_dimen();
+            variable.set(self.state, global, value);
+        } else if self.is_glue_variable_head() {
+            let variable = self.parse_glue_variable();
+            self.parse_equals_expanded();
+            let value = self.parse_glue();
             variable.set(self.state, global, value);
         } else {
             panic!("unimplemented");
@@ -405,8 +412,10 @@ mod tests {
     use super::*;
 
     use crate::category::Category;
-    use crate::dimension::{Dimen, Unit};
+    use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
+    use crate::glue::Glue;
     use crate::makro::{Macro, MacroListElem};
+    use crate::state::GlueParameter;
     use crate::testing::with_parser;
 
     #[test]
@@ -904,5 +913,39 @@ mod tests {
             parser
                 .parse_assignment(Some(SpecialVariables { prev_depth: None }));
         });
+    }
+
+    #[test]
+    fn it_assigns_glue_variables() {
+        with_parser(
+            &[r"\parskip=1pt plus2pt minus1fil%", r"\spaceskip5pt%"],
+            |parser| {
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment(None);
+
+                assert_eq!(
+                    parser.state.get_glue_parameter(&GlueParameter::ParSkip),
+                    Glue {
+                        space: Dimen::from_unit(1.0, Unit::Point),
+                        stretch: SpringDimen::Dimen(Dimen::from_unit(
+                            2.0,
+                            Unit::Point
+                        )),
+                        shrink: SpringDimen::FilDimen(FilDimen::new(
+                            FilKind::Fil,
+                            1.0
+                        )),
+                    }
+                );
+
+                assert!(parser.is_assignment_head());
+                parser.parse_assignment(None);
+
+                assert_eq!(
+                    parser.state.get_glue_parameter(&GlueParameter::SpaceSkip),
+                    Glue::from_dimen(Dimen::from_unit(5.0, Unit::Point)),
+                );
+            },
+        );
     }
 }

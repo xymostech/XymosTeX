@@ -206,6 +206,8 @@ impl<'a> Parser<'a> {
                     if chr == '-' {
                         sign *= -1;
                     }
+
+                    self.parse_optional_spaces_expanded();
                 }
                 _ => break,
             }
@@ -333,6 +335,19 @@ mod tests {
                 parser.parse_number(),
                 -metrics.get_height('g').as_scaled_points()
             );
+        });
+    }
+
+    #[test]
+    fn it_parses_multiple_signs() {
+        with_parser(&["-- --  - %"], |parser| {
+            assert_eq!(parser.parse_optional_signs(), -1);
+        });
+        with_parser(&["-%"], |parser| {
+            assert_eq!(parser.parse_optional_signs(), -1);
+        });
+        with_parser(&["-  - -- %"], |parser| {
+            assert_eq!(parser.parse_optional_signs(), 1);
         });
     }
 }

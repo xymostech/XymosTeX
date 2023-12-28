@@ -1,5 +1,5 @@
 use crate::parser::Parser;
-use crate::variable::{DimenVariable, IntegerVariable};
+use crate::variable::{DimenVariable, GlueVariable, IntegerVariable};
 
 impl<'a> Parser<'a> {
     pub fn is_integer_variable_head(&mut self) -> bool {
@@ -37,6 +37,25 @@ impl<'a> Parser<'a> {
             DimenVariable::BoxDepth(index)
         } else if self.state.is_token_equal_to_prim(&token, "hsize") {
             DimenVariable::HSize
+        } else {
+            panic!("unimplemented");
+        }
+    }
+
+    pub fn is_glue_variable_head(&mut self) -> bool {
+        self.is_next_expanded_token_in_set_of_primitives(&[
+            "parskip",
+            "spaceskip",
+        ])
+    }
+
+    pub fn parse_glue_variable(&mut self) -> GlueVariable {
+        let token = self.lex_expanded_token().unwrap();
+
+        if self.state.is_token_equal_to_prim(&token, "parskip") {
+            GlueVariable::ParSkip
+        } else if self.state.is_token_equal_to_prim(&token, "spaceskip") {
+            GlueVariable::SpaceSkip
         } else {
             panic!("unimplemented");
         }
@@ -95,6 +114,17 @@ mod tests {
                 parser.parse_dimen_variable(),
                 DimenVariable::BoxDepth(123)
             );
+        });
+    }
+
+    #[test]
+    fn it_parses_glue_parameter_variables() {
+        with_parser(&[r"\parskip%", r"\spaceskip%"], |parser| {
+            assert!(parser.is_glue_variable_head());
+            assert_eq!(parser.parse_glue_variable(), GlueVariable::ParSkip,);
+
+            assert!(parser.is_glue_variable_head());
+            assert_eq!(parser.parse_glue_variable(), GlueVariable::SpaceSkip,);
         });
     }
 }

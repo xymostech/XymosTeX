@@ -63,6 +63,8 @@ const ALL_PRIMITIVES: &[&str] = &[
     "atopwithdelims",
     "abovewithdelims",
     "hsize",
+    "parskip",
+    "spaceskip",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {
@@ -82,7 +84,6 @@ pub enum DimenParameter {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GlueParameter {
     ParSkip,
-    #[allow(dead_code)]
     SpaceSkip,
 }
 
@@ -123,7 +124,6 @@ pub struct TeXStateInner {
 
     // TeX's explicit glue parameter registers, like \parskip or \spaceskip
     // Missing glues are treated as zero.
-    #[allow(dead_code)]
     glue_parameter_registers: HashMap<GlueParameter, Glue>,
 
     // TeX's 256 box registers. The values are designed such that:
@@ -252,7 +252,6 @@ impl TeXStateInner {
             .insert(*dimen_parameter, *dimen);
     }
 
-    #[cfg(test)]
     fn get_glue_parameter(&self, glue_parameter: &GlueParameter) -> Glue {
         self.glue_parameter_registers
             .get(glue_parameter)
@@ -260,7 +259,6 @@ impl TeXStateInner {
             .unwrap_or(Glue::zero())
     }
 
-    #[cfg(test)]
     fn set_glue_parameter(
         &mut self,
         glue_parameter: &GlueParameter,
@@ -500,9 +498,7 @@ impl TeXStateStack {
     generate_inner_global_func!(fn set_category(global: bool, ch: char, cat: Category));
     generate_inner_func!(fn get_dimen_parameter(dimen_parameter: &DimenParameter) -> Dimen);
     generate_inner_global_func!(fn set_dimen_parameter(global: bool, dimen_parameter: &DimenParameter, dimen: &Dimen));
-    #[cfg(test)]
     generate_inner_func!(fn get_glue_parameter(glue_parameter: &GlueParameter) -> Glue);
-    #[cfg(test)]
     generate_inner_global_func!(fn set_glue_parameter(global: bool, glue_parameter: &GlueParameter, glue: &Glue));
     generate_inner_func!(fn get_math_code(ch: char) -> MathCode);
     generate_inner_global_func!(fn set_math_code(global: bool, ch: char, mathcode: &MathCode));
@@ -600,9 +596,7 @@ impl TeXState {
     generate_stack_func!(fn set_category(global: bool, ch: char, cat: Category));
     generate_stack_func!(fn get_dimen_parameter(dimen_parameter: &DimenParameter) -> Dimen);
     generate_stack_func!(fn set_dimen_parameter(global: bool, dimen_parameter: &DimenParameter, dimen: &Dimen));
-    #[cfg(test)]
     generate_stack_func!(fn get_glue_parameter(glue_parameter: &GlueParameter) -> Glue);
-    #[cfg(test)]
     generate_stack_func!(fn set_glue_parameter(global: bool, glue_parameter: &GlueParameter, glue: &Glue));
     generate_stack_func!(fn get_math_code(ch: char) -> MathCode);
     generate_stack_func!(fn set_math_code(global: bool, ch: char, mathcode: &MathCode));

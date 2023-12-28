@@ -4,8 +4,21 @@ use crate::dimension::{Dimen, SpringDimen};
 use crate::glue::Glue;
 
 impl<'a> Parser<'a> {
-    pub fn parse_glue(&mut self) -> Glue {
-        let space = self.parse_dimen();
+    fn is_internal_glue_head(&mut self) -> bool {
+        self.is_glue_variable_head()
+    }
+
+    fn parse_internal_glue(&mut self) -> Glue {
+        if self.is_glue_variable_head() {
+            let variable = self.parse_glue_variable();
+            variable.get(self.state)
+        } else {
+            panic!("unimplemented");
+        }
+    }
+
+    fn parse_normal_glue(&mut self, sign: i32) -> Glue {
+        let space = self.parse_dimen() * sign;
 
         let mut stretch = SpringDimen::Dimen(Dimen::zero());
         let mut shrink = SpringDimen::Dimen(Dimen::zero());
@@ -24,6 +37,17 @@ impl<'a> Parser<'a> {
             shrink,
         }
     }
+
+    pub fn parse_glue(&mut self) -> Glue {
+        let sign = self.parse_optional_signs();
+
+        if self.is_internal_glue_head() {
+            let glue = self.parse_internal_glue();
+            glue * sign
+        } else {
+            self.parse_normal_glue(sign)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -32,6 +56,7 @@ mod tests {
 
     use crate::category::Category;
     use crate::dimension::Unit;
+    use crate::state::GlueParameter;
     use crate::testing::with_parser;
     use crate::token::Token;
 
@@ -155,6 +180,45 @@ mod tests {
             assert_eq!(
                 parser.lex_expanded_token(),
                 Some(Token::Char('u', Category::Letter))
+            );
+        });
+    }
+
+    #[test]
+    fn it_parses_plain_dimens_with_negative_signs() {
+        with_parser(&[r"-3pt plus 3pt%", "-- -  -- -4pt%"], |parser| {
+            assert_eq!(
+                parser.parse_glue(),
+                Glue {
+                    space: Dimen::from_unit(-3.0, Unit::Point),
+                    stretch: SpringDimen::Dimen(Dimen::from_unit(
+                        3.0,
+                        Unit::Point
+                    )),
+                    shrink: SpringDimen::Dimen(Dimen::zero()),
+                }
+            );
+            assert_eq!(
+                parser.parse_glue(),
+                Glue {
+                    space: Dimen::from_unit(4.0, Unit::Point),
+                    stretch: SpringDimen::Dimen(Dimen::zero()),
+                    shrink: SpringDimen::Dimen(Dimen::zero()),
+                }
+            );
+        });
+    }
+
+    #[test]
+    fn it_parses_glue_variables() {
+        with_parser(&[r"\parskip%", r"- -- --\parskip%"], |parser| {
+            assert_eq!(
+                parser.parse_glue(),
+                parser.state.get_glue_parameter(&GlueParameter::ParSkip)
+            );
+            assert_eq!(
+                parser.parse_glue(),
+                parser.state.get_glue_parameter(&GlueParameter::ParSkip) * -1
             );
         });
     }
