@@ -1169,6 +1169,7 @@ mod tests {
                 MaybeEquals::Anything,
                 MaybeEquals::Anything,
                 MaybeEquals::Equals(DVICommand::SetCharN(b'g')),
+                MaybeEquals::Anything, // end of paragraph \fil
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('g').as_scaled_points(),
@@ -1184,6 +1185,7 @@ mod tests {
                 )),
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Equals(DVICommand::SetCharN(b'a')),
+                MaybeEquals::Anything, // end of paragraph \fil
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('a').as_scaled_points(),
@@ -1199,6 +1201,7 @@ mod tests {
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
                 MaybeEquals::Equals(DVICommand::SetCharN(b'q')),
+                MaybeEquals::Anything, // end of paragraph \fil
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('q').as_scaled_points(),
@@ -1206,7 +1209,7 @@ mod tests {
                 MaybeEquals::Equals(DVICommand::Eop),
                 MaybeEquals::Equals(DVICommand::Bop {
                     cs: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                    pointer: 111,
+                    pointer: 121,
                 }),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_height('a').as_scaled_points(),
@@ -1214,6 +1217,7 @@ mod tests {
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Anything,
                 MaybeEquals::Equals(DVICommand::SetCharN(b'a')),
+                MaybeEquals::Anything, // end of paragraph \fil
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('a').as_scaled_points(),
@@ -1270,6 +1274,7 @@ mod tests {
                 MaybeEquals::Anything,
                 MaybeEquals::Anything,
                 MaybeEquals::Equals(DVICommand::SetCharN(b'a')),
+                MaybeEquals::Anything, // end of paragraph \fil
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('a').as_scaled_points(),
@@ -1287,9 +1292,9 @@ mod tests {
                 }),
                 MaybeEquals::Anything,
                 MaybeEquals::Equals(DVICommand::PostPost {
-                    post_pointer: 116,
+                    post_pointer: 121,
                     format: 2,
-                    tail: 5,
+                    tail: 4,
                 }),
             ],
         );
@@ -1298,7 +1303,7 @@ mod tests {
         assert_eq!(writer.total_byte_size() % 4, 0);
 
         let first_font_def = &writer.commands[4];
-        let last_font_def = &writer.commands[11];
+        let last_font_def = &writer.commands[writer.commands.len() - 2];
 
         // The font defs in the post should match the defs in the pages
         assert_eq!(first_font_def, last_font_def);
@@ -1452,6 +1457,7 @@ mod tests {
                 )),
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Equals(DVICommand::SetCharN(b'b')),
+                MaybeEquals::Anything, // end of paragraph \fil
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('b').as_scaled_points(),
@@ -1466,13 +1472,14 @@ mod tests {
                 )),
                 MaybeEquals::Equals(DVICommand::Push),
                 MaybeEquals::Equals(DVICommand::SetCharN(b'c')),
+                MaybeEquals::Anything, // end of paragraph \fil
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(
                     metrics.get_depth('c').as_scaled_points(),
                 )),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Right4(
-                    metrics.get_width('b').as_scaled_points(),
+                    Dimen::from_unit(6.5, Unit::Inch).as_scaled_points(),
                 )),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(

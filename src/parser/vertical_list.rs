@@ -1,9 +1,13 @@
 use crate::category::Category;
 use crate::dimension::{Dimen, Unit};
 use crate::glue::Glue;
-use crate::list::VerticalListElem;
+use crate::line_breaking::{
+    break_horizontal_list_to_lines_with_params, LineBreakingParams,
+};
+use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::parser::assignment::SpecialVariables;
 use crate::parser::Parser;
+use crate::state::{DimenParameter, GlueParameter};
 use crate::token::Token;
 
 impl<'a> Parser<'a> {
@@ -12,15 +16,40 @@ impl<'a> Parser<'a> {
     fn handle_enter_horizontal_mode(
         &mut self,
         indent: bool,
-    ) -> VerticalListElem {
-        // TODO(xymostech): This will eventually potentially
-        // produce a series of boxes instead of just one, if there
-        // are line breaks. Handle that.
-        let tex_box = self.parse_unrestricted_horizontal_box(indent);
-        // TODO(xymostech): Add \parskip glue before the box.
-        VerticalListElem::Box {
-            tex_box,
-            shift: Dimen::zero(),
+    ) -> Vec<VerticalListElem> {
+        // TODO(xymostech): Add \parskip glue before the box if the vertical list is empty.
+        let mut list = self.parse_horizontal_list(false, indent);
+
+        if let Some(HorizontalListElem::HSkip(_)) = list.last() {
+            // If the last element of the list is a glue, we remove it.
+            list.pop();
+        }
+
+        list.append(&mut vec![
+            // TODO(xymostech): Add \nobreak before this and \break after this
+            HorizontalListElem::HSkip(
+                self.state.get_glue_parameter(&GlueParameter::ParFillSkip),
+            ),
+        ]);
+
+        let maybe_boxes = break_horizontal_list_to_lines_with_params(
+            &list,
+            LineBreakingParams {
+                hsize: self.state.get_dimen_parameter(&DimenParameter::HSize),
+            },
+            self.state,
+        );
+
+        if let Some(boxes) = maybe_boxes {
+            boxes
+                .into_iter()
+                .map(|tex_box| VerticalListElem::Box {
+                    tex_box: tex_box,
+                    shift: Dimen::zero(),
+                })
+                .collect()
+        } else {
+            panic!("No valid line breaking found");
         }
     }
 
@@ -43,12 +72,12 @@ impl<'a> Parser<'a> {
         false
     }
 
-    fn parse_vertical_list_elem(
+    fn parse_vertical_list_elems(
         &mut self,
         group_level: &mut usize,
         prev_depth: &mut Dimen,
         internal: bool,
-    ) -> Option<VerticalListElem> {
+    ) -> Option<Vec<VerticalListElem>> {
         let expanded_token = self.peek_expanded_token();
         let expanded_renamed_token = self.replace_renamed_token(expanded_token);
         match expanded_renamed_token {
@@ -65,7 +94,7 @@ impl<'a> Parser<'a> {
             Some(Token::Char(_, cat)) => match cat {
                 Category::Space => {
                     self.lex_expanded_token();
-                    self.parse_vertical_list_elem(
+                    self.parse_vertical_list_elems(
                         group_level,
                         prev_depth,
                         internal,
@@ -75,7 +104,7 @@ impl<'a> Parser<'a> {
                     self.lex_expanded_token();
                     *group_level += 1;
                     self.state.push_state();
-                    self.parse_vertical_list_elem(
+                    self.parse_vertical_list_elems(
                         group_level,
                         prev_depth,
                         internal,
@@ -92,7 +121,7 @@ impl<'a> Parser<'a> {
                         self.lex_expanded_token();
                         *group_level -= 1;
                         self.state.pop_state();
-                        self.parse_vertical_list_elem(
+                        self.parse_vertical_list_elems(
                             group_level,
                             prev_depth,
                             internal,
@@ -111,14 +140,18 @@ impl<'a> Parser<'a> {
             Some(ref tok) if self.state.is_token_equal_to_prim(tok, "par") => {
                 // \par is completely ignored
                 self.lex_expanded_token();
-                self.parse_vertical_list_elem(group_level, prev_depth, internal)
+                self.parse_vertical_list_elems(
+                    group_level,
+                    prev_depth,
+                    internal,
+                )
             }
             Some(ref tok)
                 if self.state.is_token_equal_to_prim(tok, "vskip") =>
             {
                 self.lex_expanded_token();
                 let glue = self.parse_glue();
-                Some(VerticalListElem::VSkip(glue))
+                Some(vec![VerticalListElem::VSkip(glue)])
             }
             Some(ref tok)
                 if self.state.is_token_equal_to_prim(tok, "moveleft") =>
@@ -126,12 +159,12 @@ impl<'a> Parser<'a> {
                 self.lex_expanded_token();
                 let shift = self.parse_dimen();
                 if let Some(tex_box) = self.parse_box() {
-                    Some(VerticalListElem::Box {
+                    Some(vec![VerticalListElem::Box {
                         tex_box,
                         shift: shift * -1,
-                    })
+                    }])
                 } else {
-                    self.parse_vertical_list_elem(
+                    self.parse_vertical_list_elems(
                         group_level,
                         prev_depth,
                         internal,
@@ -144,9 +177,9 @@ impl<'a> Parser<'a> {
                 self.lex_expanded_token();
                 let shift = self.parse_dimen();
                 if let Some(tex_box) = self.parse_box() {
-                    Some(VerticalListElem::Box { tex_box, shift })
+                    Some(vec![VerticalListElem::Box { tex_box, shift }])
                 } else {
-                    self.parse_vertical_list_elem(
+                    self.parse_vertical_list_elems(
                         group_level,
                         prev_depth,
                         internal,
@@ -158,7 +191,7 @@ impl<'a> Parser<'a> {
                     self.parse_assignment(Some(SpecialVariables {
                         prev_depth: Some(prev_depth),
                     }));
-                    self.parse_vertical_list_elem(
+                    self.parse_vertical_list_elems(
                         group_level,
                         prev_depth,
                         internal,
@@ -174,12 +207,12 @@ impl<'a> Parser<'a> {
                     let maybe_tex_box = self.parse_box();
                     if let Some(tex_box) = maybe_tex_box {
                         // TODO(xymostech): Insert interline glue here.
-                        Some(VerticalListElem::Box {
+                        Some(vec![VerticalListElem::Box {
                             tex_box,
                             shift: Dimen::zero(),
-                        })
+                        }])
                     } else {
-                        self.parse_vertical_list_elem(
+                        self.parse_vertical_list_elems(
                             group_level,
                             prev_depth,
                             internal,
@@ -210,64 +243,67 @@ impl<'a> Parser<'a> {
         let topskip = Glue::from_dimen(Dimen::from_unit(10.0, Unit::Point));
 
         let mut group_level = 0;
-        while let Some(elem) = self.parse_vertical_list_elem(
+        while let Some(elems) = self.parse_vertical_list_elems(
             &mut group_level,
             &mut prev_depth,
             internal,
         ) {
-            // Handle box elements specially so we can add interline glue
-            if let VerticalListElem::Box {
-                ref tex_box,
-                shift: _,
-            } = elem
-            {
-                // HACK(xymostech): \topskip should be handled in the outer
-                // place where we build pages, but we're doing it here since
-                // that doesn't exist yet.
-                if !internal && result.is_empty() {
-                    let box_height = tex_box.height();
-                    let total_skip =
-                        topskip.clone() - Glue::from_dimen(*box_height);
+            for elem in elems {
+                // Handle box elements specially so we can add interline glue
+                if let VerticalListElem::Box {
+                    ref tex_box,
+                    shift: _,
+                } = elem
+                {
+                    // HACK(xymostech): \topskip should be handled in the outer
+                    // place where we build pages, but we're doing it here since
+                    // that doesn't exist yet.
+                    if !internal && result.is_empty() {
+                        let box_height = tex_box.height();
+                        let total_skip =
+                            topskip.clone() - Glue::from_dimen(*box_height);
 
-                    if total_skip.space > Dimen::zero() {
-                        result.push(VerticalListElem::VSkip(total_skip));
+                        if total_skip.space > Dimen::zero() {
+                            result.push(VerticalListElem::VSkip(total_skip));
+                        }
                     }
+
+                    // If prev_depth is -1000pt, don't add interline glue
+                    if prev_depth != Dimen::from_unit(-1000.0, Unit::Point) {
+                        // Calculate how much interline glue we'd add if we just
+                        // take into account baselineskip - prev_depth - box.height
+                        let box_height = tex_box.height();
+                        let total_skip = baselineskip.clone()
+                            - Glue::from_dimen(*box_height + prev_depth);
+
+                        // If the interline glue would be less than lineskiplimit,
+                        // use lineskip instead.
+                        let interline_glue = if total_skip.space < lineskiplimit
+                        {
+                            lineskip.clone()
+                        } else {
+                            total_skip
+                        };
+
+                        result.push(VerticalListElem::VSkip(interline_glue));
+                    }
+
+                    // Keep track of the depth of the most recent box
+                    prev_depth = *tex_box.depth();
                 }
 
-                // If prev_depth is -1000pt, don't add interline glue
-                if prev_depth != Dimen::from_unit(-1000.0, Unit::Point) {
-                    // Calculate how much interline glue we'd add if we just
-                    // take into account baselineskip - prev_depth - box.height
-                    let box_height = tex_box.height();
-                    let total_skip = baselineskip.clone()
-                        - Glue::from_dimen(*box_height + prev_depth);
-
-                    // If the interline glue would be less than lineskiplimit,
-                    // use lineskip instead.
-                    let interline_glue = if total_skip.space < lineskiplimit {
-                        lineskip.clone()
+                if !internal {
+                    if let VerticalListElem::VSkip(_) = elem {
+                        // Glue disappears at a page break.
+                        if !result.is_empty() {
+                            result.push(elem);
+                        }
                     } else {
-                        total_skip
-                    };
-
-                    result.push(VerticalListElem::VSkip(interline_glue));
-                }
-
-                // Keep track of the depth of the most recent box
-                prev_depth = *tex_box.depth();
-            }
-
-            if !internal {
-                if let VerticalListElem::VSkip(_) = elem {
-                    // Glue disappears at a page break.
-                    if !result.is_empty() {
                         result.push(elem);
                     }
                 } else {
                     result.push(elem);
                 }
-            } else {
-                result.push(elem);
             }
         }
 
@@ -589,14 +625,16 @@ mod tests {
     fn it_parses_hboxes_after_noindent() {
         with_parser(
             &[
-                r"\setbox0=\hbox{a}%",
-                r"\setbox1=\hbox{g}%",
+                r"\hsize=1000pt%",
+                r"\setbox0=\hbox to1000pt{a\hskip 0pt plus1fil}%",
+                r"\setbox1=\hbox to1000pt{g\hskip 0pt plus1fil}%",
                 r"\vskip 1pt%",
                 r"\noindent a\par%",
                 r"\vskip 2pt%",
                 r"\noindent g\par%",
             ],
             |parser| {
+                parser.parse_assignment(None);
                 parser.parse_assignment(None);
                 parser.parse_assignment(None);
 
@@ -637,16 +675,18 @@ mod tests {
     fn it_parses_hboxes_after_indent() {
         with_parser(
             &[
+                r"\hsize=1000pt%",
                 r"\setbox2=\hbox{}%",
                 r"\wd2=20pt%",
-                r"\setbox0=\hbox{\copy2 a}%",
-                r"\setbox1=\hbox{\copy2 g}%",
+                r"\setbox0=\hbox to1000pt{\copy2 a\hskip 0pt plus1fil}%",
+                r"\setbox1=\hbox to1000pt{\copy2 g\hskip 0pt plus1fil}%",
                 r"\vskip 1pt%",
                 r"\indent a\par%",
                 r"\vskip 2pt%",
                 r"\indent g\par%",
             ],
             |parser| {
+                parser.parse_assignment(None);
                 parser.parse_assignment(None);
                 parser.parse_assignment(None);
                 parser.parse_assignment(None);
@@ -689,19 +729,25 @@ mod tests {
     fn it_enters_horizontal_mode_after_horizontal_material() {
         with_parser(
             &[
+                r"\hsize=1000pt%",
                 r"\setbox0=\hbox{}%",
                 r"\wd0=20pt%",
-                r"\setbox1=\hbox{\copy0 a}%",
-                r"\setbox2=\hbox{\copy0 @}%",
-                r"\setbox3=\hbox{\copy0 $a$}%",
-                r"\setbox4=\hbox{\copy0 \hskip1pt}%",
+                r"\def\line#1{\hbox to1000pt{#1\hskip0pt plus1fil}}%",
+                r"\setbox1=\line{\copy0 a}%",
+                r"\setbox2=\line{\copy0 @}%",
+                r"\setbox3=\line{\copy0 $a$}%",
+                r"\setbox4=\line{\copy0 \hskip1pt}%",
                 r"a\par%",
                 r"@\par%",
                 r"$a$\par%",
-                r"\hskip 1pt\par%",
+                // The \hskip0pt is removed because it is a skip at the end of
+                // the horizontal list
+                r"\hskip 1pt\hskip 0pt\par%",
                 r"\char 97\par%",
             ],
             |parser| {
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
                 parser.parse_assignment(None);
                 parser.parse_assignment(None);
                 parser.parse_assignment(None);
@@ -948,6 +994,51 @@ mod tests {
                             shift: Dimen::zero()
                         },
                     ]
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn it_splits_horizontal_lists_into_lines() {
+        with_parser(
+            &[
+                r"\setbox1=\hbox to50pt{abc def ghi}%",
+                r"\setbox2=\hbox to50pt{jkl mno pqr}%",
+                r"\setbox3=\hbox to50pt{stu vwx yz\hskip 0pt plus1fil}%",
+                r"\hsize=50pt%",
+                r"\noindent abc def ghi jkl mno pqr stu vwx yz%",
+            ],
+            |parser| {
+                let metrics =
+                    parser.state.get_metrics_for_font(&CMR10).unwrap();
+
+                assert_eq!(
+                    parser.parse_vertical_list(true),
+                    &[
+                        VerticalListElem::Box {
+                            tex_box: parser.state.get_box(1).unwrap(),
+                            shift: Dimen::zero()
+                        },
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(12.0, Unit::Point)
+                                - metrics.get_depth('g')
+                                - metrics.get_height('k'),
+                        )),
+                        VerticalListElem::Box {
+                            tex_box: parser.state.get_box(2).unwrap(),
+                            shift: Dimen::zero()
+                        },
+                        VerticalListElem::VSkip(Glue::from_dimen(
+                            Dimen::from_unit(12.0, Unit::Point)
+                                - metrics.get_depth('j')
+                                - metrics.get_height('t'),
+                        )),
+                        VerticalListElem::Box {
+                            tex_box: parser.state.get_box(3).unwrap(),
+                            shift: Dimen::zero()
+                        },
+                    ],
                 );
             },
         );

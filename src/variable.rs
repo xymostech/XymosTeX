@@ -1,4 +1,4 @@
-use crate::dimension::{Dimen, SpringDimen};
+use crate::dimension::Dimen;
 use crate::glue::Glue;
 use crate::state::{DimenParameter, GlueParameter, TeXState};
 
@@ -77,6 +77,7 @@ impl DimenVariable {
 pub enum GlueVariable {
     ParSkip,
     SpaceSkip,
+    ParFillSkip,
 }
 
 impl GlueVariable {
@@ -85,6 +86,9 @@ impl GlueVariable {
             Self::ParSkip => state.get_glue_parameter(&GlueParameter::ParSkip),
             Self::SpaceSkip => {
                 state.get_glue_parameter(&GlueParameter::SpaceSkip)
+            }
+            Self::ParFillSkip => {
+                state.get_glue_parameter(&GlueParameter::ParFillSkip)
             }
         }
     }
@@ -101,6 +105,11 @@ impl GlueVariable {
                 &GlueParameter::SpaceSkip,
                 &new_glue,
             ),
+            Self::ParFillSkip => state.set_glue_parameter(
+                global,
+                &GlueParameter::ParFillSkip,
+                &new_glue,
+            ),
         }
     }
 }
@@ -110,7 +119,7 @@ mod tests {
     use super::*;
 
     use crate::boxes::{HorizontalBox, TeXBox};
-    use crate::dimension::Unit;
+    use crate::dimension::{SpringDimen, Unit};
 
     #[test]
     fn it_gets_box_dimen_variables() {

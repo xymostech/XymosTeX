@@ -45,18 +45,6 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// Provides an easy way for external consumers of boxes to parse a
-    /// specific type of horizontal box, so they don't have to be concerned
-    /// with BoxLayout or TeXBox vs HorizontalBox.
-    pub fn parse_unrestricted_horizontal_box(
-        &mut self,
-        indent: bool,
-    ) -> TeXBox {
-        let hbox =
-            self.parse_horizontal_box(&BoxLayout::Natural, false, indent);
-        TeXBox::HorizontalBox(hbox)
-    }
-
     fn parse_vertical_box(
         &mut self,
         layout: &BoxLayout,
@@ -198,6 +186,7 @@ mod tests {
     use crate::boxes::{GlueSetRatio, GlueSetRatioKind};
     use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
     use crate::font::Font;
+    use crate::state::DimenParameter;
     use crate::testing::with_parser;
 
     static CMR10: Lazy<Font> = Lazy::new(|| Font {
@@ -561,33 +550,36 @@ mod tests {
 
     #[test]
     fn it_parses_vertical_lists() {
-        with_parser(&[r"aby%", r"\vskip 2pt%", r"g%"], |parser| {
-            let metrics = parser.state.get_metrics_for_font(&CMR10).unwrap();
+        with_parser(
+            &[r"\hsize=100pt%", r"aby%", r"\vskip 2pt%", r"g%"],
+            |parser| {
+                let metrics =
+                    parser.state.get_metrics_for_font(&CMR10).unwrap();
 
-            let vbox = parser.parse_vertical_box(&BoxLayout::Natural, true);
+                let vbox = parser.parse_vertical_box(&BoxLayout::Natural, true);
 
-            // Sanity check the number of elements to make sure something
-            // didn't go horribly wrong.
-            assert_eq!(vbox.list.len(), 4);
+                // Sanity check the number of elements to make sure something
+                // didn't go horribly wrong.
+                assert_eq!(vbox.list.len(), 4);
 
-            // The height will be the height of the first box + the 12pt of
-            // interline glue + the 2pt glue
-            let expected_height = metrics.get_height('b')
-                + Dimen::from_unit(12.0, Unit::Point)
-                + Dimen::from_unit(2.0, Unit::Point);
-            assert_eq!(vbox.height, expected_height);
+                // The height will be the height of the first box + the 12pt of
+                // interline glue + the 2pt glue
+                let expected_height = metrics.get_height('b')
+                    + Dimen::from_unit(12.0, Unit::Point)
+                    + Dimen::from_unit(2.0, Unit::Point);
+                assert_eq!(vbox.height, expected_height);
 
-            // The depth will just be the depth of the second box.
-            assert_eq!(vbox.depth, metrics.get_depth('g'));
+                // The depth will just be the depth of the second box.
+                assert_eq!(vbox.depth, metrics.get_depth('g'));
 
-            // The width will be the width of the first box, which is indented
-            // and contains a, b, and y.
-            let expected_width = Dimen::from_unit(20.0, Unit::Point)
-                + metrics.get_width('a')
-                + metrics.get_width('b')
-                + metrics.get_width('y');
-            assert_eq!(vbox.width, expected_width);
-        });
+                // The width will be the width of the first box, which is a
+                // horizontal box that will be set to the current hsize.
+                assert_eq!(
+                    vbox.width,
+                    parser.state.get_dimen_parameter(&DimenParameter::HSize)
+                );
+            },
+        );
     }
 
     #[test]

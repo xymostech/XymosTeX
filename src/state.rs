@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::boxes::TeXBox;
 use crate::category::Category;
-use crate::dimension::{Dimen, SpringDimen, Unit};
+use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
 use crate::font::Font;
 use crate::font_metrics::FontMetrics;
 use crate::glue::Glue;
@@ -65,6 +65,7 @@ const ALL_PRIMITIVES: &[&str] = &[
     "hsize",
     "parskip",
     "spaceskip",
+    "parfillskip",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {
@@ -85,6 +86,7 @@ pub enum DimenParameter {
 pub enum GlueParameter {
     ParSkip,
     SpaceSkip,
+    ParFillSkip,
 }
 
 #[derive(Clone)]
@@ -189,15 +191,30 @@ impl TeXStateInner {
         initial_dimen_registers
             .insert(DimenParameter::HSize, Dimen::from_unit(6.5, Unit::Inch));
 
-        let mut initial_glue_registers = HashMap::new();
-        initial_glue_registers.insert(
-            GlueParameter::ParSkip,
-            Glue {
-                space: Dimen::zero(),
-                stretch: SpringDimen::Dimen(Dimen::from_unit(1.0, Unit::Point)),
-                shrink: SpringDimen::Dimen(Dimen::zero()),
-            },
-        );
+        let initial_glue_registers = HashMap::from([
+            (
+                GlueParameter::ParSkip,
+                Glue {
+                    space: Dimen::zero(),
+                    stretch: SpringDimen::Dimen(Dimen::from_unit(
+                        1.0,
+                        Unit::Point,
+                    )),
+                    shrink: SpringDimen::Dimen(Dimen::zero()),
+                },
+            ),
+            (
+                GlueParameter::ParFillSkip,
+                Glue {
+                    space: Dimen::zero(),
+                    stretch: SpringDimen::FilDimen(FilDimen::new(
+                        FilKind::Fil,
+                        1.0,
+                    )),
+                    shrink: SpringDimen::Dimen(Dimen::zero()),
+                },
+            ),
+        ]);
 
         let mut token_definitions = HashMap::new();
 

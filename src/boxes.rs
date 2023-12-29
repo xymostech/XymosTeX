@@ -92,7 +92,6 @@ impl GlueSetRatio {
         }
     }
 
-    #[cfg(test)]
     pub fn get_badness(&self) -> u64 {
         match self.kind {
             GlueSetRatioKind::Finite => (100.0
@@ -114,7 +113,6 @@ pub enum GlueSetResult {
 }
 
 impl GlueSetResult {
-    #[cfg(test)]
     pub fn get_badness(&self) -> u64 {
         match self {
             GlueSetResult::InsufficientShrink => 10000,

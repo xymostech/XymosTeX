@@ -1,6 +1,5 @@
-#![cfg(test)]
 use crate::boxes::{set_glue_for_dimen, BoxLayout, HorizontalBox, TeXBox};
-use crate::dimension::{Dimen, Unit};
+use crate::dimension::Dimen;
 use crate::glue::Glue;
 use crate::list::HorizontalListElem;
 use crate::state::TeXState;
@@ -8,7 +7,7 @@ use crate::state::TeXState;
 use std::collections::{HashMap, HashSet};
 
 pub struct LineBreakingParams {
-    hsize: Dimen,
+    pub hsize: Dimen,
 }
 
 #[derive(Debug, PartialEq)]
@@ -361,6 +360,7 @@ pub fn break_horizontal_list_to_lines_with_params(
 mod tests {
     use super::*;
 
+    use crate::dimension::Unit;
     use crate::testing::with_parser;
 
     fn expect_paragraph_to_parse_to_lines(

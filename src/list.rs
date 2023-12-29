@@ -44,7 +44,6 @@ impl HorizontalListElem {
         }
     }
 
-    #[cfg(test)]
     pub fn is_discardable(&self) -> bool {
         match self {
             HorizontalListElem::Char { .. } => false,

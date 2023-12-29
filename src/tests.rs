@@ -30,7 +30,7 @@ fn it_parses_horizontal_boxes() {
                 // This result is found by just running the same code through TeX.
                 // We want to ensure that the dimensions are literally the exact
                 // same as what TeX gives.
-                "2877216447828127431Aa Gg Zz3276800Aa Gg Zz2752512Aa Gg Zz\n"
+                "2877216447828127431Aa Gg Zz3276800Aa Gg Zz2752512Aa Gg Zz \n"
             );
         },
     );
@@ -66,16 +66,16 @@ fn it_parses_vertical_boxes() {
 
             assert_eq!(
                 result,
-                " a
- b
- c
-d
+                " a 
+ b 
+ c 
+d 
 e
-3666375127431
- f
- g
- h
-i
+3666375127431 
+ f 
+ g 
+ h 
+i 
 j
 
 "

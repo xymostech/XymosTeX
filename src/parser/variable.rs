@@ -46,6 +46,7 @@ impl<'a> Parser<'a> {
         self.is_next_expanded_token_in_set_of_primitives(&[
             "parskip",
             "spaceskip",
+            "parfillskip",
         ])
     }
 
@@ -56,6 +57,8 @@ impl<'a> Parser<'a> {
             GlueVariable::ParSkip
         } else if self.state.is_token_equal_to_prim(&token, "spaceskip") {
             GlueVariable::SpaceSkip
+        } else if self.state.is_token_equal_to_prim(&token, "parfillskip") {
+            GlueVariable::ParFillSkip
         } else {
             panic!("unimplemented");
         }
