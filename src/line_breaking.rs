@@ -56,13 +56,22 @@ struct LineBreakBacktrace {
 
 #[derive(Debug)]
 struct LineBreakGraph {
+    // A list of places that can be broken at
     break_nodes: Vec<LineBreakPoint>,
+    // A list of backtraces from a given breakpoint to the best break before it.
+    // Each value corresponds to a value in break_nodes
     best_path_to: Vec<Option<LineBreakBacktrace>>,
+    // A list of possible edges from one break to a later one. Values are
+    // indices into break_nodes
     line_edges: HashMap<usize, HashSet<usize>>,
+    // A list of possible backward edges from one break to a previous one.
+    // Values are indices into break_nodes
     line_backwards_edges: HashMap<usize, HashSet<usize>>,
 }
 
 impl LineBreakGraph {
+    // Set up the line breaking graph given a list of indices. After
+    // initialization, only best_path_to is updated.
     fn new_from_break_indices(break_indices: &Vec<usize>) -> Self {
         let mut graph = LineBreakGraph {
             break_nodes: Vec::new(),
