@@ -3,7 +3,11 @@ use crate::variable::{DimenVariable, GlueVariable, IntegerVariable};
 
 impl<'a> Parser<'a> {
     pub fn is_integer_variable_head(&mut self) -> bool {
-        self.is_next_expanded_token_in_set_of_primitives(&["count"])
+        self.is_next_expanded_token_in_set_of_primitives(&[
+            "count",
+            "tolerance",
+            "pretolerance",
+        ])
     }
 
     pub fn parse_integer_variable(&mut self) -> IntegerVariable {
@@ -12,6 +16,10 @@ impl<'a> Parser<'a> {
         if self.state.is_token_equal_to_prim(&token, "count") {
             let index = self.parse_8bit_number();
             IntegerVariable::CountRegister(index)
+        } else if self.state.is_token_equal_to_prim(&token, "tolerance") {
+            IntegerVariable::Tolerance
+        } else if self.state.is_token_equal_to_prim(&token, "pretolerance") {
+            IntegerVariable::Pretolerance
         } else {
             panic!("unimplemented");
         }
@@ -128,6 +136,23 @@ mod tests {
 
             assert!(parser.is_glue_variable_head());
             assert_eq!(parser.parse_glue_variable(), GlueVariable::SpaceSkip,);
+        });
+    }
+
+    #[test]
+    fn it_parses_integer_parameter_variables() {
+        with_parser(&[r"\tolerance%", r"\pretolerance%"], |parser| {
+            assert!(parser.is_integer_variable_head());
+            assert_eq!(
+                parser.parse_integer_variable(),
+                IntegerVariable::Tolerance
+            );
+
+            assert!(parser.is_integer_variable_head());
+            assert_eq!(
+                parser.parse_integer_variable(),
+                IntegerVariable::Pretolerance
+            );
         });
     }
 }

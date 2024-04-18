@@ -66,6 +66,8 @@ const ALL_PRIMITIVES: &[&str] = &[
     "parskip",
     "spaceskip",
     "parfillskip",
+    "pretolerance",
+    "tolerance",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {
@@ -75,6 +77,12 @@ fn is_primitive(maybe_prim: &str) -> bool {
         }
     }
     false
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IntegerParameter {
+    Pretolerance,
+    Tolerance,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -119,6 +127,11 @@ pub struct TeXStateInner {
     // except that i32 can also hold the value -2147483648. We should keep
     // close track of that).
     count_registers: [i32; 256],
+
+    // TeX's explicit integer parameter registers, like \tolerance or
+    // \linepenalty. Missing integers are treated as zero. Similar to the count
+    // registers, the values here should be between 2147483647 and -2147483647.
+    integer_parameter_registers: HashMap<IntegerParameter, i32>,
 
     // TeX's explicit dimen parameter registers, like \hsize or \parindent.
     // Missing dimens are treated as zero.
@@ -186,6 +199,12 @@ impl TeXStateInner {
             }
         }
 
+        let mut initial_integer_registers = HashMap::new();
+        // TODO(emily): INITEX actually sets \tolerance to 10000, but it is
+        // reset to 200 in plain.tex. Remove this once we run that.
+        initial_integer_registers.insert(IntegerParameter::Tolerance, 200);
+        initial_integer_registers.insert(IntegerParameter::Pretolerance, 100);
+
         let mut initial_dimen_registers = HashMap::new();
         // TODO(emily): This is set in plain.tex. Remove this once we run that.
         initial_dimen_registers
@@ -230,6 +249,7 @@ impl TeXStateInner {
             math_code_map: initial_math_codes,
             token_definition_map: token_definitions,
             count_registers: [0; 256],
+            integer_parameter_registers: initial_integer_registers,
             dimen_parameter_registers: initial_dimen_registers,
             glue_parameter_registers: initial_glue_registers,
             box_registers: HashMap::new(),
@@ -251,6 +271,25 @@ impl TeXStateInner {
     #[cfg(test)]
     fn set_category(&mut self, ch: char, cat: Category) {
         self.category_map.insert(ch, cat);
+    }
+
+    fn get_integer_parameter(
+        &self,
+        integer_parameter: &IntegerParameter,
+    ) -> i32 {
+        *self
+            .integer_parameter_registers
+            .get(integer_parameter)
+            .unwrap_or(&0)
+    }
+
+    fn set_integer_parameter(
+        &mut self,
+        integer_parameter: &IntegerParameter,
+        value: i32,
+    ) {
+        self.integer_parameter_registers
+            .insert(*integer_parameter, value);
     }
 
     fn get_dimen_parameter(&self, dimen_parameter: &DimenParameter) -> Dimen {
@@ -513,6 +552,8 @@ impl TeXStateStack {
     generate_inner_func!(fn get_category(ch: char) -> Category);
     #[cfg(test)]
     generate_inner_global_func!(fn set_category(global: bool, ch: char, cat: Category));
+    generate_inner_func!(fn get_integer_parameter(integer_parameter: &IntegerParameter) -> i32);
+    generate_inner_global_func!(fn set_integer_parameter(global: bool, integer_parameter: &IntegerParameter, value: i32));
     generate_inner_func!(fn get_dimen_parameter(dimen_parameter: &DimenParameter) -> Dimen);
     generate_inner_global_func!(fn set_dimen_parameter(global: bool, dimen_parameter: &DimenParameter, dimen: &Dimen));
     generate_inner_func!(fn get_glue_parameter(glue_parameter: &GlueParameter) -> Glue);
@@ -611,6 +652,8 @@ impl TeXState {
     generate_stack_func!(fn get_category(ch: char) -> Category);
     #[cfg(test)]
     generate_stack_func!(fn set_category(global: bool, ch: char, cat: Category));
+    generate_stack_func!(fn get_integer_parameter(integer_parameter: &IntegerParameter) -> i32);
+    generate_stack_func!(fn set_integer_parameter(global: bool, integer_parameter: &IntegerParameter, value: i32));
     generate_stack_func!(fn get_dimen_parameter(dimen_parameter: &DimenParameter) -> Dimen);
     generate_stack_func!(fn set_dimen_parameter(global: bool, dimen_parameter: &DimenParameter, dimen: &Dimen));
     generate_stack_func!(fn get_glue_parameter(glue_parameter: &GlueParameter) -> Glue);

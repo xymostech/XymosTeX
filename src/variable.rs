@@ -1,10 +1,12 @@
 use crate::dimension::Dimen;
 use crate::glue::Glue;
-use crate::state::{DimenParameter, GlueParameter, TeXState};
+use crate::state::{DimenParameter, GlueParameter, IntegerParameter, TeXState};
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum IntegerVariable {
     CountRegister(u8),
+    Pretolerance,
+    Tolerance,
 }
 
 impl IntegerVariable {
@@ -13,12 +15,28 @@ impl IntegerVariable {
             Self::CountRegister(index) => {
                 state.set_count(global, *index, value)
             }
+            Self::Pretolerance => state.set_integer_parameter(
+                global,
+                &IntegerParameter::Pretolerance,
+                value,
+            ),
+            Self::Tolerance => state.set_integer_parameter(
+                global,
+                &IntegerParameter::Tolerance,
+                value,
+            ),
         }
     }
 
     pub fn get(&self, state: &TeXState) -> i32 {
         match self {
             Self::CountRegister(index) => state.get_count(*index),
+            Self::Pretolerance => {
+                state.get_integer_parameter(&IntegerParameter::Pretolerance)
+            }
+            Self::Tolerance => {
+                state.get_integer_parameter(&IntegerParameter::Tolerance)
+            }
         }
     }
 }
@@ -283,5 +301,26 @@ mod tests {
         parskip_variable.set(&state, true, new_value.clone());
         state.pop_state();
         assert_eq!(parskip_variable.get(&state), new_value);
+    }
+
+    #[test]
+    fn it_gets_and_sets_integer_parameters() {
+        let state = TeXState::new();
+
+        let tolerance = IntegerVariable::Tolerance;
+        let pretolerance = IntegerVariable::Pretolerance;
+
+        assert_eq!(tolerance.get(&state), 200);
+        assert_eq!(pretolerance.get(&state), 100);
+
+        tolerance.set(&state, false, 1000);
+        assert_eq!(tolerance.get(&state), 1000);
+
+        state.push_state();
+        pretolerance.set(&state, true, 500);
+        assert_eq!(pretolerance.get(&state), 500);
+
+        state.pop_state();
+        assert_eq!(pretolerance.get(&state), 500);
     }
 }
