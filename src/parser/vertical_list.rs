@@ -7,7 +7,7 @@ use crate::line_breaking::{
 use crate::list::{HorizontalListElem, VerticalListElem};
 use crate::parser::assignment::SpecialVariables;
 use crate::parser::Parser;
-use crate::state::{DimenParameter, GlueParameter};
+use crate::state::{DimenParameter, GlueParameter, IntegerParameter};
 use crate::token::Token;
 
 impl<'a> Parser<'a> {
@@ -36,6 +36,9 @@ impl<'a> Parser<'a> {
             &list,
             LineBreakingParams {
                 hsize: self.state.get_dimen_parameter(&DimenParameter::HSize),
+                tolerance: self
+                    .state
+                    .get_integer_parameter(&IntegerParameter::Tolerance),
             },
             self.state,
         );

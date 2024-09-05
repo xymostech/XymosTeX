@@ -1,13 +1,16 @@
-use crate::boxes::{set_glue_for_dimen, BoxLayout, HorizontalBox, TeXBox};
+use crate::boxes::{
+    set_glue_for_dimen, BoxLayout, GlueSetResult, HorizontalBox, TeXBox,
+};
 use crate::dimension::Dimen;
 use crate::glue::Glue;
 use crate::list::HorizontalListElem;
-use crate::state::TeXState;
+use crate::state::{IntegerParameter, TeXState};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 pub struct LineBreakingParams {
     pub hsize: Dimen,
+    pub tolerance: i32,
 }
 
 #[derive(Debug, PartialEq)]
@@ -16,11 +19,32 @@ struct LineBreakingResult {
     all_breaks: Vec<LineBreakPoint>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 enum LineBreakPoint {
     Start,
-    End,
     BreakAtIndex(usize),
+    End,
+}
+
+#[cfg(test)]
+mod line_break_point_tests {
+    use super::LineBreakPoint;
+
+    #[test]
+    fn it_orders_line_break_points_correctly() {
+        assert!(LineBreakPoint::Start < LineBreakPoint::BreakAtIndex(0));
+        assert!(LineBreakPoint::Start < LineBreakPoint::BreakAtIndex(100));
+        assert!(
+            LineBreakPoint::BreakAtIndex(0) < LineBreakPoint::BreakAtIndex(1)
+        );
+        assert!(
+            LineBreakPoint::BreakAtIndex(100)
+                < LineBreakPoint::BreakAtIndex(101)
+        );
+        assert!(LineBreakPoint::Start < LineBreakPoint::End);
+        assert!(LineBreakPoint::BreakAtIndex(0) < LineBreakPoint::End);
+        assert!(LineBreakPoint::BreakAtIndex(101) < LineBreakPoint::End);
+    }
 }
 
 fn get_list_indices_for_breaks(
@@ -55,115 +79,36 @@ struct LineBreakBacktrace {
 }
 
 #[derive(Debug)]
-struct LineBreakGraph {
+struct LineBreakGraph<'a> {
     // A list of places that can be broken at
-    break_nodes: Vec<LineBreakPoint>,
+    break_nodes: &'a Vec<LineBreakPoint>,
     // A list of backtraces from a given breakpoint to the best break before it.
-    // Each value corresponds to a value in break_nodes
+    // Each value corresponds to an entry in break_nodes
     best_path_to: Vec<Option<LineBreakBacktrace>>,
-    // A list of possible edges from one break to a later one. Values are
-    // indices into break_nodes
-    line_edges: HashMap<usize, HashSet<usize>>,
-    // A list of possible backward edges from one break to a previous one.
-    // Values are indices into break_nodes
-    line_backwards_edges: HashMap<usize, HashSet<usize>>,
 }
 
-impl LineBreakGraph {
-    // Set up the line breaking graph given a list of indices. After
-    // initialization, only best_path_to is updated.
-    fn new_from_break_indices(break_indices: &Vec<usize>) -> Self {
+impl<'a> LineBreakGraph<'a> {
+    // Set up an empty line breaking graph given a list of indices.
+    fn new_from_break_indices(break_indices: &'a Vec<LineBreakPoint>) -> Self {
         let mut graph = LineBreakGraph {
-            break_nodes: Vec::new(),
+            break_nodes: break_indices,
             best_path_to: Vec::new(),
-            line_edges: HashMap::new(),
-            line_backwards_edges: HashMap::new(),
         };
 
-        graph.break_nodes.push(LineBreakPoint::Start);
         graph.best_path_to.push(Some(LineBreakBacktrace {
             prev_break: None,
             total_demerits: 0,
         }));
-        graph.break_nodes.append(
-            &mut break_indices
-                .iter()
-                .map(|index| LineBreakPoint::BreakAtIndex(*index))
-                .collect(),
-        );
-        graph.break_nodes.push(LineBreakPoint::End);
         graph.best_path_to.resize(2 + break_indices.len(), None);
 
-        graph.add_edge(0, graph.break_nodes.len() - 1);
-
-        for (ii, start_index) in break_indices.iter().enumerate() {
-            let i = ii + 1;
-
-            graph.add_edge(0, i);
-            graph.add_edge(i, graph.break_nodes.len() - 1);
-
-            for (jj, end_index) in break_indices.iter().enumerate() {
-                let j = jj + 1;
-
-                if start_index < end_index {
-                    graph.add_edge(i, j);
-                }
-            }
-        }
-
         graph
-    }
-
-    fn add_edge(&mut self, from: usize, to: usize) {
-        (*self.line_edges.entry(from).or_insert(HashSet::new())).insert(to);
-        (*self
-            .line_backwards_edges
-            .entry(to)
-            .or_insert(HashSet::new()))
-        .insert(from);
     }
 
     fn index_of(&self, node: &LineBreakPoint) -> Option<usize> {
         self.break_nodes.iter().position(|n| n == node)
     }
 
-    fn get_nodes_connected_to(
-        &self,
-        from: &LineBreakPoint,
-    ) -> Vec<LineBreakPoint> {
-        if let Some(from_index) = self.index_of(from) {
-            if let Some(to_indices) = self.line_edges.get(&from_index) {
-                to_indices
-                    .iter()
-                    .map(|to_index| self.break_nodes[*to_index])
-                    .collect()
-            } else {
-                Vec::new()
-            }
-        } else {
-            Vec::new()
-        }
-    }
-
-    fn get_nodes_connecting_to(
-        &self,
-        to: &LineBreakPoint,
-    ) -> Vec<LineBreakPoint> {
-        if let Some(to_index) = self.index_of(to) {
-            if let Some(from_indices) = self.line_backwards_edges.get(&to_index)
-            {
-                from_indices
-                    .iter()
-                    .map(|from_index| self.break_nodes[*from_index])
-                    .collect()
-            } else {
-                Vec::new()
-            }
-        } else {
-            Vec::new()
-        }
-    }
-
+    // Find the best demerits from the start to a given node, if one exists
     fn get_best_demerits_to_node(&self, to: &LineBreakPoint) -> Option<u64> {
         let to_index = self.index_of(to)?;
         if let Some(backtrace) = &self.best_path_to[to_index] {
@@ -173,6 +118,7 @@ impl LineBreakGraph {
         }
     }
 
+    // Update the best path to a given node
     fn update_best_path_to_node(
         &mut self,
         to: &LineBreakPoint,
@@ -189,6 +135,7 @@ impl LineBreakGraph {
         Some(())
     }
 
+    // Return the best list of breaks to the end node
     fn get_best_breaks_to_end(&self) -> Option<LineBreakingResult> {
         let end_demerits =
             self.get_best_demerits_to_node(&LineBreakPoint::End)?;
@@ -218,19 +165,30 @@ impl LineBreakGraph {
     }
 }
 
-fn get_available_break_indices(list: &Vec<HorizontalListElem>) -> Vec<usize> {
+fn get_available_break_indices(
+    list: &Vec<HorizontalListElem>,
+) -> Vec<LineBreakPoint> {
     let mut available_break_indices = Vec::new();
 
+    available_break_indices.push(LineBreakPoint::Start);
     for (i, curr) in list.iter().enumerate() {
         match curr {
             HorizontalListElem::HSkip(_) => {
-                available_break_indices.push(i);
+                available_break_indices.push(LineBreakPoint::BreakAtIndex(i));
             }
             _ => (),
         }
     }
+    available_break_indices.push(LineBreakPoint::End);
 
     available_break_indices
+}
+
+#[derive(Debug)]
+enum DemeritResult {
+    Overfull,
+    TooLargeBadness,
+    Demerits { demerits: u64, badness: u64 },
 }
 
 fn get_demerits_for_line_between(
@@ -239,7 +197,7 @@ fn get_demerits_for_line_between(
     state: &TeXState,
     start: &LineBreakPoint,
     end: &LineBreakPoint,
-) -> Option<u64> {
+) -> Option<DemeritResult> {
     let (start_index, end_index) =
         get_list_indices_for_breaks(list, start, end)?;
 
@@ -253,82 +211,175 @@ fn get_demerits_for_line_between(
         .fold(Glue::zero(), |width, elem| width + elem.get_size(state).2);
 
     let glue_set = set_glue_for_dimen(&params.hsize, &line_width);
-    let badness = glue_set.get_badness();
+    let badness = match glue_set {
+        GlueSetResult::GlueSetRatio(glue_set_ratio) => {
+            glue_set_ratio.get_badness()
+        }
+        GlueSetResult::InsufficientShrink => {
+            return Some(DemeritResult::Overfull);
+        }
+        // We treat underfull boxes as 10000 badness. This lets us still set
+        // underfull boxes if \tolerance=10000
+        GlueSetResult::ZeroStretch => 10000,
+        GlueSetResult::ZeroShrink => {
+            return Some(DemeritResult::Overfull);
+        }
+    };
+
+    if badness > params.tolerance as u64 {
+        return Some(DemeritResult::TooLargeBadness);
+    }
 
     let line_penalty: u64 = 10;
     let penalty: i64 = 0;
     let demerits = if 0 <= penalty && penalty < 10000 {
-        (line_penalty + badness).pow(2) + (penalty.pow(2) as u64)
+        (line_penalty + badness).min(10000).pow(2) + (penalty.pow(2) as u64)
     } else if -10000 < penalty && penalty < 0 {
-        (line_penalty + badness).pow(2) - (penalty.pow(2) as u64)
+        (line_penalty + badness).min(10000).pow(2) - (penalty.pow(2) as u64)
     } else {
-        (line_penalty + badness).pow(2)
+        (line_penalty + badness).min(10000).pow(2)
     };
 
-    Some(demerits)
+    Some(DemeritResult::Demerits { demerits, badness })
 }
 
+// Given a horizontal list, try to generate the best line breaks which match the
+// line breaking params.
 fn generate_best_list_break_option_with_params(
     list: &Vec<HorizontalListElem>,
     params: &LineBreakingParams,
     state: &TeXState,
 ) -> Option<LineBreakingResult> {
-    let break_indices = get_available_break_indices(&list);
-    let mut graph = LineBreakGraph::new_from_break_indices(&break_indices);
+    // This function implements the Knuth-Plass line breaking algorithm. This is
+    // an optimized version of a shortest path graph search, where each
+    // available break point is a node and the weight of the edges between them
+    // is the badness of setting the line between those break points.
 
-    let mut seen_nodes = HashSet::new();
-    let mut nodes_to_search = vec![LineBreakPoint::Start];
+    let line_breaks = get_available_break_indices(&list);
+    let mut graph = LineBreakGraph::new_from_break_indices(&line_breaks);
 
-    while let Some(node) = nodes_to_search.pop() {
-        if seen_nodes.contains(&node) {
-            continue;
-        }
+    // Keep track of previous breakpoints that we've looked at already, that are
+    // still reachable from the current break without being overfull.
+    let mut reachable_previous_breaks: Vec<LineBreakPoint> =
+        Vec::from([LineBreakPoint::Start]);
 
-        let from_nodes = graph
-            .get_nodes_connecting_to(&node)
-            .into_iter()
-            .collect::<HashSet<_>>();
-        if !from_nodes.is_subset(&seen_nodes) {
-            continue;
-        }
+    // For logging, we don't want to refer to our `LineBreakPoint`s using our
+    // internal representation, so we sequentially number the feasible
+    // breakpoints we find, with the start referring to 0.
+    let mut next_feasible_line_break_number = 1;
+    let mut feasible_line_break_numbers: HashMap<LineBreakPoint, usize> =
+        HashMap::new();
+    feasible_line_break_numbers.insert(LineBreakPoint::Start, 0);
 
-        seen_nodes.insert(node);
-        let node_demerits =
-            if let Some(demerits) = graph.get_best_demerits_to_node(&node) {
-                demerits
-            } else {
-                continue;
-            };
+    // Whether we should log information about the line breaking procedure
+    let should_log =
+        state.get_integer_parameter(&IntegerParameter::TracingParagraphs) > 0;
 
-        for connected_node in graph.get_nodes_connected_to(&node).iter() {
+    for line_break in line_breaks.iter().skip(1) {
+        feasible_line_break_numbers
+            .insert(*line_break, next_feasible_line_break_number);
+        next_feasible_line_break_number += 1;
+
+        let mut maybe_best_backwards_path: Option<LineBreakPoint> = None;
+        let mut best_total_demerits: u64 = 0;
+        for previous_break in reachable_previous_breaks.clone().iter() {
+            let previous_demerits =
+                graph.get_best_demerits_to_node(previous_break).unwrap();
             if let Some(demerits) = get_demerits_for_line_between(
-                &list,
-                &params,
+                list,
+                params,
                 state,
-                &node,
-                &connected_node,
+                previous_break,
+                line_break,
             ) {
-                let total_demerits = node_demerits + demerits;
-                if let Some(prev_best_demerits) =
-                    graph.get_best_demerits_to_node(connected_node)
-                {
-                    if total_demerits < prev_best_demerits {
-                        graph.update_best_path_to_node(
-                            connected_node,
-                            &node,
-                            total_demerits,
-                        );
-                    }
-                } else {
-                    graph.update_best_path_to_node(
-                        connected_node,
-                        &node,
-                        total_demerits,
-                    );
-                }
+                match demerits {
+                    DemeritResult::Overfull => {
+                        // If we reach a previously visited breakpoint where
+                        // setting the line between it and the current break
+                        // would overfill the line, we no longer want to look at
+                        // that previous break. Remove it from the list of
+                        // previous breaks.
 
-                nodes_to_search.push(*connected_node);
+                        // We have to look up the new position of the current
+                        // break because other breaks might have been removed so
+                        // the original index of that node might have changed.
+                        let previous_break_index = reachable_previous_breaks
+                            .iter()
+                            .position(|bp| bp == previous_break)
+                            .unwrap();
+                        reachable_previous_breaks.remove(previous_break_index);
+
+                        if reachable_previous_breaks.len() == 0 {
+                            // In a very special case where removing the
+                            // previous break would remove all of the previous
+                            // viable breakpoints, this means that there are no
+                            // possible ways to break the line while staying
+                            // within our constraints.
+                            //
+                            // Instead, we add an overfull line between the
+                            // current node and the previous break we are
+                            // currently looking at. Because
+                            // `reachable_previous_breaks` is sorted and all of
+                            // the other elements were removed, we know that the
+                            // previous break we are looking at will be the
+                            // furthest along break, which will produce the
+                            // smallest overfull line.
+                            if should_log {
+                                println!(
+                                    "@ via @@{:?} b=* p=x d=*",
+                                    feasible_line_break_numbers[previous_break]
+                                );
+                            }
+                            maybe_best_backwards_path = Some(*previous_break);
+                            // When this happens, even though this is a very bad
+                            // situation, we add no demerits.
+                            best_total_demerits = previous_demerits;
+                        }
+                    }
+                    DemeritResult::TooLargeBadness => {} // ignore
+                    DemeritResult::Demerits { demerits, badness } => {
+                        if should_log {
+                            println!(
+                                "@ via @@{:?} b={} p=x d={}",
+                                feasible_line_break_numbers[previous_break],
+                                badness,
+                                demerits
+                            );
+                        }
+                        if maybe_best_backwards_path.is_none()
+                            || demerits + previous_demerits
+                                <= best_total_demerits
+                        {
+                            maybe_best_backwards_path = Some(*previous_break);
+                            best_total_demerits = demerits + previous_demerits;
+                        }
+                    }
+                }
+            } else {
+                // This branch can happen when we try to break at the \hskip
+                // inserted right before the end of the paragraph.
+                // TODO(xymostech): Stop trying to break here. TeX normally
+                // inserts a \nobreak before that \hskip to prevent this.
             }
+        }
+
+        if let Some(best_backwards_path) = maybe_best_backwards_path {
+            if should_log {
+                // TODO(xymostech): Keep track of the line number of a given active
+                // node to print here.
+                println!(
+                    "@@{:?}: line x.x t={} -> @@{:?}",
+                    feasible_line_break_numbers[line_break],
+                    best_total_demerits,
+                    feasible_line_break_numbers[&best_backwards_path]
+                );
+            }
+            reachable_previous_breaks.push(*line_break);
+            graph.update_best_path_to_node(
+                line_break,
+                &best_backwards_path,
+                best_total_demerits,
+            );
         }
     }
 
@@ -406,6 +457,18 @@ mod tests {
                 )
                 .unwrap();
 
+                // If the assert below fails, the log isn't going to be super
+                // helpful. Add in a slightly nicer check beforehand to give a
+                // hint what went wrong.
+                for (index, (actual_box, expected_line)) in
+                    actual_boxes.iter().zip(expected_lines.iter()).enumerate()
+                {
+                    if actual_box != expected_line {
+                        println!("First different line: {}", index);
+                        break;
+                    }
+                }
+
                 assert_eq!(actual_boxes, expected_lines);
             });
         });
@@ -427,6 +490,7 @@ mod tests {
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(150.0, Unit::Point),
+                tolerance: 10000,
             },
             100,
         );
@@ -446,6 +510,7 @@ mod tests {
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(105.0, Unit::Point),
+                tolerance: 10000,
             },
             12100 + 100,
         );
@@ -472,6 +537,7 @@ mod tests {
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(105.0, Unit::Point),
+                tolerance: 10000,
             },
             // NOTE: should be 22100 for first line and 10100 for last
             // line due to visual incompatibility, which hasn't been
@@ -499,20 +565,151 @@ mod tests {
                 r"\def\a{\copy1}%",
                 r"\def\line#1{\hbox to400pt{#1}}%",
                 r"\line{{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a}}%",
-                r"\line{{\a} {\a\a\a}  {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
+                r"\line{{\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
                 r"\line{{\a\a\a\a} {\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a}}%",
                 r"\line{{\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a} {\a} {\a\a\a\a}}%",
-                r"\line{{\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}}%",
-                r"\line{{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a}}%",
-                r"\line{{\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
+                // NOTE: the commented lines are correct here. We choose the
+                // incorrect breaks here because we don't take into account
+                // visual incompatibility, which allows for multiple breaking
+                // options at some points in the paragraph.
+                //r"\line{{\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}}%",
+                //r"\line{{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a}}%",
+                //r"\line{{\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
+                r"\line{{\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a} {\a}}%",
+                r"\line{{\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a}}%",
+                r"\line{{\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
                 r"\line{{\a\a\a\a} {\a} {\a\a\a}\hskip0pt plus1fil}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(400.0, Unit::Point),
+                tolerance: 10000,
             },
             // NOTE: should be 20000 more due to visual incompatibility, which
             // hasn't been implemented yet.
             100 + 324 + 656100 + 656100 + 656100 + 100 + 324 + 100,
+        );
+    }
+
+    #[test]
+    fn it_splits_paragraphs_with_boxes_wider_than_hsize() {
+        expect_paragraph_to_parse_to_lines(
+            &[
+                r"\hbox to90pt{ab\hskip0pt plus1fil cd} %",
+                r"efg hij%",
+                r"\hskip0pt plus1fil%",
+            ],
+            &[
+                r"\def\line#1{\hbox to80pt{#1}}%",
+                r"\line{\hbox to90pt{ab\hskip0pt plus1fil cd}}%",
+                r"\line{efg hij\hskip0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(80.0, Unit::Point),
+                tolerance: 10000,
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn it_splits_paragraphs_into_overfull_boxes_if_badness_is_low_enough() {
+        expect_paragraph_to_parse_to_lines(
+            &[
+                r"\def\sp{\hskip 1pt plus3pt{}}%",
+                r"\def\box{\hbox to50pt{a}}%",
+                r"\box\sp\box\sp\box\sp\box\sp\box%",
+                r"\hskip0pt plus1fil%",
+            ],
+            &[
+                r"\def\line#1{\hbox to110pt{#1}}%",
+                r"\def\sp{\hskip 1pt plus3pt{}}%",
+                r"\def\box{\hbox to50pt{a}}%",
+                r"\line{\box\sp\box}%",
+                r"\line{\box\sp\box}%",
+                r"\line{\box\hskip0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(110.0, Unit::Point),
+                tolerance: 2700,
+            },
+            // The last 100 should be zero because this break is "forced".
+            7333264 + 7333264 + 100,
+        );
+
+        expect_paragraph_to_parse_to_lines(
+            &[
+                r"\def\sp{\hskip 1pt plus3pt{}}%",
+                r"\def\box{\hbox to50pt{a}}%",
+                r"\box\sp\box\sp\box\sp\box\sp\box%",
+                r"\hskip0pt plus1fil%",
+            ],
+            &[
+                r"\def\line#1{\hbox to110pt{#1}}%",
+                r"\def\sp{\hskip 1pt plus3pt{}}%",
+                r"\def\box{\hbox to50pt{a}}%",
+                r"\line{\box\sp\box\sp\box}%",
+                r"\line{\box\sp\box\hskip0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(110.0, Unit::Point),
+                tolerance: 2600,
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn it_treats_10000_tolerance_as_infinite() {
+        expect_paragraph_to_parse_to_lines(
+            &[
+                r"\def\sp{\hskip 1pt plus3pt{}}%",
+                r"\def\box{\hbox to50pt{a}}%",
+                // Setting this to 120pt has a very large badness because the
+                // spaces would need to stretch significantly. Instead of
+                // allowing that badness, we get an overfull box.
+                r"\box\sp\box\sp\box\sp\box\sp\box%",
+                r"\hskip0pt plus1fil%",
+            ],
+            &[
+                r"\def\line#1{\hbox to120pt{#1}}%",
+                r"\def\sp{\hskip 1pt plus3pt{}}%",
+                r"\def\box{\hbox to50pt{a}}%",
+                r"\line{\box\sp\box\sp\box}%",
+                r"\line{\box\sp\box\hskip0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(120.0, Unit::Point),
+                tolerance: 9999,
+            },
+            // This should actually be zero, because the last break is "forced"
+            // and in this case we don't add any demerits (in this case we're
+            // adding \linepenalty).
+            100,
+        );
+
+        expect_paragraph_to_parse_to_lines(
+            &[
+                r"\def\sp{\hskip 1pt plus3pt{}}%",
+                r"\def\box{\hbox to50pt{a}}%",
+                // Even though this needs to stretch a huge amount, the
+                // tolerance is infinite so this is allowed
+                r"\box\sp\box\sp\box\sp\box\sp\box%",
+                r"\hskip0pt plus1fil%",
+            ],
+            &[
+                r"\def\line#1{\hbox to120pt{#1}}%",
+                r"\def\sp{\hskip 1pt plus3pt{}}%",
+                r"\def\box{\hbox to50pt{a}}%",
+                r"\line{\box\sp\box}%",
+                r"\line{\box\sp\box}%",
+                r"\line{\box\hskip0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(120.0, Unit::Point),
+                tolerance: 10000,
+            },
+            // NOTE: should be 20000 higher due to visual incompatibility
+            100000000 + 100000000 + 100,
         );
     }
 }

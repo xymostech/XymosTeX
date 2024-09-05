@@ -7,6 +7,7 @@ impl<'a> Parser<'a> {
             "count",
             "tolerance",
             "pretolerance",
+            "tracingparagraphs",
         ])
     }
 
@@ -20,6 +21,11 @@ impl<'a> Parser<'a> {
             IntegerVariable::Tolerance
         } else if self.state.is_token_equal_to_prim(&token, "pretolerance") {
             IntegerVariable::Pretolerance
+        } else if self
+            .state
+            .is_token_equal_to_prim(&token, "tracingparagraphs")
+        {
+            IntegerVariable::TracingParagraphs
         } else {
             panic!("unimplemented");
         }

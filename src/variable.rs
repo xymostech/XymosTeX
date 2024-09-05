@@ -7,6 +7,7 @@ pub enum IntegerVariable {
     CountRegister(u8),
     Pretolerance,
     Tolerance,
+    TracingParagraphs,
 }
 
 impl IntegerVariable {
@@ -25,6 +26,11 @@ impl IntegerVariable {
                 &IntegerParameter::Tolerance,
                 value,
             ),
+            Self::TracingParagraphs => state.set_integer_parameter(
+                global,
+                &IntegerParameter::TracingParagraphs,
+                value,
+            ),
         }
     }
 
@@ -37,6 +43,8 @@ impl IntegerVariable {
             Self::Tolerance => {
                 state.get_integer_parameter(&IntegerParameter::Tolerance)
             }
+            Self::TracingParagraphs => state
+                .get_integer_parameter(&IntegerParameter::TracingParagraphs),
         }
     }
 }

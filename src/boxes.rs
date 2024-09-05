@@ -92,13 +92,60 @@ impl GlueSetRatio {
         }
     }
 
+    // Returns the badness of a box given the glue set ratio of that box.
     pub fn get_badness(&self) -> u64 {
+        // To quote the source code of TeX[1]:
+        //
+        // > The actual method used to compute the badness [...] produces an
+        // > integer value that is a reasonably close approximation to
+        // > $100(t/s)^3$, and all implementations of TeX should use precisely
+        // > this method.
+        //
+        // "Reasonably close" is maybe stretching it a bit in the current age of
+        // computers, but when badness starts getting large, accuracy is
+        // probably not the most important feature (since your paragraphs
+        // probably look terrible anyways!). This formula only uses integers, so
+        // it is also very portable.
+        //
+        // In our case, self.stretch is already (t/s*65536), so we just use
+        // t=self.stretch and s=65536.
+        //
+        // TODO(xymostech): We should probably represent these ratios by just
+        // storing the numerator and denominator separately, to ensure that we
+        // get this calculation exactly correct. For now, the approximation of
+        // this slight approximation works fine.
+        //
+        // [1]: From TeX-Live's version at of TeX at line 2317:
+        //      https://github.com/TeX-Live/texlive-source/blob/trunk/texk/web2c/tex.web#L2317
         match self.kind {
-            GlueSetRatioKind::Finite => (100.0
-                * ((self.stretch as f64) / 65536.0).powi(3))
-            .abs()
-            .round()
-            .min(10000.0) as u64,
+            GlueSetRatioKind::Finite => {
+                let inf_bad = 10000;
+                let r: u64;
+                let t: u64 = self.stretch.abs() as u64;
+                let s: u64 = 65536;
+                if t == 0 {
+                    return 0;
+                }
+
+                // 297^3 = 99.94 * 2^{18}, so we can use it to scale up the
+                // numerator and denominator before cubing to retain most of the
+                // precision without using floats.
+                if t <= 7230584 {
+                    r = t * 297 / s;
+                } else if s >= 1663497 {
+                    r = t / (s / 297);
+                } else {
+                    r = t;
+                }
+
+                if r > 1290 {
+                    return inf_bad;
+                }
+
+                // We add a little bit before dividing to compensate for 297^3
+                // not being quite 100 * 2^{18}.
+                (r * r * r + 0o400_000) / 0o1_000_000
+            }
             _ => 0,
         }
     }
@@ -113,17 +160,6 @@ pub enum GlueSetResult {
 }
 
 impl GlueSetResult {
-    pub fn get_badness(&self) -> u64 {
-        match self {
-            GlueSetResult::InsufficientShrink => 10000,
-            GlueSetResult::ZeroStretch => 10000,
-            GlueSetResult::ZeroShrink => 10000,
-            GlueSetResult::GlueSetRatio(glue_set_ratio) => {
-                glue_set_ratio.get_badness()
-            }
-        }
-    }
-
     pub fn to_glue_set_ratio(self) -> GlueSetRatio {
         match self {
             GlueSetResult::InsufficientShrink => {
@@ -629,6 +665,26 @@ mod tests {
             )
             .to_glue_set_ratio(),
             GlueSetRatio::from(GlueSetRatioKind::Finite, 0.0),
+        );
+    }
+
+    #[test]
+    fn it_correctly_calculates_badness_for_glue() {
+        assert_eq!(
+            GlueSetRatio::from(GlueSetRatioKind::Finite, 1.0).get_badness(),
+            100
+        );
+        assert_eq!(
+            GlueSetRatio::from(GlueSetRatioKind::Finite, 2.0).get_badness(),
+            800
+        );
+        assert_eq!(
+            GlueSetRatio::from(GlueSetRatioKind::Finite, 3.0).get_badness(),
+            2698
+        );
+        assert_eq!(
+            GlueSetRatio::from(GlueSetRatioKind::Finite, 4.0).get_badness(),
+            6396
         );
     }
 }

@@ -68,6 +68,7 @@ const ALL_PRIMITIVES: &[&str] = &[
     "parfillskip",
     "pretolerance",
     "tolerance",
+    "tracingparagraphs",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {
@@ -83,6 +84,7 @@ fn is_primitive(maybe_prim: &str) -> bool {
 pub enum IntegerParameter {
     Pretolerance,
     Tolerance,
+    TracingParagraphs,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
