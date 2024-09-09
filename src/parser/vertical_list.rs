@@ -39,6 +39,9 @@ impl<'a> Parser<'a> {
                 tolerance: self
                     .state
                     .get_integer_parameter(&IntegerParameter::Tolerance),
+                visual_incompatibility_demerits: self
+                    .state
+                    .get_integer_parameter(&IntegerParameter::AdjDemerits),
             },
             self.state,
         );

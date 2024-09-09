@@ -11,11 +11,12 @@ use std::collections::HashMap;
 pub struct LineBreakingParams {
     pub hsize: Dimen,
     pub tolerance: i32,
+    pub visual_incompatibility_demerits: i32,
 }
 
 #[derive(Debug, PartialEq)]
 struct LineBreakingResult {
-    total_demerits: u64,
+    total_demerits: i64,
     all_breaks: Vec<LineBreakPoint>,
 }
 
@@ -72,10 +73,55 @@ fn get_list_indices_for_breaks(
     Some((start_index, end_index))
 }
 
+#[derive(Debug, Clone, Copy)]
+enum VisualClassification {
+    VeryLoose = 0,
+    Loose = 1,
+    Decent = 2,
+    Tight = 3,
+}
+
+impl VisualClassification {
+    fn is_adjacent(&self, other: &VisualClassification) -> bool {
+        match (self, other) {
+            (VisualClassification::VeryLoose, VisualClassification::Decent) => {
+                false
+            }
+            (VisualClassification::VeryLoose, VisualClassification::Tight) => {
+                false
+            }
+            (VisualClassification::Loose, VisualClassification::Tight) => false,
+            (VisualClassification::Decent, VisualClassification::VeryLoose) => {
+                false
+            }
+            (VisualClassification::Tight, VisualClassification::Loose) => false,
+            (VisualClassification::Tight, VisualClassification::VeryLoose) => {
+                false
+            }
+            (_, _) => true,
+        }
+    }
+
+    fn from_badness(badness: u64, shrink: bool) -> VisualClassification {
+        if badness >= 100 {
+            VisualClassification::VeryLoose
+        } else if badness >= 13 {
+            if shrink {
+                VisualClassification::Tight
+            } else {
+                VisualClassification::Loose
+            }
+        } else {
+            VisualClassification::Decent
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct LineBreakBacktrace {
     prev_break: Option<LineBreakPoint>,
-    total_demerits: u64,
+    total_demerits: i64,
+    prev_line_classification: VisualClassification,
 }
 
 #[derive(Debug)]
@@ -97,6 +143,7 @@ impl LineBreakGraph {
             LineBreakBacktrace {
                 prev_break: None,
                 total_demerits: 0,
+                prev_line_classification: VisualClassification::Decent,
             },
         );
 
@@ -104,10 +151,19 @@ impl LineBreakGraph {
     }
 
     // Find the best demerits from the start to a given node, if one exists
-    fn get_best_demerits_to_node(&self, to: &LineBreakPoint) -> Option<u64> {
+    fn get_best_demerits_to_node(&self, to: &LineBreakPoint) -> Option<i64> {
         self.best_path_to
             .get(to)
             .map(|backtrace| backtrace.total_demerits)
+    }
+
+    fn get_classification_of_best_line_before_node(
+        &self,
+        to: &LineBreakPoint,
+    ) -> Option<VisualClassification> {
+        self.best_path_to
+            .get(to)
+            .map(|backtrace| backtrace.prev_line_classification)
     }
 
     // Update the best path to a given node
@@ -115,13 +171,15 @@ impl LineBreakGraph {
         &mut self,
         to: &LineBreakPoint,
         from: &LineBreakPoint,
-        demerits: u64,
+        demerits: i64,
+        prev_line_classification: VisualClassification,
     ) {
         self.best_path_to.insert(
             *to,
             LineBreakBacktrace {
                 prev_break: Some(*from),
                 total_demerits: demerits,
+                prev_line_classification,
             },
         );
     }
@@ -179,7 +237,11 @@ fn get_available_break_indices(
 enum DemeritResult {
     Overfull,
     TooLargeBadness,
-    Demerits { demerits: u64, badness: u64 },
+    Demerits {
+        demerits: i64,
+        badness: u64,
+        classification: VisualClassification,
+    },
 }
 
 fn get_demerits_for_line_between(
@@ -188,6 +250,7 @@ fn get_demerits_for_line_between(
     state: &TeXState,
     start: &LineBreakPoint,
     end: &LineBreakPoint,
+    previous_classification: Option<VisualClassification>,
 ) -> Option<DemeritResult> {
     let (start_index, end_index) =
         get_list_indices_for_breaks(list, start, end)?;
@@ -221,17 +284,38 @@ fn get_demerits_for_line_between(
         return Some(DemeritResult::TooLargeBadness);
     }
 
-    let line_penalty: u64 = 10;
+    let visual_classification = VisualClassification::from_badness(
+        badness,
+        params.hsize < line_width.space,
+    );
+    let adjacent_classification_demerits =
+        if let Some(previous_classification) = previous_classification {
+            if visual_classification.is_adjacent(&previous_classification) {
+                0
+            } else {
+                params.visual_incompatibility_demerits as i64
+            }
+        } else {
+            0
+        };
+
+    let additional_demerits: i64 = adjacent_classification_demerits;
+
+    let line_penalty: i64 = 10;
     let penalty: i64 = 0;
-    let demerits = if 0 <= penalty && penalty < 10000 {
-        (line_penalty + badness).min(10000).pow(2) + (penalty.pow(2) as u64)
+    let base_demerits = if 0 <= penalty && penalty < 10000 {
+        (line_penalty + badness as i64).min(10000).pow(2) + penalty.pow(2)
     } else if -10000 < penalty && penalty < 0 {
-        (line_penalty + badness).min(10000).pow(2) - (penalty.pow(2) as u64)
+        (line_penalty + badness as i64).min(10000).pow(2) - penalty.pow(2)
     } else {
-        (line_penalty + badness).min(10000).pow(2)
+        (line_penalty + badness as i64).min(10000).pow(2)
     };
 
-    Some(DemeritResult::Demerits { demerits, badness })
+    Some(DemeritResult::Demerits {
+        demerits: base_demerits + additional_demerits,
+        badness,
+        classification: visual_classification,
+    })
 }
 
 // Given a horizontal list, try to generate the best line breaks which match the
@@ -272,16 +356,20 @@ fn generate_best_list_break_option_with_params(
         next_feasible_line_break_number += 1;
 
         let mut maybe_best_backwards_path: Option<LineBreakPoint> = None;
-        let mut best_total_demerits: u64 = 0;
+        let mut best_classification: Option<VisualClassification> = None;
+        let mut best_total_demerits: i64 = 0;
         for previous_break in reachable_previous_breaks.clone().iter() {
             let previous_demerits =
                 graph.get_best_demerits_to_node(previous_break).unwrap();
+            let previous_classification = graph
+                .get_classification_of_best_line_before_node(previous_break);
             if let Some(demerits) = get_demerits_for_line_between(
                 list,
                 params,
                 state,
                 previous_break,
                 line_break,
+                previous_classification,
             ) {
                 match demerits {
                     DemeritResult::Overfull => {
@@ -322,13 +410,19 @@ fn generate_best_list_break_option_with_params(
                                 );
                             }
                             maybe_best_backwards_path = Some(*previous_break);
+                            best_classification =
+                                Some(VisualClassification::Tight);
                             // When this happens, even though this is a very bad
                             // situation, we add no demerits.
                             best_total_demerits = previous_demerits;
                         }
                     }
                     DemeritResult::TooLargeBadness => {} // ignore
-                    DemeritResult::Demerits { demerits, badness } => {
+                    DemeritResult::Demerits {
+                        demerits,
+                        badness,
+                        classification,
+                    } => {
                         if should_log {
                             println!(
                                 "@ via @@{:?} b={} p=x d={}",
@@ -342,6 +436,7 @@ fn generate_best_list_break_option_with_params(
                                 <= best_total_demerits
                         {
                             maybe_best_backwards_path = Some(*previous_break);
+                            best_classification = Some(classification);
                             best_total_demerits = demerits + previous_demerits;
                         }
                     }
@@ -359,8 +454,9 @@ fn generate_best_list_break_option_with_params(
                 // TODO(xymostech): Keep track of the line number of a given active
                 // node to print here.
                 println!(
-                    "@@{:?}: line x.x t={} -> @@{:?}",
+                    "@@{:?}: line x.{} t={} -> @@{:?}",
                     feasible_line_break_numbers[line_break],
+                    best_classification.unwrap() as u8,
                     best_total_demerits,
                     feasible_line_break_numbers[&best_backwards_path]
                 );
@@ -370,6 +466,7 @@ fn generate_best_list_break_option_with_params(
                 line_break,
                 &best_backwards_path,
                 best_total_demerits,
+                best_classification.unwrap(),
             );
         }
     }
@@ -418,7 +515,7 @@ mod tests {
         paragraph: &[&str],
         lines: &[&str],
         params: LineBreakingParams,
-        expected_demerits: u64,
+        expected_demerits: i64,
     ) {
         with_parser(lines, |parser| {
             while parser.is_assignment_head() {
@@ -431,6 +528,12 @@ mod tests {
 
             with_parser(paragraph, |parser| {
                 let hlist = parser.parse_horizontal_list(false, false);
+
+                parser.state.set_integer_parameter(
+                    false,
+                    &IntegerParameter::TracingParagraphs,
+                    1,
+                );
 
                 let best_break = generate_best_list_break_option_with_params(
                     &hlist,
@@ -456,11 +559,19 @@ mod tests {
                 {
                     if actual_box != expected_line {
                         println!("First different line: {}", index);
+                        println!(
+                            "{:?} elems vs {:?} elems",
+                            actual_box.to_chars(),
+                            expected_line.to_chars()
+                        );
                         break;
                     }
                 }
 
-                assert_eq!(actual_boxes, expected_lines);
+                assert!(
+                    actual_boxes == expected_lines,
+                    "assertion failed: Lines didn't match up!"
+                );
             });
         });
     }
@@ -482,6 +593,7 @@ mod tests {
             LineBreakingParams {
                 hsize: Dimen::from_unit(150.0, Unit::Point),
                 tolerance: 10000,
+                visual_incompatibility_demerits: 0,
             },
             100,
         );
@@ -502,6 +614,7 @@ mod tests {
             LineBreakingParams {
                 hsize: Dimen::from_unit(105.0, Unit::Point),
                 tolerance: 10000,
+                visual_incompatibility_demerits: 0,
             },
             12100 + 100,
         );
@@ -529,11 +642,9 @@ mod tests {
             LineBreakingParams {
                 hsize: Dimen::from_unit(105.0, Unit::Point),
                 tolerance: 10000,
+                visual_incompatibility_demerits: 10000,
             },
-            // NOTE: should be 22100 for first line and 10100 for last
-            // line due to visual incompatibility, which hasn't been
-            // implemented yet
-            12100 + 12100 + 12100 + 12100 + 100,
+            22100 + 12100 + 12100 + 12100 + 10100,
         );
     }
 
@@ -559,25 +670,17 @@ mod tests {
                 r"\line{{\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
                 r"\line{{\a\a\a\a} {\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a}}%",
                 r"\line{{\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a} {\a} {\a\a\a\a}}%",
-                // NOTE: the commented lines are correct here. We choose the
-                // incorrect breaks here because we don't take into account
-                // visual incompatibility, which allows for multiple breaking
-                // options at some points in the paragraph.
-                //r"\line{{\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}}%",
-                //r"\line{{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a}}%",
-                //r"\line{{\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
-                r"\line{{\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a} {\a}}%",
-                r"\line{{\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a}}%",
-                r"\line{{\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
+                r"\line{{\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}}%",
+                r"\line{{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a}}%",
+                r"\line{{\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
                 r"\line{{\a\a\a\a} {\a} {\a\a\a}\hskip0pt plus1fil}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(400.0, Unit::Point),
                 tolerance: 10000,
+                visual_incompatibility_demerits: 10000,
             },
-            // NOTE: should be 20000 more due to visual incompatibility, which
-            // hasn't been implemented yet.
-            100 + 324 + 656100 + 656100 + 656100 + 100 + 324 + 100,
+            100 + 324 + 666100 + 656100 + 656100 + 10100 + 324 + 100,
         );
     }
 
@@ -597,6 +700,7 @@ mod tests {
             LineBreakingParams {
                 hsize: Dimen::from_unit(80.0, Unit::Point),
                 tolerance: 10000,
+                visual_incompatibility_demerits: 0,
             },
             100,
         );
@@ -622,6 +726,7 @@ mod tests {
             LineBreakingParams {
                 hsize: Dimen::from_unit(110.0, Unit::Point),
                 tolerance: 2700,
+                visual_incompatibility_demerits: 0,
             },
             // The last 100 should be zero because this break is "forced".
             7333264 + 7333264 + 100,
@@ -644,6 +749,7 @@ mod tests {
             LineBreakingParams {
                 hsize: Dimen::from_unit(110.0, Unit::Point),
                 tolerance: 2600,
+                visual_incompatibility_demerits: 0,
             },
             100,
         );
@@ -671,6 +777,7 @@ mod tests {
             LineBreakingParams {
                 hsize: Dimen::from_unit(120.0, Unit::Point),
                 tolerance: 9999,
+                visual_incompatibility_demerits: 0,
             },
             // This should actually be zero, because the last break is "forced"
             // and in this case we don't add any demerits (in this case we're
@@ -698,9 +805,66 @@ mod tests {
             LineBreakingParams {
                 hsize: Dimen::from_unit(120.0, Unit::Point),
                 tolerance: 10000,
+                visual_incompatibility_demerits: 10000,
             },
-            // NOTE: should be 20000 higher due to visual incompatibility
-            100000000 + 100000000 + 100,
+            100010000 + 100000000 + 10100,
+        );
+    }
+
+    #[test]
+    fn it_considers_visual_incompatibility_when_making_linebreaks() {
+        let paragraph = [
+            r"\def\x{\hbox to20pt{x}}%",
+            r"\def\spa{\hskip6pt plus2pt minus3.5pt}%",
+            r"\def\spb{\hskip5pt plus15pt minus2.5pt}%",
+            r"\x\spb\x\spb\x\spa%",
+            r"\x\spa\x\spa\x\spa\x\spb%",
+            r"\x\spb\x\spb\x\spa%",
+            r"\x\spa\x\spa\x\spa\x\spb%",
+            r"\x\spb\x\spb\x%",
+            r"\hskip0pt plus1fil%",
+        ];
+
+        expect_paragraph_to_parse_to_lines(
+            &paragraph,
+            &[
+                r"\def\x{\hbox to20pt{x}}%",
+                r"\def\spa{\hskip6pt plus2pt minus3.5pt}%",
+                r"\def\spb{\hskip5pt plus15pt minus2.5pt}%",
+                r"\def\line#1{\hbox to90pt{#1}}%",
+                r"\line{\x\spb\x\spb\x}%",
+                r"\line{\x\spa\x\spa\x\spa\x}%",
+                r"\line{\x\spb\x\spb\x}%",
+                r"\line{\x\spa\x\spa\x\spa\x}%",
+                r"\line{\x\spb\x\spb\x\hskip0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(90.0, Unit::Point),
+                tolerance: 100,
+                visual_incompatibility_demerits: 0,
+            },
+            9132,
+        );
+
+        expect_paragraph_to_parse_to_lines(
+            &paragraph,
+            &[
+                r"\def\x{\hbox to20pt{x}}%",
+                r"\def\spa{\hskip6pt plus2pt minus3.5pt}%",
+                r"\def\spb{\hskip5pt plus15pt minus2.5pt}%",
+                r"\def\line#1{\hbox to90pt{#1}}%",
+                r"\line{\x\spb\x\spb\x\spa\x}%",
+                r"\line{\x\spa\x\spa\x\spb\x}%",
+                r"\line{\x\spb\x\spa\x\spa\x}%",
+                r"\line{\x\spa\x\spb\x\spb\x}%",
+                r"\line{\x\hskip0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(90.0, Unit::Point),
+                tolerance: 100,
+                visual_incompatibility_demerits: 100,
+            },
+            9150,
         );
     }
 }

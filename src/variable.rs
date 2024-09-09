@@ -5,9 +5,7 @@ use crate::state::{DimenParameter, GlueParameter, IntegerParameter, TeXState};
 #[derive(PartialEq, Eq, Debug)]
 pub enum IntegerVariable {
     CountRegister(u8),
-    Pretolerance,
-    Tolerance,
-    TracingParagraphs,
+    Parameter(IntegerParameter),
 }
 
 impl IntegerVariable {
@@ -16,35 +14,18 @@ impl IntegerVariable {
             Self::CountRegister(index) => {
                 state.set_count(global, *index, value)
             }
-            Self::Pretolerance => state.set_integer_parameter(
-                global,
-                &IntegerParameter::Pretolerance,
-                value,
-            ),
-            Self::Tolerance => state.set_integer_parameter(
-                global,
-                &IntegerParameter::Tolerance,
-                value,
-            ),
-            Self::TracingParagraphs => state.set_integer_parameter(
-                global,
-                &IntegerParameter::TracingParagraphs,
-                value,
-            ),
+            Self::Parameter(parameter) => {
+                state.set_integer_parameter(global, parameter, value)
+            }
         }
     }
 
     pub fn get(&self, state: &TeXState) -> i32 {
         match self {
             Self::CountRegister(index) => state.get_count(*index),
-            Self::Pretolerance => {
-                state.get_integer_parameter(&IntegerParameter::Pretolerance)
+            Self::Parameter(parameter) => {
+                state.get_integer_parameter(parameter)
             }
-            Self::Tolerance => {
-                state.get_integer_parameter(&IntegerParameter::Tolerance)
-            }
-            Self::TracingParagraphs => state
-                .get_integer_parameter(&IntegerParameter::TracingParagraphs),
         }
     }
 }
@@ -54,7 +35,7 @@ pub enum DimenVariable {
     BoxWidth(u8),
     BoxHeight(u8),
     BoxDepth(u8),
-    HSize,
+    Parameter(DimenParameter),
 }
 
 impl DimenVariable {
@@ -69,7 +50,7 @@ impl DimenVariable {
             Self::BoxDepth(index) => state
                 .with_box(*index, |tex_box| *tex_box.depth())
                 .unwrap_or_else(Dimen::zero),
-            Self::HSize => state.get_dimen_parameter(&DimenParameter::HSize),
+            Self::Parameter(parameter) => state.get_dimen_parameter(parameter),
         }
     }
 
@@ -90,52 +71,30 @@ impl DimenVariable {
                     *tex_box.mut_depth() = new_dimen
                 });
             }
-            Self::HSize => state.set_dimen_parameter(
-                global,
-                &DimenParameter::HSize,
-                &new_dimen,
-            ),
+            Self::Parameter(parameter) => {
+                state.set_dimen_parameter(global, parameter, &new_dimen)
+            }
         }
     }
 }
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum GlueVariable {
-    ParSkip,
-    SpaceSkip,
-    ParFillSkip,
+    Parameter(GlueParameter),
 }
 
 impl GlueVariable {
     pub fn get(&self, state: &TeXState) -> Glue {
         match self {
-            Self::ParSkip => state.get_glue_parameter(&GlueParameter::ParSkip),
-            Self::SpaceSkip => {
-                state.get_glue_parameter(&GlueParameter::SpaceSkip)
-            }
-            Self::ParFillSkip => {
-                state.get_glue_parameter(&GlueParameter::ParFillSkip)
-            }
+            Self::Parameter(parameter) => state.get_glue_parameter(parameter),
         }
     }
 
     pub fn set(&self, state: &TeXState, global: bool, new_glue: Glue) {
         match self {
-            Self::ParSkip => state.set_glue_parameter(
-                global,
-                &GlueParameter::ParSkip,
-                &new_glue,
-            ),
-            Self::SpaceSkip => state.set_glue_parameter(
-                global,
-                &GlueParameter::SpaceSkip,
-                &new_glue,
-            ),
-            Self::ParFillSkip => state.set_glue_parameter(
-                global,
-                &GlueParameter::ParFillSkip,
-                &new_glue,
-            ),
+            Self::Parameter(parameter) => {
+                state.set_glue_parameter(global, parameter, &new_glue)
+            }
         }
     }
 }
@@ -243,7 +202,7 @@ mod tests {
     fn it_gets_and_sets_dimen_parameters() {
         let state = TeXState::new();
 
-        let param_variable = DimenVariable::HSize;
+        let param_variable = DimenVariable::Parameter(DimenParameter::HSize);
 
         assert_eq!(
             param_variable.get(&state),
@@ -287,7 +246,7 @@ mod tests {
     fn it_gets_and_sets_glue_parameters() {
         let state = TeXState::new();
 
-        let parskip_variable = GlueVariable::ParSkip;
+        let parskip_variable = GlueVariable::Parameter(GlueParameter::ParSkip);
 
         let default_value = Glue {
             space: Dimen::zero(),
@@ -315,8 +274,9 @@ mod tests {
     fn it_gets_and_sets_integer_parameters() {
         let state = TeXState::new();
 
-        let tolerance = IntegerVariable::Tolerance;
-        let pretolerance = IntegerVariable::Pretolerance;
+        let tolerance = IntegerVariable::Parameter(IntegerParameter::Tolerance);
+        let pretolerance =
+            IntegerVariable::Parameter(IntegerParameter::Pretolerance);
 
         assert_eq!(tolerance.get(&state), 200);
         assert_eq!(pretolerance.get(&state), 100);

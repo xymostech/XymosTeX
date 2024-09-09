@@ -69,6 +69,7 @@ const ALL_PRIMITIVES: &[&str] = &[
     "pretolerance",
     "tolerance",
     "tracingparagraphs",
+    "adjdemerits",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {
@@ -80,19 +81,20 @@ fn is_primitive(maybe_prim: &str) -> bool {
     false
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntegerParameter {
     Pretolerance,
     Tolerance,
     TracingParagraphs,
+    AdjDemerits,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DimenParameter {
     HSize,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GlueParameter {
     ParSkip,
     SpaceSkip,
@@ -206,6 +208,8 @@ impl TeXStateInner {
         // reset to 200 in plain.tex. Remove this once we run that.
         initial_integer_registers.insert(IntegerParameter::Tolerance, 200);
         initial_integer_registers.insert(IntegerParameter::Pretolerance, 100);
+        // TODO(emily): This is set in plain.tex. Remove this once we run that.
+        initial_integer_registers.insert(IntegerParameter::AdjDemerits, 10000);
 
         let mut initial_dimen_registers = HashMap::new();
         // TODO(emily): This is set in plain.tex. Remove this once we run that.

@@ -1,4 +1,5 @@
 use crate::parser::Parser;
+use crate::state::{DimenParameter, GlueParameter, IntegerParameter};
 use crate::variable::{DimenVariable, GlueVariable, IntegerVariable};
 
 impl<'a> Parser<'a> {
@@ -8,6 +9,7 @@ impl<'a> Parser<'a> {
             "tolerance",
             "pretolerance",
             "tracingparagraphs",
+            "adjdemerits",
         ])
     }
 
@@ -18,14 +20,16 @@ impl<'a> Parser<'a> {
             let index = self.parse_8bit_number();
             IntegerVariable::CountRegister(index)
         } else if self.state.is_token_equal_to_prim(&token, "tolerance") {
-            IntegerVariable::Tolerance
+            IntegerVariable::Parameter(IntegerParameter::Tolerance)
         } else if self.state.is_token_equal_to_prim(&token, "pretolerance") {
-            IntegerVariable::Pretolerance
+            IntegerVariable::Parameter(IntegerParameter::Pretolerance)
         } else if self
             .state
             .is_token_equal_to_prim(&token, "tracingparagraphs")
         {
-            IntegerVariable::TracingParagraphs
+            IntegerVariable::Parameter(IntegerParameter::TracingParagraphs)
+        } else if self.state.is_token_equal_to_prim(&token, "adjdemerits") {
+            IntegerVariable::Parameter(IntegerParameter::AdjDemerits)
         } else {
             panic!("unimplemented");
         }
@@ -50,7 +54,7 @@ impl<'a> Parser<'a> {
             let index = self.parse_8bit_number();
             DimenVariable::BoxDepth(index)
         } else if self.state.is_token_equal_to_prim(&token, "hsize") {
-            DimenVariable::HSize
+            DimenVariable::Parameter(DimenParameter::HSize)
         } else {
             panic!("unimplemented");
         }
@@ -68,11 +72,11 @@ impl<'a> Parser<'a> {
         let token = self.lex_expanded_token().unwrap();
 
         if self.state.is_token_equal_to_prim(&token, "parskip") {
-            GlueVariable::ParSkip
+            GlueVariable::Parameter(GlueParameter::ParSkip)
         } else if self.state.is_token_equal_to_prim(&token, "spaceskip") {
-            GlueVariable::SpaceSkip
+            GlueVariable::Parameter(GlueParameter::SpaceSkip)
         } else if self.state.is_token_equal_to_prim(&token, "parfillskip") {
-            GlueVariable::ParFillSkip
+            GlueVariable::Parameter(GlueParameter::ParFillSkip)
         } else {
             panic!("unimplemented");
         }
@@ -135,13 +139,30 @@ mod tests {
     }
 
     #[test]
+    fn it_parses_other_dimen_variables() {
+        with_parser(&["\\hsize%"], |parser| {
+            assert!(parser.is_dimen_variable_head());
+            assert_eq!(
+                parser.parse_dimen_variable(),
+                DimenVariable::Parameter(DimenParameter::HSize)
+            );
+        });
+    }
+
+    #[test]
     fn it_parses_glue_parameter_variables() {
         with_parser(&[r"\parskip%", r"\spaceskip%"], |parser| {
             assert!(parser.is_glue_variable_head());
-            assert_eq!(parser.parse_glue_variable(), GlueVariable::ParSkip,);
+            assert_eq!(
+                parser.parse_glue_variable(),
+                GlueVariable::Parameter(GlueParameter::ParSkip),
+            );
 
             assert!(parser.is_glue_variable_head());
-            assert_eq!(parser.parse_glue_variable(), GlueVariable::SpaceSkip,);
+            assert_eq!(
+                parser.parse_glue_variable(),
+                GlueVariable::Parameter(GlueParameter::SpaceSkip),
+            );
         });
     }
 
@@ -151,13 +172,13 @@ mod tests {
             assert!(parser.is_integer_variable_head());
             assert_eq!(
                 parser.parse_integer_variable(),
-                IntegerVariable::Tolerance
+                IntegerVariable::Parameter(IntegerParameter::Tolerance)
             );
 
             assert!(parser.is_integer_variable_head());
             assert_eq!(
                 parser.parse_integer_variable(),
-                IntegerVariable::Pretolerance
+                IntegerVariable::Parameter(IntegerParameter::Pretolerance)
             );
         });
     }
