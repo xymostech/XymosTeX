@@ -74,48 +74,40 @@ fn get_list_indices_for_breaks(
 
 #[derive(Debug, Clone)]
 struct LineBreakBacktrace {
-    prev_break: Option<usize>,
+    prev_break: Option<LineBreakPoint>,
     total_demerits: u64,
 }
 
 #[derive(Debug)]
-struct LineBreakGraph<'a> {
-    // A list of places that can be broken at
-    break_nodes: &'a Vec<LineBreakPoint>,
+struct LineBreakGraph {
     // A list of backtraces from a given breakpoint to the best break before it.
     // Each value corresponds to an entry in break_nodes
-    best_path_to: Vec<Option<LineBreakBacktrace>>,
+    best_path_to: HashMap<LineBreakPoint, LineBreakBacktrace>,
 }
 
-impl<'a> LineBreakGraph<'a> {
+impl LineBreakGraph {
     // Set up an empty line breaking graph given a list of indices.
-    fn new_from_break_indices(break_indices: &'a Vec<LineBreakPoint>) -> Self {
+    fn new() -> Self {
         let mut graph = LineBreakGraph {
-            break_nodes: break_indices,
-            best_path_to: Vec::new(),
+            best_path_to: HashMap::new(),
         };
 
-        graph.best_path_to.push(Some(LineBreakBacktrace {
-            prev_break: None,
-            total_demerits: 0,
-        }));
-        graph.best_path_to.resize(2 + break_indices.len(), None);
+        graph.best_path_to.insert(
+            LineBreakPoint::Start,
+            LineBreakBacktrace {
+                prev_break: None,
+                total_demerits: 0,
+            },
+        );
 
         graph
     }
 
-    fn index_of(&self, node: &LineBreakPoint) -> Option<usize> {
-        self.break_nodes.iter().position(|n| n == node)
-    }
-
     // Find the best demerits from the start to a given node, if one exists
     fn get_best_demerits_to_node(&self, to: &LineBreakPoint) -> Option<u64> {
-        let to_index = self.index_of(to)?;
-        if let Some(backtrace) = &self.best_path_to[to_index] {
-            Some(backtrace.total_demerits)
-        } else {
-            None
-        }
+        self.best_path_to
+            .get(to)
+            .map(|backtrace| backtrace.total_demerits)
     }
 
     // Update the best path to a given node
@@ -124,15 +116,14 @@ impl<'a> LineBreakGraph<'a> {
         to: &LineBreakPoint,
         from: &LineBreakPoint,
         demerits: u64,
-    ) -> Option<()> {
-        let to_index = self.index_of(to)?;
-        let from_index = self.index_of(from)?;
-        self.best_path_to[to_index] = Some(LineBreakBacktrace {
-            prev_break: Some(from_index),
-            total_demerits: demerits,
-        });
-
-        Some(())
+    ) {
+        self.best_path_to.insert(
+            *to,
+            LineBreakBacktrace {
+                prev_break: Some(*from),
+                total_demerits: demerits,
+            },
+        );
     }
 
     // Return the best list of breaks to the end node
@@ -141,17 +132,17 @@ impl<'a> LineBreakGraph<'a> {
             self.get_best_demerits_to_node(&LineBreakPoint::End)?;
         let mut all_breaks = vec![LineBreakPoint::End];
         let mut curr_break_backtrace = if let Some(backtrace) =
-            &self.best_path_to[self.index_of(&LineBreakPoint::End)?]
+            self.best_path_to.get(&LineBreakPoint::End)
         {
             backtrace
         } else {
             return None;
         };
 
-        while let Some(prev_index) = curr_break_backtrace.prev_break {
-            all_breaks.insert(0, self.break_nodes[prev_index]);
+        while let Some(prev_break) = curr_break_backtrace.prev_break {
+            all_breaks.insert(0, prev_break);
             curr_break_backtrace =
-                if let Some(backtrace) = &self.best_path_to[prev_index] {
+                if let Some(backtrace) = &self.best_path_to.get(&prev_break) {
                     backtrace
                 } else {
                     return None;
@@ -256,7 +247,7 @@ fn generate_best_list_break_option_with_params(
     // is the badness of setting the line between those break points.
 
     let line_breaks = get_available_break_indices(&list);
-    let mut graph = LineBreakGraph::new_from_break_indices(&line_breaks);
+    let mut graph = LineBreakGraph::new();
 
     // Keep track of previous breakpoints that we've looked at already, that are
     // still reachable from the current break without being overfull.
