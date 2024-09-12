@@ -4,7 +4,7 @@ use crate::boxes::{
 use crate::dimension::Dimen;
 use crate::glue::Glue;
 use crate::list::HorizontalListElem;
-use crate::state::{IntegerParameter, TeXState};
+use crate::state::TeXState;
 
 use std::collections::HashMap;
 
@@ -12,6 +12,10 @@ pub struct LineBreakingParams {
     pub hsize: Dimen,
     pub tolerance: i32,
     pub visual_incompatibility_demerits: i32,
+
+    // Whether we should log information about the line breaking procedure. Set
+    // by \tracingparagraphs
+    pub should_log: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -346,15 +350,7 @@ fn generate_best_list_break_option_with_params(
         HashMap::new();
     feasible_line_break_numbers.insert(LineBreakPoint::Start, 0);
 
-    // Whether we should log information about the line breaking procedure
-    let should_log =
-        state.get_integer_parameter(&IntegerParameter::TracingParagraphs) > 0;
-
     for line_break in line_breaks.iter().skip(1) {
-        feasible_line_break_numbers
-            .insert(*line_break, next_feasible_line_break_number);
-        next_feasible_line_break_number += 1;
-
         let mut maybe_best_backwards_path: Option<LineBreakPoint> = None;
         let mut best_classification: Option<VisualClassification> = None;
         let mut best_total_demerits: i64 = 0;
@@ -403,7 +399,7 @@ fn generate_best_list_break_option_with_params(
                             // previous break we are looking at will be the
                             // furthest along break, which will produce the
                             // smallest overfull line.
-                            if should_log {
+                            if params.should_log {
                                 println!(
                                     "@ via @@{:?} b=* p=x d=*",
                                     feasible_line_break_numbers[previous_break]
@@ -423,7 +419,7 @@ fn generate_best_list_break_option_with_params(
                         badness,
                         classification,
                     } => {
-                        if should_log {
+                        if params.should_log {
                             println!(
                                 "@ via @@{:?} b={} p=x d={}",
                                 feasible_line_break_numbers[previous_break],
@@ -450,7 +446,11 @@ fn generate_best_list_break_option_with_params(
         }
 
         if let Some(best_backwards_path) = maybe_best_backwards_path {
-            if should_log {
+            feasible_line_break_numbers
+                .insert(*line_break, next_feasible_line_break_number);
+            next_feasible_line_break_number += 1;
+
+            if params.should_log {
                 // TODO(xymostech): Keep track of the line number of a given active
                 // node to print here.
                 println!(
@@ -529,12 +529,6 @@ mod tests {
             with_parser(paragraph, |parser| {
                 let hlist = parser.parse_horizontal_list(false, false);
 
-                parser.state.set_integer_parameter(
-                    false,
-                    &IntegerParameter::TracingParagraphs,
-                    1,
-                );
-
                 let best_break = generate_best_list_break_option_with_params(
                     &hlist,
                     &params,
@@ -594,6 +588,7 @@ mod tests {
                 hsize: Dimen::from_unit(150.0, Unit::Point),
                 tolerance: 10000,
                 visual_incompatibility_demerits: 0,
+                should_log: true,
             },
             100,
         );
@@ -615,6 +610,7 @@ mod tests {
                 hsize: Dimen::from_unit(105.0, Unit::Point),
                 tolerance: 10000,
                 visual_incompatibility_demerits: 0,
+                should_log: true,
             },
             12100 + 100,
         );
@@ -643,6 +639,7 @@ mod tests {
                 hsize: Dimen::from_unit(105.0, Unit::Point),
                 tolerance: 10000,
                 visual_incompatibility_demerits: 10000,
+                should_log: true,
             },
             22100 + 12100 + 12100 + 12100 + 10100,
         );
@@ -679,6 +676,7 @@ mod tests {
                 hsize: Dimen::from_unit(400.0, Unit::Point),
                 tolerance: 10000,
                 visual_incompatibility_demerits: 10000,
+                should_log: true,
             },
             100 + 324 + 666100 + 656100 + 656100 + 10100 + 324 + 100,
         );
@@ -701,6 +699,7 @@ mod tests {
                 hsize: Dimen::from_unit(80.0, Unit::Point),
                 tolerance: 10000,
                 visual_incompatibility_demerits: 0,
+                should_log: true,
             },
             100,
         );
@@ -708,13 +707,15 @@ mod tests {
 
     #[test]
     fn it_splits_paragraphs_into_overfull_boxes_if_badness_is_low_enough() {
+        let paragraph = [
+            r"\def\sp{\hskip 1pt plus3pt{}}%",
+            r"\def\box{\hbox to50pt{a}}%",
+            r"\box\sp\box\sp\box\sp\box\sp\box%",
+            r"\hskip0pt plus1fil%",
+        ];
+
         expect_paragraph_to_parse_to_lines(
-            &[
-                r"\def\sp{\hskip 1pt plus3pt{}}%",
-                r"\def\box{\hbox to50pt{a}}%",
-                r"\box\sp\box\sp\box\sp\box\sp\box%",
-                r"\hskip0pt plus1fil%",
-            ],
+            &paragraph,
             &[
                 r"\def\line#1{\hbox to110pt{#1}}%",
                 r"\def\sp{\hskip 1pt plus3pt{}}%",
@@ -727,18 +728,14 @@ mod tests {
                 hsize: Dimen::from_unit(110.0, Unit::Point),
                 tolerance: 2700,
                 visual_incompatibility_demerits: 0,
+                should_log: true,
             },
             // The last 100 should be zero because this break is "forced".
             7333264 + 7333264 + 100,
         );
 
         expect_paragraph_to_parse_to_lines(
-            &[
-                r"\def\sp{\hskip 1pt plus3pt{}}%",
-                r"\def\box{\hbox to50pt{a}}%",
-                r"\box\sp\box\sp\box\sp\box\sp\box%",
-                r"\hskip0pt plus1fil%",
-            ],
+            &paragraph,
             &[
                 r"\def\line#1{\hbox to110pt{#1}}%",
                 r"\def\sp{\hskip 1pt plus3pt{}}%",
@@ -750,6 +747,7 @@ mod tests {
                 hsize: Dimen::from_unit(110.0, Unit::Point),
                 tolerance: 2600,
                 visual_incompatibility_demerits: 0,
+                should_log: true,
             },
             100,
         );
@@ -778,6 +776,7 @@ mod tests {
                 hsize: Dimen::from_unit(120.0, Unit::Point),
                 tolerance: 9999,
                 visual_incompatibility_demerits: 0,
+                should_log: true,
             },
             // This should actually be zero, because the last break is "forced"
             // and in this case we don't add any demerits (in this case we're
@@ -806,6 +805,7 @@ mod tests {
                 hsize: Dimen::from_unit(120.0, Unit::Point),
                 tolerance: 10000,
                 visual_incompatibility_demerits: 10000,
+                should_log: true,
             },
             100010000 + 100000000 + 10100,
         );
@@ -842,6 +842,7 @@ mod tests {
                 hsize: Dimen::from_unit(90.0, Unit::Point),
                 tolerance: 100,
                 visual_incompatibility_demerits: 0,
+                should_log: true,
             },
             9132,
         );
@@ -863,6 +864,7 @@ mod tests {
                 hsize: Dimen::from_unit(90.0, Unit::Point),
                 tolerance: 100,
                 visual_incompatibility_demerits: 100,
+                should_log: true,
             },
             9150,
         );

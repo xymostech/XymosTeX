@@ -42,6 +42,9 @@ impl<'a> Parser<'a> {
                 visual_incompatibility_demerits: self
                     .state
                     .get_integer_parameter(&IntegerParameter::AdjDemerits),
+                should_log: self.state.get_integer_parameter(
+                    &IntegerParameter::TracingParagraphs,
+                ) > 0,
             },
             self.state,
         );
