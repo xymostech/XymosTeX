@@ -21,7 +21,6 @@ struct DVIStateStack {
 
     // spacing amounts
     w: i32,
-    #[allow(dead_code)]
     x: i32,
     y: i32,
     #[allow(dead_code)]
@@ -134,6 +133,13 @@ where
             }
             DVICommand::W3(b) => {
                 state.curr_stack().w = *b;
+                state.curr_stack().h += b;
+            }
+            DVICommand::X0 => {
+                state.curr_stack().h += state.curr_stack().x;
+            }
+            DVICommand::X3(b) => {
+                state.curr_stack().x = *b;
                 state.curr_stack().h += b;
             }
             DVICommand::Down3(a) => {
@@ -500,6 +506,11 @@ mod tests {
             DVICommand::SetCharN(67),
             DVICommand::Pop,
             DVICommand::Push,
+            DVICommand::X3(2000),
+            DVICommand::X0,
+            DVICommand::SetCharN(67),
+            DVICommand::Pop,
+            DVICommand::Push,
             DVICommand::Down3(1000),
             DVICommand::SetCharN(67),
             DVICommand::Pop,
@@ -523,6 +534,7 @@ mod tests {
         assert_eq!(page.get(&(1000, 0)), Some(&char_vec));
         assert_eq!(page.get(&(2000, 0)), Some(&char_vec));
         assert_eq!(page.get(&(3000, 0)), Some(&char_vec));
+        assert_eq!(page.get(&(4000, 0)), Some(&char_vec));
         assert_eq!(page.get(&(0, 1000)), Some(&char_vec));
         assert_eq!(page.get(&(0, 2000)), Some(&char_vec));
         assert_eq!(page.get(&(0, 3000)), Some(&char_vec));
