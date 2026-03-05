@@ -703,10 +703,10 @@ impl TeXState {
     /// the process. Thus, holding onto a reference to FontMetrics can cause
     /// problems if unloaded fonts are accessed. Prefer `with_metrics_for_font`
     /// which drops the FontMetrics reference immediately after use.
-    pub fn get_metrics_for_font(
-        &self,
+    pub fn get_metrics_for_font<'a>(
+        &'a self,
         font: &Font,
-    ) -> Option<Ref<FontMetrics>> {
+    ) -> Option<Ref<'a, FontMetrics>> {
         let has_metrics = self.font_metrics.borrow().contains_key(font);
 
         if !has_metrics {

@@ -1,12 +1,10 @@
 use std::io;
 
+use crate::tfm::fixnum::Fixnum;
+
 pub struct TeXFileReader<T: io::Read> {
     reader: T,
 }
-
-const FIXNUM_SIGN_MASK: u32 = 0b1000_0000_0000_0000_0000_0000_0000_0000;
-const FIXNUM_INT_MASK: u32 = 0b0111_1111_1111_0000_0000_0000_0000_0000;
-const FIXNUM_FRAC_MASK: u32 = 0b0000_0000_0000_1111_1111_1111_1111_1111;
 
 impl<T: io::Read> TeXFileReader<T> {
     pub fn new(reader: T) -> TeXFileReader<T> {
@@ -37,21 +35,8 @@ impl<T: io::Read> TeXFileReader<T> {
         Ok(buf[0])
     }
 
-    pub fn read_fixnum(&mut self) -> io::Result<f64> {
-        let mut num = self.read_32bit_int()?;
-
-        let sign = if num & FIXNUM_SIGN_MASK == FIXNUM_SIGN_MASK {
-            num = !num + 1;
-            -1.0
-        } else {
-            1.0
-        };
-
-        let int_part: f64 = ((num & FIXNUM_INT_MASK) >> 20) as f64;
-        let frac_part: f64 =
-            ((num & FIXNUM_FRAC_MASK) as f64) / ((1 << 20) as f64);
-
-        Ok(sign * (int_part + frac_part))
+    pub fn read_fixnum(&mut self) -> io::Result<Fixnum> {
+        Ok(Fixnum::from_raw(self.read_32bit_int()?))
     }
 
     // Reads a string from the file with a maximum length of max_len. Exactly
@@ -119,11 +104,11 @@ mod tests {
         assert_eq!(reader.read_32bit_int().unwrap(), 255);
         assert_eq!(reader.read_32bit_int().unwrap(), 4294967295);
 
-        assert_eq!(reader.read_fixnum().unwrap(), 0.0);
-        assert_eq!(reader.read_fixnum().unwrap(), 1024.5);
-        assert_eq!(reader.read_fixnum().unwrap(), -0.0);
+        assert_eq!(reader.read_fixnum().unwrap().as_float(), 0.0);
+        assert_eq!(reader.read_fixnum().unwrap().as_float(), 1024.5);
+        assert_eq!(reader.read_fixnum().unwrap().as_float(), -0.0);
         assert_eq!(
-            reader.read_fixnum().unwrap(),
+            reader.read_fixnum().unwrap().as_float(),
             -2048.0 + 1.0 / (1 << 20) as f64
         );
     }

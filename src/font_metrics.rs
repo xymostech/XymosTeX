@@ -6,7 +6,6 @@ use crate::tfm::TFMFile;
 #[derive(Debug)]
 pub struct FontMetrics {
     tfm_file: TFMFile,
-    design_size: Dimen,
     scale: Dimen,
 }
 
@@ -22,11 +21,8 @@ impl FontMetrics {
             }
         }?;
 
-        let design_size = file.get_design_size();
-
         Some(FontMetrics {
             tfm_file: file,
-            design_size: Dimen::from_unit(design_size, Unit::Point),
             scale: font.scale,
         })
     }
@@ -39,29 +35,21 @@ impl FontMetrics {
         self.tfm_file.get_checksum()
     }
 
-    fn scale_dimen(&self, dimen: Dimen) -> Dimen {
-        Dimen::from_scaled_points(
-            (dimen.as_scaled_points() as i64
-                * self.scale.as_scaled_points() as i64
-                / self.design_size.as_scaled_points() as i64)
-                as i32,
-        )
-    }
-
     pub fn get_width(&self, chr: char) -> Dimen {
-        self.scale_dimen(self.tfm_file.get_width(chr))
+        self.tfm_file.get_width(chr, Some(&self.scale))
     }
 
     pub fn get_height(&self, chr: char) -> Dimen {
-        self.scale_dimen(self.tfm_file.get_height(chr))
+        self.tfm_file.get_height(chr, Some(&self.scale))
     }
 
     pub fn get_depth(&self, chr: char) -> Dimen {
-        self.scale_dimen(self.tfm_file.get_depth(chr))
+        self.tfm_file.get_depth(chr, Some(&self.scale))
     }
 
     pub fn get_font_dimension(&self, dimen_number: usize) -> Dimen {
-        self.scale_dimen(self.tfm_file.get_font_dimension(dimen_number))
+        self.tfm_file
+            .get_font_dimension(dimen_number, Some(&self.scale))
     }
 
     pub fn get_successor(&self, chr: char) -> char {
@@ -104,19 +92,28 @@ mod tests {
         })
         .unwrap();
 
+        // Not exactly twice due to rounding.
+        // \font\tenrm=cmr10 at 10pt \setbox0=\hbox{\tenrm a} \count0=\wd0 \showthe\count0
         assert_eq!(
-            tenpt_metrics.get_width('a') / 2,
-            fivept_metrics.get_width('a')
+            tenpt_metrics.get_width('a'),
+            Dimen::from_scaled_points(327681)
+        );
+        // \font\fiverm=cmr10 at 5pt \setbox0=\hbox{\fiverm a} \count0=\wd0 \showthe\count0
+        assert_eq!(
+            fivept_metrics.get_width('a'),
+            Dimen::from_scaled_points(163840)
         );
 
+        // \font\twentyrm=cmr10 at 20pt \setbox0=\hbox{\twentyrm w} \count0=\ht0 \showthe\count0
         assert_eq!(
-            twentypt_metrics.get_height('w') / 2,
-            tenpt_metrics.get_height('w')
+            twentypt_metrics.get_height('w'),
+            Dimen::from_scaled_points(564337)
         );
 
+        // \font\fiverm=cmr10 at 5pt \setbox0=\hbox{\fiverm j} \count0=\dp0 \showthe\count0
         assert_eq!(
-            twentypt_metrics.get_depth('j') / 4,
-            fivept_metrics.get_depth('j')
+            fivept_metrics.get_depth('j'),
+            Dimen::from_scaled_points(63715)
         );
     }
 
@@ -130,7 +127,7 @@ mod tests {
 
         assert_eq!(
             twentypt_metrics.get_font_dimension(5),
-            Dimen::from_scaled_points(282168 * 2)
+            Dimen::from_scaled_points(564337)
         );
     }
 

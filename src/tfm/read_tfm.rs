@@ -152,7 +152,7 @@ impl TFMFile {
     fn read_n_fixnums<T: io::Read>(
         file_reader: &mut TeXFileReader<T>,
         num: u16,
-    ) -> io::Result<Vec<f64>> {
+    ) -> io::Result<Vec<Fixnum>> {
         (0..num).map(|_| file_reader.read_fixnum()).collect()
     }
 
@@ -211,7 +211,7 @@ mod tests {
 
                 header: TFMHeader {
                     checksum: 0xABCDEFAB,
-                    design_size: 5.0,
+                    design_size: Fixnum::from_float(5.0),
                     coding_scheme: "testing".to_string(),
                     parc_font_identifier: "hi parc".to_string(),
                     seven_bit_safe: true,
@@ -226,14 +226,20 @@ mod tests {
                     kind: CharKind::Vanilla,
                 }],
 
-                widths: vec![0.0, 3.5],
-                heights: vec![0.0, 5.5],
-                depths: vec![0.0, 0.5],
-                italic_corrections: vec![0.0, 0.25],
+                widths: vec![Fixnum::from_float(0.0), Fixnum::from_float(3.5)],
+                heights: vec![Fixnum::from_float(0.0), Fixnum::from_float(5.5)],
+                depths: vec![Fixnum::from_float(0.0), Fixnum::from_float(0.5)],
+                italic_corrections: vec![
+                    Fixnum::from_float(0.0),
+                    Fixnum::from_float(0.25)
+                ],
                 lig_kern_steps: vec![],
                 kerns: vec![],
                 ext_recipes: vec![],
-                font_parameters: vec![0.0, 4.0, 1.0, 2.0, 5.5, 4.0, 1.0,],
+                font_parameters: vec![0.0, 4.0, 1.0, 2.0, 5.5, 4.0, 1.0,]
+                    .iter()
+                    .map(|x| Fixnum::from_float(*x))
+                    .collect(),
             }
         );
     }
@@ -243,6 +249,6 @@ mod tests {
         let cmr10 = TFMFile::new(CMR10_TFM).unwrap();
 
         // Test one specific metric that we can compare to TeX
-        assert_eq!(cmr10.get_width('a').as_scaled_points(), 327681);
+        assert_eq!(cmr10.get_width('a', None).as_scaled_points(), 327681);
     }
 }

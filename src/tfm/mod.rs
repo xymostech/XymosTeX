@@ -1,7 +1,9 @@
+use crate::tfm::fixnum::Fixnum;
+
 #[derive(Debug, PartialEq)]
 struct TFMHeader {
     checksum: u32,
-    design_size: f64,
+    design_size: Fixnum,
     coding_scheme: String,
     parc_font_identifier: String,
     seven_bit_safe: bool,
@@ -54,18 +56,19 @@ pub struct TFMFile {
     header: TFMHeader,
 
     char_infos: Vec<CharInfoEntry>,
-    widths: Vec<f64>,
-    heights: Vec<f64>,
-    depths: Vec<f64>,
-    italic_corrections: Vec<f64>,
+    widths: Vec<Fixnum>,
+    heights: Vec<Fixnum>,
+    depths: Vec<Fixnum>,
+    italic_corrections: Vec<Fixnum>,
     lig_kern_steps: Vec<LigKernStep>,
-    kerns: Vec<f64>,
+    kerns: Vec<Fixnum>,
     ext_recipes: Vec<ExtRecipe>,
-    font_parameters: Vec<f64>,
+    font_parameters: Vec<Fixnum>,
 }
 
 mod accessors;
 mod file_reader;
+mod fixnum;
 mod read_tfm;
 
 #[cfg(test)]
