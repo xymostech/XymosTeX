@@ -184,7 +184,7 @@ mod tests {
     use once_cell::sync::Lazy;
 
     use crate::boxes::{GlueSetRatio, GlueSetRatioKind};
-    use crate::dimension::{Dimen, FilDimen, FilKind, SpringDimen, Unit};
+    use crate::dimension::{Dimen, Unit};
     use crate::font::Font;
     use crate::state::DimenParameter;
     use crate::testing::with_parser;
@@ -262,7 +262,10 @@ mod tests {
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 5.0))
+                Some(GlueSetRatio::from_scaled_ratio(
+                    GlueSetRatioKind::Finite,
+                    (5, 1)
+                ))
             );
         });
     }
@@ -285,7 +288,10 @@ mod tests {
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 5.0))
+                Some(GlueSetRatio::from_scaled_ratio(
+                    GlueSetRatioKind::Fil,
+                    (5, 1)
+                ))
             );
         });
 
@@ -305,7 +311,10 @@ mod tests {
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Fill, 5.0))
+                Some(GlueSetRatio::from_scaled_ratio(
+                    GlueSetRatioKind::Fill,
+                    (5, 1)
+                ))
             );
         });
 
@@ -325,7 +334,10 @@ mod tests {
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Filll, 5.0))
+                Some(GlueSetRatio::from_scaled_ratio(
+                    GlueSetRatioKind::Filll,
+                    (5, 1)
+                ))
             );
         });
     }
@@ -350,7 +362,10 @@ mod tests {
                 assert_eq!(hbox.width, fixed_width);
                 assert_eq!(
                     hbox.glue_set_ratio,
-                    Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 2.0))
+                    Some(GlueSetRatio::from_scaled_ratio(
+                        GlueSetRatioKind::Finite,
+                        (2, 1)
+                    ))
                 );
             },
         );
@@ -372,7 +387,10 @@ mod tests {
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5))
+                Some(GlueSetRatio::from_scaled_ratio(
+                    GlueSetRatioKind::Finite,
+                    (-1, 2)
+                ))
             );
         });
     }
@@ -393,7 +411,10 @@ mod tests {
             assert_eq!(hbox.width, fixed_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -4.0))
+                Some(GlueSetRatio::from_scaled_ratio(
+                    GlueSetRatioKind::Fil,
+                    (-4, 1)
+                ))
             );
         });
     }
@@ -415,7 +436,10 @@ mod tests {
             assert_eq!(hbox.width, expected_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 2.0))
+                Some(GlueSetRatio::from_scaled_ratio(
+                    GlueSetRatioKind::Finite,
+                    (2, 1)
+                ))
             );
         });
     }
@@ -437,7 +461,10 @@ mod tests {
             assert_eq!(hbox.width, expected_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Fill, 6.0))
+                Some(GlueSetRatio::from_scaled_ratio(
+                    GlueSetRatioKind::Fill,
+                    (6, 1)
+                ))
             );
         });
     }
@@ -459,7 +486,10 @@ mod tests {
             assert_eq!(hbox.width, expected_width);
             assert_eq!(
                 hbox.glue_set_ratio,
-                Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5))
+                Some(GlueSetRatio::from_scaled_ratio(
+                    GlueSetRatioKind::Finite,
+                    (-1, 2)
+                ))
             );
         });
     }
@@ -620,7 +650,10 @@ mod tests {
                 // The glue set ratio ends up being -8/5 pt/fil
                 assert_eq!(
                     vbox.glue_set_ratio,
-                    Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -8.0 / 5.0))
+                    Some(GlueSetRatio::from_scaled_ratio(
+                        GlueSetRatioKind::Fil,
+                        (-8, 5)
+                    ))
                 );
             },
         );
@@ -665,112 +698,6 @@ mod tests {
                 parser.parse_assignment(None);
 
                 assert_eq!(parser.state.get_box(0), parser.state.get_box(1),);
-            },
-        );
-    }
-
-    #[test]
-    fn it_rounds_glue_set_ratio_to_the_nearest_65536th() {
-        with_parser(
-            &[
-                r"\setbox0=\hbox to1sp{\hskip 0pt plus 2fil}%",
-                r"\setbox1=\hbox to500sp{\hskip 0pt plus 1000fil}%",
-                r"\setbox2=\hbox to500sp{\hskip 0pt plus 1001fil}%",
-                r"\setbox3=\hbox to1500sp{\hskip 0pt plus 1000fil}%",
-            ],
-            |parser| {
-                parser.parse_assignment(None);
-                parser.parse_assignment(None);
-                parser.parse_assignment(None);
-                parser.parse_assignment(None);
-
-                assert_eq!(
-                    parser.state.get_box(0),
-                    Some(TeXBox::HorizontalBox(HorizontalBox {
-                        height: Dimen::zero(),
-                        depth: Dimen::zero(),
-                        width: Dimen::from_unit(1.0, Unit::ScaledPoint),
-
-                        list: vec![HorizontalListElem::HSkip(Glue {
-                            space: Dimen::zero(),
-                            stretch: SpringDimen::FilDimen(FilDimen::new(
-                                FilKind::Fil,
-                                2.0
-                            )),
-                            shrink: SpringDimen::Dimen(Dimen::zero()),
-                        }),],
-                        glue_set_ratio: Some(GlueSetRatio::from(
-                            GlueSetRatioKind::Fil,
-                            1.0 / 65536.0
-                        )),
-                    }))
-                );
-
-                assert_eq!(
-                    parser.state.get_box(1),
-                    Some(TeXBox::HorizontalBox(HorizontalBox {
-                        height: Dimen::zero(),
-                        depth: Dimen::zero(),
-                        width: Dimen::from_unit(500.0, Unit::ScaledPoint),
-
-                        list: vec![HorizontalListElem::HSkip(Glue {
-                            space: Dimen::zero(),
-                            stretch: SpringDimen::FilDimen(FilDimen::new(
-                                FilKind::Fil,
-                                1000.0
-                            )),
-                            shrink: SpringDimen::Dimen(Dimen::zero()),
-                        }),],
-                        glue_set_ratio: Some(GlueSetRatio::from(
-                            GlueSetRatioKind::Fil,
-                            1.0 / 65536.0
-                        )),
-                    }))
-                );
-
-                assert_eq!(
-                    parser.state.get_box(2),
-                    Some(TeXBox::HorizontalBox(HorizontalBox {
-                        height: Dimen::zero(),
-                        depth: Dimen::zero(),
-                        width: Dimen::from_unit(500.0, Unit::ScaledPoint),
-
-                        list: vec![HorizontalListElem::HSkip(Glue {
-                            space: Dimen::zero(),
-                            stretch: SpringDimen::FilDimen(FilDimen::new(
-                                FilKind::Fil,
-                                1001.0
-                            )),
-                            shrink: SpringDimen::Dimen(Dimen::zero()),
-                        }),],
-                        glue_set_ratio: Some(GlueSetRatio::from(
-                            GlueSetRatioKind::Fil,
-                            0.0
-                        )),
-                    }))
-                );
-
-                assert_eq!(
-                    parser.state.get_box(3),
-                    Some(TeXBox::HorizontalBox(HorizontalBox {
-                        height: Dimen::zero(),
-                        depth: Dimen::zero(),
-                        width: Dimen::from_unit(1500.0, Unit::ScaledPoint),
-
-                        list: vec![HorizontalListElem::HSkip(Glue {
-                            space: Dimen::zero(),
-                            stretch: SpringDimen::FilDimen(FilDimen::new(
-                                FilKind::Fil,
-                                1000.0
-                            )),
-                            shrink: SpringDimen::Dimen(Dimen::zero()),
-                        }),],
-                        glue_set_ratio: Some(GlueSetRatio::from(
-                            GlueSetRatioKind::Fil,
-                            2.0 / 65536.0
-                        )),
-                    }))
-                );
             },
         );
     }

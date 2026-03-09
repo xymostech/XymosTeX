@@ -25,16 +25,15 @@ impl GlueSetRatioKind {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(Clone)]
 pub struct GlueSetRatio {
     // What kinds of glue should be stretching. For instance, if this is
     // GlueSetRatioKind::Fil then only glues with fil stretch/shrink components
     // will be affected.
     kind: GlueSetRatioKind,
-    // How much to stretch/shrink. Each increment of this value represents
-    // 1/65536 of a unit of stretch. Measured in units of pt/pt for finite
-    // stretching and pt/<fil/fill/filll> for infinite stretching.
-    stretch: i32,
+    // How much to stretch/shrink, as a ratio between the total amount of space
+    // to take up per each unit of glue that is stretching/shrinking.
+    stretch: (i32, i32),
 }
 
 impl fmt::Debug for GlueSetRatio {
@@ -43,53 +42,82 @@ impl fmt::Debug for GlueSetRatio {
             .field("kind", &self.kind)
             .field(
                 "stretch",
-                &format!("{:.3}", (self.stretch as f64) / 65536.0),
+                &format!("{:?}", self.stretch.0 as f64 / self.stretch.1 as f64),
             )
             .finish()
     }
 }
 
+#[cfg(test)]
+impl PartialEq for GlueSetRatio {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+            && (self.stretch.0 as i64 * other.stretch.1 as i64
+                == other.stretch.0 as i64 * self.stretch.1 as i64)
+    }
+}
+
 impl GlueSetRatio {
-    pub fn from(kind: GlueSetRatioKind, ratio: f64) -> GlueSetRatio {
-        GlueSetRatio {
-            kind,
-            stretch: (ratio * 65536.0).round() as i32,
+    pub fn from_scaled_ratio(
+        kind: GlueSetRatioKind,
+        ratio: (i32, i32),
+    ) -> GlueSetRatio {
+        if ratio.1 < 0 {
+            GlueSetRatio::from_scaled_ratio(kind, (-ratio.0, -ratio.1))
+        } else {
+            GlueSetRatio {
+                kind,
+                stretch: ratio,
+            }
         }
     }
 
     fn multiply_spring_dimen(&self, spring_dimen: &SpringDimen) -> Dimen {
         match (&self.kind, spring_dimen) {
             (&GlueSetRatioKind::Finite, SpringDimen::Dimen(dimen)) => {
-                *dimen * (self.stretch, 65536)
+                // TeX uses 64-bit floating point numbers in this calculation,
+                // so we need to also to ensure correct rounding.
+                *dimen * (self.stretch.0 as f64 / self.stretch.1 as f64)
             }
             (
                 &GlueSetRatioKind::Fil,
                 SpringDimen::FilDimen(FilDimen(FilKind::Fil, fils)),
-            ) => Dimen::from_scaled_points(
-                ((*fils as i64) * (self.stretch as i64) / 65536) as i32,
-            ),
+            ) => {
+                // TODO(emily): figure out if this (and the two below this) also
+                // should use floating point math
+                Dimen::from_scaled_points(*fils)
+                    * (self.stretch.0 as f64 / self.stretch.1 as f64)
+            }
             (
                 &GlueSetRatioKind::Fill,
                 SpringDimen::FilDimen(FilDimen(FilKind::Fill, fills)),
-            ) => Dimen::from_scaled_points(
-                ((*fills as i64) * (self.stretch as i64) / 65536) as i32,
-            ),
+            ) => {
+                Dimen::from_scaled_points(*fills)
+                    * (self.stretch.0 as f64 / self.stretch.1 as f64)
+            }
             (
                 &GlueSetRatioKind::Filll,
                 SpringDimen::FilDimen(FilDimen(FilKind::Filll, fillls)),
-            ) => Dimen::from_scaled_points(
-                ((*fillls as i64) * (self.stretch as i64) / 65536) as i32,
-            ),
+            ) => {
+                Dimen::from_scaled_points(*fillls)
+                    * (self.stretch.0 as f64 / self.stretch.1 as f64)
+            }
             _ => Dimen::zero(),
         }
     }
 
     pub fn apply_to_glue(&self, glue: &Glue) -> Dimen {
-        if self.stretch < 0 {
-            glue.space + self.multiply_spring_dimen(&glue.shrink)
-        } else {
+        if self.is_stretch() {
             glue.space + self.multiply_spring_dimen(&glue.stretch)
+        } else {
+            glue.space + self.multiply_spring_dimen(&glue.shrink)
         }
+    }
+
+    pub fn is_stretch(&self) -> bool {
+        // self.stretch.0 should always be positive, but we check it just in
+        // case
+        (self.stretch.1 > 0) == (self.stretch.0 > 0)
     }
 
     // Returns the badness of a box given the glue set ratio of that box.
@@ -121,8 +149,8 @@ impl GlueSetRatio {
             GlueSetRatioKind::Finite => {
                 let inf_bad = 10000;
                 let r: u64;
-                let t: u64 = self.stretch.abs() as u64;
-                let s: u64 = 65536;
+                let t: u64 = self.stretch.0.abs() as u64;
+                let s: u64 = self.stretch.1.abs() as u64;
                 if t == 0 {
                     return 0;
                 }
@@ -151,7 +179,8 @@ impl GlueSetRatio {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum GlueSetResult {
     InsufficientShrink,
     ZeroStretch,
@@ -163,14 +192,19 @@ impl GlueSetResult {
     pub fn to_glue_set_ratio(self) -> GlueSetRatio {
         match self {
             GlueSetResult::InsufficientShrink => {
-                GlueSetRatio::from(GlueSetRatioKind::Finite, -1.0)
+                GlueSetRatio::from_scaled_ratio(
+                    GlueSetRatioKind::Finite,
+                    (-1, 1),
+                )
             }
-            GlueSetResult::ZeroStretch => {
-                GlueSetRatio::from(GlueSetRatioKind::Finite, 0.0)
-            }
-            GlueSetResult::ZeroShrink => {
-                GlueSetRatio::from(GlueSetRatioKind::Finite, 0.0)
-            }
+            GlueSetResult::ZeroStretch => GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (0, 1),
+            ),
+            GlueSetResult::ZeroShrink => GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (0, 1),
+            ),
             GlueSetResult::GlueSetRatio(glue_set_ratio) => glue_set_ratio,
         }
     }
@@ -188,9 +222,9 @@ fn set_glue_for_positive_stretch(
         // stretch/shrink
         SpringDimen::Dimen(stretch_dimen) => {
             if stretch_needed == &Dimen::zero() {
-                GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+                GlueSetResult::GlueSetRatio(GlueSetRatio::from_scaled_ratio(
                     GlueSetRatioKind::Finite,
-                    0.0,
+                    (0, 1),
                 ))
             } else if stretch_dimen == &Dimen::zero() {
                 if stretch_needed < &Dimen::zero() {
@@ -198,23 +232,28 @@ fn set_glue_for_positive_stretch(
                 } else {
                     GlueSetResult::ZeroStretch
                 }
-            } else if stretch_needed / stretch_dimen < -1.0 {
-                GlueSetResult::InsufficientShrink
             } else {
-                GlueSetResult::GlueSetRatio(GlueSetRatio::from(
-                    GlueSetRatioKind::Finite,
-                    stretch_needed / stretch_dimen,
-                ))
+                let ratio = stretch_needed / stretch_dimen;
+                if ratio.0 < -ratio.1 {
+                    GlueSetResult::InsufficientShrink
+                } else {
+                    GlueSetResult::GlueSetRatio(
+                        GlueSetRatio::from_scaled_ratio(
+                            GlueSetRatioKind::Finite,
+                            ratio,
+                        ),
+                    )
+                }
             }
         }
 
         // If there's an infinite amount of stretch/shrink available, then we
         // can stretch/shrink as much as is needed with no limits.
         SpringDimen::FilDimen(stretch_fil_dimen) => {
-            GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+            GlueSetResult::GlueSetRatio(GlueSetRatio::from_scaled_ratio(
                 GlueSetRatioKind::from_fil_kind(&stretch_fil_dimen.0),
                 if stretch_fil_dimen.is_zero() {
-                    0.0
+                    (0, 1)
                 } else {
                     stretch_needed / stretch_fil_dimen
                 },
@@ -295,7 +334,8 @@ pub fn get_set_dimen_and_ratio(
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct HorizontalBox {
     pub height: Dimen,
     pub depth: Dimen,
@@ -380,7 +420,8 @@ impl HorizontalBox {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct VerticalBox {
     pub height: Dimen,
     pub depth: Dimen,
@@ -410,7 +451,8 @@ impl VerticalBox {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum TeXBox {
     HorizontalBox(HorizontalBox),
     VerticalBox(VerticalBox),
@@ -565,25 +607,25 @@ mod tests {
 
         assert_eq!(
             set_glue_for_dimen(&Dimen::from_unit(10.0, Unit::Point), &glue),
-            GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+            GlueSetResult::GlueSetRatio(GlueSetRatio::from_scaled_ratio(
                 GlueSetRatioKind::Finite,
-                0.0
+                (0, 1)
             ))
         );
 
         assert_eq!(
             set_glue_for_dimen(&Dimen::from_unit(6.0, Unit::Point), &glue),
-            GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+            GlueSetResult::GlueSetRatio(GlueSetRatio::from_scaled_ratio(
                 GlueSetRatioKind::Finite,
-                -4.0 / 5.0
+                (-4, 5)
             ))
         );
 
         assert_eq!(
             set_glue_for_dimen(&Dimen::from_unit(5.0, Unit::Point), &glue),
-            GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+            GlueSetResult::GlueSetRatio(GlueSetRatio::from_scaled_ratio(
                 GlueSetRatioKind::Finite,
-                -5.0 / 5.0
+                (-5, 5)
             ))
         );
 
@@ -595,7 +637,7 @@ mod tests {
         assert_eq!(
             set_glue_for_dimen(&Dimen::from_unit(4.0, Unit::Point), &glue)
                 .to_glue_set_ratio(),
-            GlueSetRatio::from(GlueSetRatioKind::Finite, -1.0),
+            GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Finite, (-1, 1)),
         );
 
         let infinite_glue = Glue {
@@ -610,7 +652,7 @@ mod tests {
                 &infinite_glue
             )
             .to_glue_set_ratio(),
-            GlueSetRatio::from(GlueSetRatioKind::Fil, -6.0),
+            GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Fil, (-6, 1)),
         );
     }
 
@@ -627,9 +669,9 @@ mod tests {
                 &Dimen::from_unit(10.0, Unit::Point),
                 &fixed_glue
             ),
-            GlueSetResult::GlueSetRatio(GlueSetRatio::from(
+            GlueSetResult::GlueSetRatio(GlueSetRatio::from_scaled_ratio(
                 GlueSetRatioKind::Finite,
-                0.0
+                (0, 1)
             ))
         );
 
@@ -647,7 +689,7 @@ mod tests {
                 &fixed_glue
             )
             .to_glue_set_ratio(),
-            GlueSetRatio::from(GlueSetRatioKind::Finite, 0.0),
+            GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Finite, (0, 1)),
         );
 
         assert_eq!(
@@ -664,27 +706,84 @@ mod tests {
                 &fixed_glue
             )
             .to_glue_set_ratio(),
-            GlueSetRatio::from(GlueSetRatioKind::Finite, 0.0),
+            GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Finite, (0, 1)),
         );
     }
 
     #[test]
     fn it_correctly_calculates_badness_for_glue() {
         assert_eq!(
-            GlueSetRatio::from(GlueSetRatioKind::Finite, 1.0).get_badness(),
+            GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Finite, (1, 1))
+                .get_badness(),
             100
         );
         assert_eq!(
-            GlueSetRatio::from(GlueSetRatioKind::Finite, 2.0).get_badness(),
+            GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Finite, (2, 1))
+                .get_badness(),
             800
         );
         assert_eq!(
-            GlueSetRatio::from(GlueSetRatioKind::Finite, 3.0).get_badness(),
+            GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Finite, (3, 1))
+                .get_badness(),
             2698
         );
         assert_eq!(
-            GlueSetRatio::from(GlueSetRatioKind::Finite, 4.0).get_badness(),
+            GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Finite, (4, 1))
+                .get_badness(),
             6396
+        );
+    }
+
+    #[test]
+    fn it_correctly_rounds_when_scaling_dimensions() {
+        // Weird artifacts of floating point rounding turn up when calculating
+        // things very close to a 0.5 border. In all of these cases, we are
+        // calculating
+        //   2500001 / (2 * x) * x
+        // for some x. This gives 1250000.5, which sometimes rounds and up and
+        // sometimes rounds down based on the specific values.
+        assert_eq!(
+            GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (2500001, 1200780 * 2)
+            )
+            .multiply_spring_dimen(&SpringDimen::Dimen(
+                Dimen::from_scaled_points(1200780)
+            )),
+            Dimen::from_scaled_points(1250000)
+        );
+
+        assert_eq!(
+            GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (2500001, 1119682 * 2)
+            )
+            .multiply_spring_dimen(&SpringDimen::Dimen(
+                Dimen::from_scaled_points(1119682)
+            )),
+            Dimen::from_scaled_points(1250000)
+        );
+
+        assert_eq!(
+            GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (2500001, 19373 * 2)
+            )
+            .multiply_spring_dimen(&SpringDimen::Dimen(
+                Dimen::from_scaled_points(19373)
+            )),
+            Dimen::from_scaled_points(1250001)
+        );
+
+        assert_eq!(
+            GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (2500001, 455499 * 2)
+            )
+            .multiply_spring_dimen(&SpringDimen::Dimen(
+                Dimen::from_scaled_points(455499)
+            )),
+            Dimen::from_scaled_points(1250001)
         );
     }
 }

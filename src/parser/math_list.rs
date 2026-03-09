@@ -2419,9 +2419,9 @@ mod tests {
                         TeXBox::HorizontalBox(hbox) => hbox.glue_set_ratio,
                         _ => panic!("Not a horizontal box!"),
                     },
-                    Some(GlueSetRatio::from(
+                    Some(GlueSetRatio::from_scaled_ratio(
                         GlueSetRatioKind::from_fil_kind(&FilKind::Fil),
-                        2.5
+                        (5, 2)
                     )),
                 );
 
@@ -2451,9 +2451,9 @@ mod tests {
                         TeXBox::HorizontalBox(hbox) => hbox.glue_set_ratio,
                         _ => panic!("Not a horizontal box!"),
                     },
-                    Some(GlueSetRatio::from(
+                    Some(GlueSetRatio::from_scaled_ratio(
                         GlueSetRatioKind::from_fil_kind(&FilKind::Fil),
-                        5.0 / 3.0
+                        (5, 3)
                     )),
                 );
 
@@ -2469,9 +2469,9 @@ mod tests {
                         TeXBox::HorizontalBox(hbox) => hbox.glue_set_ratio,
                         _ => panic!("Not a horizontal box!"),
                     },
-                    Some(GlueSetRatio::from(
+                    Some(GlueSetRatio::from_scaled_ratio(
                         GlueSetRatioKind::from_fil_kind(&FilKind::Fill),
-                        5.0
+                        (5, 1)
                     )),
                 );
 
@@ -2485,9 +2485,9 @@ mod tests {
                         TeXBox::HorizontalBox(hbox) => hbox.glue_set_ratio,
                         _ => panic!("Not a horizontal box!"),
                     },
-                    Some(GlueSetRatio::from(
+                    Some(GlueSetRatio::from_scaled_ratio(
                         GlueSetRatioKind::from_fil_kind(&FilKind::Fil),
-                        2.5
+                        (5, 2)
                     )),
                 );
             },

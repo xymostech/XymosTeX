@@ -58,14 +58,16 @@ impl MathSymbol {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum MathField {
     Symbol(MathSymbol),
     TeXBox(TeXBox),
     MathList(MathList),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct MathAtom {
     pub kind: AtomKind,
     pub nucleus: Option<MathField>,
@@ -203,7 +205,8 @@ pub struct MathDelimiter {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct GeneralizedFraction {
     pub left_delim: Option<MathDelimiter>,
     pub right_delim: Option<MathDelimiter>,
@@ -219,7 +222,8 @@ pub enum BoundaryKind {
     Right,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum MathListElem {
     Atom(MathAtom),
     #[allow(dead_code)]

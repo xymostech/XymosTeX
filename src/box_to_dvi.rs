@@ -524,7 +524,10 @@ mod tests {
                 2.0,
                 Unit::Point,
             ))),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 2.0)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (2, 1),
+            )),
         );
 
         // Finite stretch
@@ -542,7 +545,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (3, 2),
+            )),
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -550,7 +556,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 2.0)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (2, 1),
+            )),
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -558,7 +567,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (-3, 2),
+            )),
         );
 
         // Finite shrink
@@ -576,7 +588,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (-1, 2),
+            )),
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -584,7 +599,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (-3, 2),
+            )),
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -592,7 +610,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (3, 2),
+            )),
         );
 
         // Infinite stretch
@@ -616,7 +637,10 @@ mod tests {
                 )),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (3, 2),
+            )),
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -627,7 +651,10 @@ mod tests {
                 )),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (3, 2),
+            )),
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -638,7 +665,10 @@ mod tests {
                 )),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fill, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fill,
+                (3, 2),
+            )),
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -649,7 +679,10 @@ mod tests {
                 )),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -0.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (-1, 2),
+            )),
         );
 
         // Infinite shrink
@@ -667,7 +700,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (-3, 2),
+            )),
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -675,7 +711,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (-1, 2),
+            )),
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -683,7 +722,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fill, -1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fill,
+                (-3, 2),
+            )),
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -691,7 +733,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (3, 2),
+            )),
         );
 
         assert_eq!(
@@ -816,7 +861,10 @@ mod tests {
                 2.0,
                 Unit::Point,
             ))),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 2.0)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (2, 1),
+            )),
         );
 
         // Finite stretch
@@ -834,7 +882,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (3, 2),
+            )),
         );
         writer.add_vertical_list_elem(
             &VerticalListElem::VSkip(Glue {
@@ -842,7 +893,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 2.0)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (2, 1),
+            )),
         );
         writer.add_vertical_list_elem(
             &VerticalListElem::VSkip(Glue {
@@ -850,7 +904,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::from_unit(3.0, Unit::Point)),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (-3, 2),
+            )),
         );
 
         // Finite shrink
@@ -868,7 +925,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (-1, 2),
+            )),
         );
         writer.add_vertical_list_elem(
             &VerticalListElem::VSkip(Glue {
@@ -876,7 +936,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (-3, 2),
+            )),
         );
         writer.add_vertical_list_elem(
             &VerticalListElem::VSkip(Glue {
@@ -884,7 +947,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (3, 2),
+            )),
         );
 
         // Infinite stretch
@@ -908,7 +974,10 @@ mod tests {
                 )),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (3, 2),
+            )),
         );
         writer.add_vertical_list_elem(
             &VerticalListElem::VSkip(Glue {
@@ -919,7 +988,10 @@ mod tests {
                 )),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (3, 2),
+            )),
         );
         writer.add_vertical_list_elem(
             &VerticalListElem::VSkip(Glue {
@@ -930,7 +1002,10 @@ mod tests {
                 )),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fill, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fill,
+                (3, 2),
+            )),
         );
         writer.add_vertical_list_elem(
             &VerticalListElem::VSkip(Glue {
@@ -941,7 +1016,10 @@ mod tests {
                 )),
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -0.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (-1, 2),
+            )),
         );
 
         // Infinite shrink
@@ -959,7 +1037,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, -1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (-3, 2),
+            )),
         );
         writer.add_vertical_list_elem(
             &VerticalListElem::VSkip(Glue {
@@ -967,7 +1048,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Finite, -0.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Finite,
+                (-1, 2),
+            )),
         );
         writer.add_vertical_list_elem(
             &VerticalListElem::VSkip(Glue {
@@ -975,7 +1059,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fill, -1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fill,
+                (-3, 2),
+            )),
         );
         writer.add_vertical_list_elem(
             &VerticalListElem::VSkip(Glue {
@@ -983,7 +1070,10 @@ mod tests {
                 stretch: SpringDimen::Dimen(Dimen::zero()),
                 shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
             }),
-            &Some(GlueSetRatio::from(GlueSetRatioKind::Fil, 1.5)),
+            &Some(GlueSetRatio::from_scaled_ratio(
+                GlueSetRatioKind::Fil,
+                (3, 2),
+            )),
         );
 
         assert_eq!(

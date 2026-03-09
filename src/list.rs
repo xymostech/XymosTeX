@@ -4,7 +4,8 @@ use crate::font::Font;
 use crate::glue::Glue;
 use crate::state::TeXState;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum HorizontalListElem {
     Char { chr: char, font: Font },
     HSkip(Glue),
@@ -53,7 +54,8 @@ impl HorizontalListElem {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum VerticalListElem {
     Box { tex_box: TeXBox, shift: Dimen },
     VSkip(Glue),

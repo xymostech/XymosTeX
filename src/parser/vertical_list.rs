@@ -530,9 +530,9 @@ mod tests {
                             )),
                             shrink: SpringDimen::Dimen(Dimen::zero()),
                         })],
-                        glue_set_ratio: Some(GlueSetRatio::from(
+                        glue_set_ratio: Some(GlueSetRatio::from_scaled_ratio(
                             GlueSetRatioKind::Finite,
-                            5.0,
+                            (5, 1),
                         )),
                     }),
                     shift: Dimen::zero(),
@@ -555,9 +555,9 @@ mod tests {
                         )),
                         shrink: SpringDimen::Dimen(Dimen::zero()),
                     })],
-                    glue_set_ratio: Some(GlueSetRatio::from(
+                    glue_set_ratio: Some(GlueSetRatio::from_scaled_ratio(
                         GlueSetRatioKind::Finite,
-                        15.0,
+                        (15, 1),
                     )),
                 }),
                 shift: Dimen::zero(),

@@ -137,6 +137,17 @@ impl Mul<(i32, i32)> for Dimen {
     }
 }
 
+// Floating point multiplication should be used sparingly! TeX only relies on
+// floating points in a few specific places, and we will run into rounding
+// issues if this is used elsewhere.
+impl Mul<f64> for Dimen {
+    type Output = Dimen;
+
+    fn mul(self, other: f64) -> Dimen {
+        Dimen(((self.0 as f64) * other).round() as i32).validate()
+    }
+}
+
 impl Div<i32> for Dimen {
     type Output = Dimen;
 
@@ -146,18 +157,18 @@ impl Div<i32> for Dimen {
 }
 
 impl Div<&Dimen> for &Dimen {
-    type Output = f64;
+    type Output = (i32, i32);
 
-    fn div(self, other: &Dimen) -> f64 {
-        (self.0 as f64) / (other.0 as f64)
+    fn div(self, other: &Dimen) -> (i32, i32) {
+        (self.0, other.0)
     }
 }
 
 impl Div<&FilDimen> for &Dimen {
-    type Output = f64;
+    type Output = (i32, i32);
 
-    fn div(self, other: &FilDimen) -> f64 {
-        (self.0 as f64) / (other.1 as f64)
+    fn div(self, other: &FilDimen) -> (i32, i32) {
+        (self.0, other.1)
     }
 }
 
