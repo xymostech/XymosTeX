@@ -77,7 +77,7 @@ fn get_list_indices_for_breaks(
     Some((start_index, end_index))
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum VisualClassification {
     VeryLoose = 0,
     Loose = 1,
@@ -86,6 +86,15 @@ enum VisualClassification {
 }
 
 impl VisualClassification {
+    fn all_ordered_classifications() -> [VisualClassification; 4] {
+        [
+            VisualClassification::VeryLoose,
+            VisualClassification::Loose,
+            VisualClassification::Decent,
+            VisualClassification::Tight,
+        ]
+    }
+
     fn is_adjacent(&self, other: &VisualClassification) -> bool {
         match (self, other) {
             (VisualClassification::VeryLoose, VisualClassification::Decent) => {
@@ -121,18 +130,25 @@ impl VisualClassification {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct LineBreak {
+    line_break_point: LineBreakPoint,
+    classification_before_break: VisualClassification,
+}
+
 #[derive(Debug, Clone)]
 struct LineBreakBacktrace {
-    prev_break: Option<LineBreakPoint>,
+    prev_break: Option<LineBreak>,
     total_demerits: i64,
-    prev_line_classification: VisualClassification,
 }
 
 #[derive(Debug)]
 struct LineBreakGraph {
-    // A list of backtraces from a given breakpoint to the best break before it.
-    // Each value corresponds to an entry in break_nodes
-    best_path_to: HashMap<LineBreakPoint, LineBreakBacktrace>,
+    // A map to keep track of the potential best ways to get to a certain break
+    // point. It maps from a given point in the list (and the visual
+    // classification that it arrived at) to the best previous line break (and
+    // also the demerits that would be accrued if that line was set).
+    best_path_to: HashMap<LineBreak, LineBreakBacktrace>,
 }
 
 impl LineBreakGraph {
@@ -143,11 +159,13 @@ impl LineBreakGraph {
         };
 
         graph.best_path_to.insert(
-            LineBreakPoint::Start,
+            LineBreak {
+                line_break_point: LineBreakPoint::Start,
+                classification_before_break: VisualClassification::Decent,
+            },
             LineBreakBacktrace {
                 prev_break: None,
                 total_demerits: 0,
-                prev_line_classification: VisualClassification::Decent,
             },
         );
 
@@ -155,56 +173,65 @@ impl LineBreakGraph {
     }
 
     // Find the best demerits from the start to a given node, if one exists
-    fn get_best_demerits_to_node(&self, to: &LineBreakPoint) -> Option<i64> {
+    fn get_best_demerits_to_node(&self, to: &LineBreak) -> Option<i64> {
         self.best_path_to
             .get(to)
             .map(|backtrace| backtrace.total_demerits)
     }
 
-    fn get_classification_of_best_line_before_node(
-        &self,
-        to: &LineBreakPoint,
-    ) -> Option<VisualClassification> {
-        self.best_path_to
-            .get(to)
-            .map(|backtrace| backtrace.prev_line_classification)
-    }
-
-    // Update the best path to a given node
     fn update_best_path_to_node(
         &mut self,
-        to: &LineBreakPoint,
-        from: &LineBreakPoint,
+        to: LineBreak,
+        from: LineBreak,
         demerits: i64,
-        prev_line_classification: VisualClassification,
     ) {
         self.best_path_to.insert(
-            *to,
+            to,
             LineBreakBacktrace {
-                prev_break: Some(*from),
+                prev_break: Some(from),
                 total_demerits: demerits,
-                prev_line_classification,
             },
         );
     }
 
-    // Return the best list of breaks to the end node
+    fn get_best_backtrace_to_point(
+        &self,
+        to: &LineBreakPoint,
+    ) -> Option<&LineBreakBacktrace> {
+        // There might be multiple breaking options which all arrive at the same
+        // point, but have different visual classifications. Search for all of
+        // those options and choose the best.
+        let mut backtraces =
+            VisualClassification::all_ordered_classifications()
+                .iter()
+                .filter_map(|visual_classification| {
+                    self.best_path_to.get(&LineBreak {
+                        line_break_point: *to,
+                        classification_before_break: *visual_classification,
+                    })
+                })
+                .collect::<Vec<_>>();
+
+        backtraces.sort_by(|a, b| a.total_demerits.cmp(&b.total_demerits));
+        backtraces.get(0).copied()
+    }
+
     fn get_best_breaks_to_end(&self) -> Option<LineBreakingResult> {
-        let end_demerits =
-            self.get_best_demerits_to_node(&LineBreakPoint::End)?;
         let mut all_breaks = vec![LineBreakPoint::End];
         let mut curr_break_backtrace = if let Some(backtrace) =
-            self.best_path_to.get(&LineBreakPoint::End)
+            self.get_best_backtrace_to_point(&LineBreakPoint::End)
         {
             backtrace
         } else {
             return None;
         };
 
-        while let Some(prev_break) = curr_break_backtrace.prev_break {
-            all_breaks.insert(0, prev_break);
+        let end_demerits = curr_break_backtrace.total_demerits;
+
+        while let Some(prev_break) = &curr_break_backtrace.prev_break {
+            all_breaks.insert(0, prev_break.line_break_point);
             curr_break_backtrace =
-                if let Some(backtrace) = &self.best_path_to.get(&prev_break) {
+                if let Some(backtrace) = self.best_path_to.get(&prev_break) {
                     backtrace
                 } else {
                     return None;
@@ -322,6 +349,12 @@ fn get_demerits_for_line_between(
     })
 }
 
+#[derive(Clone)]
+struct BackwardsPath {
+    line_break: LineBreak,
+    total_demerits: i64,
+}
+
 // Given a horizontal list, try to generate the best line breaks which match the
 // line breaking params.
 fn generate_best_list_break_option_with_params(
@@ -339,33 +372,42 @@ fn generate_best_list_break_option_with_params(
 
     // Keep track of previous breakpoints that we've looked at already, that are
     // still reachable from the current break without being overfull.
-    let mut reachable_previous_breaks: Vec<LineBreakPoint> =
-        Vec::from([LineBreakPoint::Start]);
+    let mut reachable_previous_breaks: Vec<LineBreak> =
+        Vec::from([LineBreak {
+            line_break_point: LineBreakPoint::Start,
+            classification_before_break: VisualClassification::Decent,
+        }]);
 
-    // For logging, we don't want to refer to our `LineBreakPoint`s using our
+    // For logging, we don't want to refer to our `LineBreak`s using our
     // internal representation, so we sequentially number the feasible
     // breakpoints we find, with the start referring to 0.
     let mut next_feasible_line_break_number = 1;
-    let mut feasible_line_break_numbers: HashMap<LineBreakPoint, usize> =
+    let mut feasible_line_break_numbers: HashMap<LineBreak, usize> =
         HashMap::new();
-    feasible_line_break_numbers.insert(LineBreakPoint::Start, 0);
+    feasible_line_break_numbers.insert(
+        LineBreak {
+            line_break_point: LineBreakPoint::Start,
+            classification_before_break: VisualClassification::Decent,
+        },
+        0,
+    );
 
-    for line_break in line_breaks.iter().skip(1) {
-        let mut maybe_best_backwards_path: Option<LineBreakPoint> = None;
-        let mut best_classification: Option<VisualClassification> = None;
-        let mut best_total_demerits: i64 = 0;
+    for line_break_point in line_breaks.iter().skip(1) {
+        let mut best_backwards_paths_by_classification: HashMap<
+            VisualClassification,
+            BackwardsPath,
+        > = HashMap::new();
+
         for previous_break in reachable_previous_breaks.clone().iter() {
             let previous_demerits =
-                graph.get_best_demerits_to_node(previous_break).unwrap();
-            let previous_classification = graph
-                .get_classification_of_best_line_before_node(previous_break);
+                graph.get_best_demerits_to_node(&previous_break).unwrap();
             if let Some(demerits) = get_demerits_for_line_between(
                 list,
                 params,
                 state,
-                previous_break,
-                line_break,
-                previous_classification,
+                &previous_break.line_break_point,
+                line_break_point,
+                Some(previous_break.classification_before_break),
             ) {
                 match demerits {
                     DemeritResult::Overfull => {
@@ -405,12 +447,15 @@ fn generate_best_list_break_option_with_params(
                                     feasible_line_break_numbers[previous_break]
                                 );
                             }
-                            maybe_best_backwards_path = Some(*previous_break);
-                            best_classification =
-                                Some(VisualClassification::Tight);
-                            // When this happens, even though this is a very bad
-                            // situation, we add no demerits.
-                            best_total_demerits = previous_demerits;
+                            best_backwards_paths_by_classification.insert(
+                                VisualClassification::Tight,
+                                BackwardsPath {
+                                    line_break: previous_break.clone(),
+                                    // When this happens, even though this is a very bad
+                                    // situation, we add no demerits.
+                                    total_demerits: previous_demerits,
+                                },
+                            );
                         }
                     }
                     DemeritResult::TooLargeBadness => {} // ignore
@@ -427,14 +472,23 @@ fn generate_best_list_break_option_with_params(
                                 demerits
                             );
                         }
-                        if maybe_best_backwards_path.is_none()
-                            || demerits + previous_demerits
-                                <= best_total_demerits
-                        {
-                            maybe_best_backwards_path = Some(*previous_break);
-                            best_classification = Some(classification);
-                            best_total_demerits = demerits + previous_demerits;
-                        }
+
+                        let current_backwards_path = BackwardsPath {
+                            line_break: previous_break.clone(),
+                            total_demerits: demerits + previous_demerits,
+                        };
+
+                        best_backwards_paths_by_classification
+                            .entry(classification)
+                            .and_modify(|previous_best_path| {
+                                if current_backwards_path.total_demerits
+                                    <= previous_best_path.total_demerits
+                                {
+                                    *previous_best_path =
+                                        current_backwards_path.clone();
+                                }
+                            })
+                            .or_insert(current_backwards_path);
                     }
                 }
             } else {
@@ -445,29 +499,46 @@ fn generate_best_list_break_option_with_params(
             }
         }
 
-        if let Some(best_backwards_path) = maybe_best_backwards_path {
-            feasible_line_break_numbers
-                .insert(*line_break, next_feasible_line_break_number);
-            next_feasible_line_break_number += 1;
+        // We don't want to depend on the nondeterministic order of iterating
+        // through the map of backwards paths. Instead, always iterate through
+        // them in a specific order of classifications.
+        for classification in
+            VisualClassification::all_ordered_classifications()
+        {
+            if let Some(best_backwards_path) =
+                best_backwards_paths_by_classification.get(&classification)
+            {
+                let line_break = LineBreak {
+                    line_break_point: *line_break_point,
+                    classification_before_break: classification,
+                };
 
-            if params.should_log {
-                // TODO(xymostech): Keep track of the line number of a given active
-                // node to print here.
-                println!(
-                    "@@{:?}: line x.{} t={} -> @@{:?}",
-                    feasible_line_break_numbers[line_break],
-                    best_classification.unwrap() as u8,
-                    best_total_demerits,
-                    feasible_line_break_numbers[&best_backwards_path]
+                feasible_line_break_numbers.insert(
+                    line_break.clone(),
+                    next_feasible_line_break_number,
                 );
+                next_feasible_line_break_number += 1;
+
+                if params.should_log {
+                    // TODO(xymostech): Keep track of the line number of a given active
+                    // node to print here.
+                    println!(
+                        "@@{:?}: line x.{} t={} -> @@{:?}",
+                        feasible_line_break_numbers[&line_break],
+                        classification as u8,
+                        best_backwards_path.total_demerits,
+                        feasible_line_break_numbers
+                            [&best_backwards_path.line_break]
+                    );
+                }
+
+                graph.update_best_path_to_node(
+                    line_break.clone(),
+                    best_backwards_path.line_break.clone(),
+                    best_backwards_path.total_demerits,
+                );
+                reachable_previous_breaks.push(line_break);
             }
-            reachable_previous_breaks.push(*line_break);
-            graph.update_best_path_to_node(
-                line_break,
-                &best_backwards_path,
-                best_total_demerits,
-                best_classification.unwrap(),
-            );
         }
     }
 
@@ -867,6 +938,42 @@ mod tests {
                 should_log: true,
             },
             9150,
+        );
+    }
+
+    #[test]
+    fn it_checks_multiple_visual_compatibilities() {
+        expect_paragraph_to_parse_to_lines(
+            &[
+                r"\setbox1=\hbox to20pt{x}%",
+                r"\def\a{\copy1}%",
+                r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}",
+                r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}",
+                r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}",
+                r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}",
+                r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}",
+                r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}%",
+                r"\hskip0pt plus1fil%",
+            ],
+            &[
+                r"\def\a{\hbox to20pt{x}}%",
+                r"\def\line#1{\hbox to410pt{#1}}%",
+                r"\line{{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a}}%",
+                r"\line{{\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
+                r"\line{{\a\a\a\a} {\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a}}%",
+                r"\line{{\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a} {\a} {\a\a\a\a}}%",
+                r"\line{{\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}}%",
+                r"\line{{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a}}%",
+                r"\line{{\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
+                r"\line{{\a\a\a\a} {\a} {\a\a\a}\hskip0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(410.0, Unit::Point),
+                tolerance: 10000,
+                visual_incompatibility_demerits: 60,
+                should_log: true,
+            },
+            22025720,
         );
     }
 }
