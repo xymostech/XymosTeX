@@ -614,7 +614,7 @@ impl<'a> Parser<'a> {
         style: &MathStyle,
     ) -> Option<MuGlue> {
         // TODO: These should come from the state variables \thinmuskip,
-        // \mediummuskip, and \thickmuskip.
+        // \medmuskip, and \thickmuskip.
         let thinskip = MuGlue {
             space: MuDimen::new(3.0),
             stretch: MuDimen::zero(),
@@ -2730,6 +2730,75 @@ mod tests {
                 r"\teni a\hskip109224sp \hbox{\tenrm +}\hskip109224sp b%",
                 r"\seveni a\hskip89505sp \hbox{\sevenrm +}\hskip89505sp b%",
                 r"\fivei a\hskip80403sp \hbox{\fiverm +}\hskip80403sp b%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_rounds_fontdimens_correctly_when_shifting_superscripts() {
+        assert_math_list_converts_to_horizontal_list(
+            &[
+                r"\font\tenrm=cmr10%",
+                r"\setbox0=\hbox{\tenrm x}%",
+                r"\dp0=20pt%",
+                r"\scriptstyle x^{\box0}%",
+            ],
+            &[
+                r"\def\addscriptspace#1{%",
+                r"  \count0=\wd#1%",
+                r"  \advance\count0 by 32768 %",
+                r"  \wd#1=\count0 sp}%",
+                r"\font\tenrm=cmr10%",
+                r"\font\teni=cmmi10%",
+                r"\font\sevenrm=cmr7%",
+                r"\font\seveni=cmmi7%",
+                r"\font\fiverm=cmr5%",
+                r"\font\fivei=cmmi5%",
+                r"\setbox0=\hbox{\tenrm x}%",
+                r"\dp0=20pt%",
+                r"\setbox1=\hbox{\box0}%",
+                r"\addscriptspace 1%",
+                r"\seveni x%",
+                r"\raise 1360099sp \box1%",
+            ],
+        );
+    }
+
+    #[test]
+    fn it_rounds_fontdimens_correctly_when_shifting_superscripts_and_subscripts(
+    ) {
+        assert_math_list_converts_to_horizontal_list(
+            &[
+                r"\font\tenrm=cmr10%",
+                r"\setbox0=\hbox{\tenrm x}%",
+                r"\dp0=20pt%",
+                r"\scriptstyle x^{\box0}_x%",
+            ],
+            &[
+                r"\def\addscriptspace#1{%",
+                r"  \count0=\wd#1%",
+                r"  \advance\count0 by 32768 %",
+                r"  \wd#1=\count0 sp}%",
+                r"\def\nointerlineskip{\prevdepth=-1000pt}%",
+                r"\font\tenrm=cmr10%",
+                r"\font\teni=cmmi10%",
+                r"\font\sevenrm=cmr7%",
+                r"\font\seveni=cmmi7%",
+                r"\font\fiverm=cmr5%",
+                r"\font\fivei=cmmi5%",
+                r"\setbox0=\hbox{\tenrm x}%",
+                r"\dp0=20pt%",
+                r"\setbox1=\hbox{\box0}%",
+                r"\addscriptspace 1%",
+                r"\setbox2=\hbox{\fivei x}%",
+                r"\addscriptspace 2%",
+                r"\seveni x%",
+                r"\raise -87922sp \vbox{%",
+                r"  \box1%",
+                r"  \vskip 104852sp%",
+                r"  \nointerlineskip%",
+                r"  \box2%",
+                r"}%",
             ],
         );
     }

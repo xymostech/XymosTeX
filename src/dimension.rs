@@ -18,20 +18,20 @@ pub enum Unit {
     ScaledPoint,
 }
 
-// Return a fractional scale to convert from the passed in unit into scaled
-// points. E.g. a return value of (7, 3) would indicate that there are 7/3 of
-// those units per scaled point.
-fn get_scale(unit: Unit) -> (f64, f64) {
+// Return a fractional scale to convert from the passed in unit into points.
+// E.g. a return value of (7, 3) would indicate that there are 7/3 of those
+// units per point.
+fn get_scale(unit: Unit) -> (i64, i64) {
     match unit {
-        Unit::Point => (65536.0, 1.0),
-        Unit::Pica => (12.0 * 65536.0, 1.0),
-        Unit::Inch => (65536.0 * 7227.0, 100.0),
-        Unit::BigPoint => (65536.0 * 7227.0, 72.0 * 100.0),
-        Unit::Centimeter => (65536.0 * 7227.0, 254.0),
-        Unit::Millimeter => (65536.0 * 7227.0, 2540.0),
-        Unit::DidotPoint => (65536.0 * 1238.0, 1157.0),
-        Unit::Cicero => (65536.0 * 1238.0 * 12.0, 1157.0),
-        Unit::ScaledPoint => (1.0, 1.0),
+        Unit::Point => (1, 1),
+        Unit::Pica => (12, 1),
+        Unit::Inch => (7227, 100),
+        Unit::BigPoint => (7227, 72 * 100),
+        Unit::Centimeter => (7227, 254),
+        Unit::Millimeter => (7227, 2540),
+        Unit::DidotPoint => (1238, 1157),
+        Unit::Cicero => (1238 * 12, 1157),
+        Unit::ScaledPoint => (1, 65536),
     }
 }
 
@@ -54,8 +54,11 @@ impl Dimen {
 
     // Given a number of a given unit, create a Dimen.
     pub fn from_unit(num: f64, from_unit: Unit) -> Dimen {
-        let scale = get_scale(from_unit);
-        Dimen((num * scale.0 / scale.1) as i32).validate()
+        let (scale_num, scale_denom) = get_scale(from_unit);
+        Dimen(
+            (((num * 65536.0).round() as i64) * scale_num / scale_denom) as i32,
+        )
+        .validate()
     }
 
     pub fn from_scaled_points(num: i32) -> Dimen {
@@ -64,9 +67,12 @@ impl Dimen {
 
     // Given a Dimen and a unit to convert that to, returns the amount of that unit
     // that are in that Dimen.
+    // Note: This should only be used for printing/debugging, not for calculation
     fn to_unit(&self, to_unit: Unit) -> f64 {
-        let scale = get_scale(to_unit);
-        (self.0 as f64) * scale.1 / scale.0
+        let (scale_num, scale_denom) = get_scale(to_unit);
+        (self.0 as f64) * (scale_denom as f64)
+            / (scale_num as f64)
+            / (65536.0 as f64)
     }
 
     // Returns the exact number of scaled points in the Dimen. This might be
@@ -88,6 +94,7 @@ impl fmt::Debug for Dimen {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Dimen")
             .field("pts", &format!("{:.3}", self.to_unit(Unit::Point)))
+            .field("sp", &format!("{}", self.0))
             .finish()
     }
 }
@@ -132,7 +139,7 @@ impl Mul<(i32, i32)> for Dimen {
     type Output = Dimen;
 
     fn mul(self, other: (i32, i32)) -> Dimen {
-        let value = (self.0 as i64) * (other.0 as i64) / (other.1 as i64);
+        let value = (self.0 as i64 * other.0 as i64) / other.1 as i64;
         Dimen(value as i32).validate()
     }
 }
@@ -287,17 +294,17 @@ impl MuDimen {
     }
 
     pub fn new(num: f64) -> MuDimen {
-        MuDimen((num * 65536.0) as i32)
+        MuDimen((num * 65536.0).round() as i32)
     }
 
     /// Given the value of the quad dimension from a given font, converts the
     /// MuDimen into a plain Dimen
     pub fn to_dimen(&self, quad: Dimen) -> Dimen {
-        // Doing dimen * (self.0, 655536 * 18) would produce a result of higher
-        // quality, but we perform this multiplication in multiple steps
-        // because TeX itself loses some precision when doing this conversion.
-        let dimen = quad / 18;
-        dimen * (self.0, 65536)
+        // Calculating this result using quad * (self.0, 655536 * 18) would
+        // produce a result of higher precision, but we explicitly truncate the
+        // intermediate result because TeX itself loses some precision when
+        // doing this conversion.
+        (quad / 18) * (self.0, 65536)
     }
 }
 
@@ -449,6 +456,29 @@ mod tests {
             SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 3.4))
                 + SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 1.2)),
             SpringDimen::FilDimen(FilDimen::new(FilKind::Filll, 3.4))
+        );
+    }
+
+    #[test]
+    fn it_rounds_quad_dimens_correctly_when_converting_mudimens_to_dimens() {
+        assert_eq!(
+            MuDimen::new(3.0).to_dimen(Dimen::from_scaled_points(655361)),
+            Dimen::from_scaled_points(109224)
+        );
+
+        assert_eq!(
+            MuDimen::new(1.3).to_dimen(Dimen::from_scaled_points(655361)),
+            Dimen::from_scaled_points(47330)
+        );
+
+        assert_eq!(
+            MuDimen::new(1.8).to_dimen(Dimen::from_scaled_points(655361)),
+            Dimen::from_scaled_points(65534)
+        );
+
+        assert_eq!(
+            MuDimen::new(2.8).to_dimen(Dimen::from_scaled_points(655361)),
+            Dimen::from_scaled_points(101942)
         );
     }
 }

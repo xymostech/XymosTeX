@@ -9,9 +9,9 @@ use crate::token::Token;
 
 fn get_space_glue() -> Glue {
     Glue {
-        space: Dimen::from_unit(3.33333, Unit::Point),
-        stretch: SpringDimen::Dimen(Dimen::from_unit(1.66666, Unit::Point)),
-        shrink: SpringDimen::Dimen(Dimen::from_unit(1.11111, Unit::Point)),
+        space: Dimen::from_scaled_points(218453),
+        stretch: SpringDimen::Dimen(Dimen::from_scaled_points(109226)),
+        shrink: SpringDimen::Dimen(Dimen::from_scaled_points(72818)),
     }
 }
 
