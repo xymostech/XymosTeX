@@ -1,4 +1,4 @@
-use crate::dimension::{Dimen, Unit};
+use crate::dimension::Dimen;
 use crate::tfm::fixnum::Fixnum;
 use crate::tfm::{CharInfoEntry, CharKind, TFMFile};
 
@@ -92,7 +92,8 @@ impl TFMFile {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::TFMFile;
+    use crate::dimension::{Dimen, Unit};
 
     use crate::tfm::test_data::{BASIC_TFM, CMR10_TFM};
 

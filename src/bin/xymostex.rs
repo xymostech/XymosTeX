@@ -1,38 +1,12 @@
 #![deny(clippy::all)]
 
-mod box_to_dvi;
-mod boxes;
-mod category;
-mod dimension;
-mod dvi;
-mod font;
-mod font_metrics;
-mod glue;
-mod lexer;
-mod line_breaking;
-mod list;
-mod makro;
-mod math_code;
-mod math_list;
-mod parser;
-mod paths;
-mod state;
-mod tfm;
-mod token;
-mod variable;
-
-#[cfg(test)]
-mod testing;
-#[cfg(test)]
-mod tests;
-
 use std::fs;
 use std::io;
 use std::io::prelude::*;
 
-use crate::box_to_dvi::DVIFileWriter;
-use crate::parser::Parser;
-use crate::state::TeXState;
+use xymostex::box_to_dvi::DVIFileWriter;
+use xymostex::parser::Parser;
+use xymostex::state::TeXState;
 
 fn main() -> io::Result<()> {
     let mut lines: Vec<String> = Vec::new();

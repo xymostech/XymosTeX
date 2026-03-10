@@ -1,16 +1,8 @@
-#![allow(dead_code)]
-
-mod dimension;
-mod dvi;
-mod font;
-mod font_metrics;
-mod paths;
-mod tfm;
-
-use dvi::{interpret_dvi_file, DVIFile};
 use std::env;
 use std::fs;
 use std::io;
+
+use xymostex::dvi::{interpret_dvi_file, DVIFile};
 
 fn main() -> io::Result<()> {
     let mut args = env::args().skip(1).collect::<Vec<String>>();

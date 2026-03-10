@@ -29,6 +29,7 @@ impl<T: io::Read> DVIFileReader<T> {
 
     // This cannot be generated using generate_int_reader_func!() because there
     // is no u24 type.
+    #[cfg(test)]
     pub fn read_3_bytes_unsigned(&mut self) -> io::Result<u32> {
         let mut buf = [0; 3];
         self.reader.read_exact(&mut buf)?;
@@ -36,6 +37,7 @@ impl<T: io::Read> DVIFileReader<T> {
         Ok(u32::from_be_bytes(final_buf))
     }
 
+    #[cfg(test)]
     generate_int_reader_func!(fn read_1_byte_signed() -> i8, 1);
     generate_int_reader_func!(fn read_2_bytes_signed() -> i16, 2);
     generate_int_reader_func!(fn read_4_bytes_signed() -> i32, 4);

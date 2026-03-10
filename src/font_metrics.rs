@@ -1,4 +1,4 @@
-use crate::dimension::{Dimen, Unit};
+use crate::dimension::Dimen;
 use crate::font::Font;
 use crate::paths::get_path_to_font;
 use crate::tfm::TFMFile;
@@ -59,7 +59,9 @@ impl FontMetrics {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::FontMetrics;
+    use crate::dimension::{Dimen, Unit};
+    use crate::font::Font;
 
     #[test]
     fn it_correctly_loads_font_metrics() {

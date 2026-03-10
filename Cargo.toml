@@ -5,17 +5,20 @@ authors = ["Emily Eisenberg <xymostech@gmail.com>"]
 edition = "2018"
 default-run = "xymostex"
 
+[lib]
+doctest = false
+
 [[bin]]
 name = "xymostex"
-path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "print_dvi"
-path = "src/print_dvi.rs"
+test = false
 
 [[bin]]
 name = "interpret"
-path = "src/interpret.rs"
+test = false
 
 [dependencies]
 kpathsea = "0.2.3"
