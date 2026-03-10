@@ -122,6 +122,9 @@ where
             DVICommand::Eop => break,
             DVICommand::Push => state.push_stack(),
             DVICommand::Pop => state.pop_stack(),
+            DVICommand::Right2(b) => {
+                state.curr_stack().h += *b as i32;
+            }
             DVICommand::Right3(b) => {
                 state.curr_stack().h += b;
             }
