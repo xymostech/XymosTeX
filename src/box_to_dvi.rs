@@ -6,6 +6,7 @@ use crate::dimension::Dimen;
 use crate::dvi::{DVICommand, DVIFile};
 use crate::font::Font;
 use crate::font_metrics::FontMetrics;
+use crate::glue::Glue;
 use crate::list::{HorizontalListElem, VerticalListElem};
 
 pub struct DVIFileWriter {
@@ -13,6 +14,7 @@ pub struct DVIFileWriter {
     last_page_start: i32,
     curr_font_num: i32,
     font_nums: HashMap<Font, i32>,
+    font_metrics: HashMap<Font, FontMetrics>,
     next_font_num: i32,
     num: u32,
     den: u32,
@@ -29,6 +31,7 @@ impl DVIFileWriter {
             last_page_start: -1,
             curr_font_num: -1,
             font_nums: HashMap::new(),
+            font_metrics: HashMap::new(),
             next_font_num: 0,
             num: 0,
             den: 0,
@@ -39,17 +42,26 @@ impl DVIFileWriter {
         }
     }
 
-    fn add_font_def_with_metrics(
-        &mut self,
-        font: &Font,
-        metrics: &FontMetrics,
-        font_num: i32,
-    ) {
+    fn get_metrics_for_font(&mut self, font: &Font) -> &FontMetrics {
+        &*self
+            .font_metrics
+            .entry(font.clone())
+            .or_insert_with_key(|font| {
+                FontMetrics::from_font(font).unwrap_or_else(|| {
+                    panic!("Error loading font metrics for {}", font.font_name)
+                })
+            })
+    }
+
+    fn add_font_def_with_metrics(&mut self, font: &Font, font_num: i32) {
+        let metrics = self.get_metrics_for_font(font);
+
         let design_size = (metrics.get_design_size() * 65536.0) as u32;
+        let checksum = metrics.get_checksum();
 
         self.commands.push(DVICommand::FntDef4 {
             font_num,
-            checksum: metrics.get_checksum(),
+            checksum,
 
             scale: font.scale.as_scaled_points() as u32,
             design_size,
@@ -64,11 +76,7 @@ impl DVIFileWriter {
         let font_num = self.next_font_num;
         self.next_font_num += 1;
 
-        let metrics = FontMetrics::from_font(font).unwrap_or_else(|| {
-            panic!("Error loading font metrics for {}", font.font_name)
-        });
-
-        self.add_font_def_with_metrics(font, &metrics, font_num);
+        self.add_font_def_with_metrics(font, font_num);
         self.font_nums.insert(font.clone(), font_num);
 
         font_num
@@ -87,6 +95,19 @@ impl DVIFileWriter {
         }
     }
 
+    fn get_h_elem_width(&mut self, elem: &HorizontalListElem) -> Glue {
+        match elem {
+            HorizontalListElem::Char { chr, font } => {
+                let font_metrics = self.get_metrics_for_font(font);
+                Glue::from_dimen(font_metrics.get_width(*chr))
+            }
+            HorizontalListElem::HSkip(glue) => glue.clone(),
+            HorizontalListElem::Box { tex_box, .. } => {
+                Glue::from_dimen(*tex_box.width())
+            }
+        }
+    }
+
     fn add_box(&mut self, tex_box: &TeXBox) {
         self.commands.push(DVICommand::Push);
         self.curr_stack_depth += 1;
@@ -96,11 +117,20 @@ impl DVIFileWriter {
 
         match tex_box {
             TeXBox::HorizontalBox(hbox) => {
+                let mut seen_width: Glue = Glue::zero();
+
                 for elem in &hbox.list {
-                    self.add_horizontal_list_elem(&elem, &hbox.glue_set_ratio);
+                    self.add_horizontal_list_elem(
+                        &elem,
+                        &hbox.glue_set_ratio,
+                        Some(&seen_width),
+                    );
+
+                    seen_width = seen_width + self.get_h_elem_width(elem);
                 }
             }
             TeXBox::VerticalBox(vbox) => {
+                // TODO(xymostech): Add similar rounding adjustment as for horizontal boxes
                 self.commands
                     .push(DVICommand::Down4(-vbox.height.as_scaled_points()));
 
@@ -155,6 +185,7 @@ impl DVIFileWriter {
         &mut self,
         elem: &HorizontalListElem,
         glue_set_ratio: &Option<GlueSetRatio>,
+        existing_glue: Option<&Glue>,
     ) {
         match elem {
             HorizontalListElem::Char { chr, font } => {
@@ -170,7 +201,13 @@ impl DVIFileWriter {
 
             HorizontalListElem::HSkip(glue) => {
                 let move_amount = if let Some(set_ratio) = glue_set_ratio {
-                    set_ratio.apply_to_glue(glue)
+                    if let Some(existing_glue) = existing_glue {
+                        let total_glue = glue.clone() + existing_glue.clone();
+                        set_ratio.apply_to_glue(&total_glue)
+                            - set_ratio.apply_to_glue(existing_glue)
+                    } else {
+                        set_ratio.apply_to_glue(glue)
+                    }
                 } else {
                     glue.space
                 };
@@ -258,11 +295,7 @@ impl DVIFileWriter {
         });
 
         for (font, font_num) in std::mem::take(&mut self.font_nums) {
-            let metrics = FontMetrics::from_font(&font).unwrap_or_else(|| {
-                panic!("Error loading font metrics for {}", font.font_name)
-            });
-
-            self.add_font_def_with_metrics(&font, &metrics, font_num);
+            self.add_font_def_with_metrics(&font, font_num);
         }
 
         let total_size = self.total_byte_size();
@@ -305,6 +338,7 @@ mod tests {
                 font: CMR10.clone(),
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -312,6 +346,7 @@ mod tests {
                 font: CMR10.clone(),
             },
             &None,
+            None,
         );
 
         // The commands start with a fnt_def4 and fnt4 command, then come the
@@ -350,6 +385,7 @@ mod tests {
                 font: CMR10.clone(),
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -357,6 +393,7 @@ mod tests {
                 font: CMR10.clone(),
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -364,6 +401,7 @@ mod tests {
                 font: cmr7.clone(),
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -371,6 +409,7 @@ mod tests {
                 font: cmr7.clone(),
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -378,6 +417,7 @@ mod tests {
                 font: CMR10.clone(),
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -385,6 +425,7 @@ mod tests {
                 font: big_cmr10.clone(),
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -392,6 +433,7 @@ mod tests {
                 font: small_cmr10.clone(),
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -399,6 +441,7 @@ mod tests {
                 font: big_cmr10,
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -406,6 +449,7 @@ mod tests {
                 font: small_cmr10,
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -413,6 +457,7 @@ mod tests {
                 font: cmtt10.clone(),
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -420,6 +465,7 @@ mod tests {
                 font: cmr7.clone(),
             },
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::Char {
@@ -427,6 +473,7 @@ mod tests {
                 font: CMR10.clone(),
             },
             &None,
+            None,
         );
 
         let cmr10_metrics = FontMetrics::from_font(&CMR10).unwrap();
@@ -518,6 +565,7 @@ mod tests {
                 Unit::Point,
             ))),
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue::from_dimen(Dimen::from_unit(
@@ -528,6 +576,7 @@ mod tests {
                 GlueSetRatioKind::Finite,
                 (2, 1),
             )),
+            None,
         );
 
         // Finite stretch
@@ -538,6 +587,7 @@ mod tests {
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -549,6 +599,7 @@ mod tests {
                 GlueSetRatioKind::Finite,
                 (3, 2),
             )),
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -560,6 +611,7 @@ mod tests {
                 GlueSetRatioKind::Fil,
                 (2, 1),
             )),
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -571,6 +623,7 @@ mod tests {
                 GlueSetRatioKind::Finite,
                 (-3, 2),
             )),
+            None,
         );
 
         // Finite shrink
@@ -581,6 +634,7 @@ mod tests {
                 shrink: SpringDimen::Dimen(Dimen::from_unit(2.0, Unit::Point)),
             }),
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -592,6 +646,7 @@ mod tests {
                 GlueSetRatioKind::Finite,
                 (-1, 2),
             )),
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -603,6 +658,7 @@ mod tests {
                 GlueSetRatioKind::Fil,
                 (-3, 2),
             )),
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -614,6 +670,7 @@ mod tests {
                 GlueSetRatioKind::Finite,
                 (3, 2),
             )),
+            None,
         );
 
         // Infinite stretch
@@ -627,6 +684,7 @@ mod tests {
                 shrink: SpringDimen::Dimen(Dimen::zero()),
             }),
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -641,6 +699,7 @@ mod tests {
                 GlueSetRatioKind::Fil,
                 (3, 2),
             )),
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -655,6 +714,7 @@ mod tests {
                 GlueSetRatioKind::Finite,
                 (3, 2),
             )),
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -669,6 +729,7 @@ mod tests {
                 GlueSetRatioKind::Fill,
                 (3, 2),
             )),
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -683,6 +744,7 @@ mod tests {
                 GlueSetRatioKind::Fil,
                 (-1, 2),
             )),
+            None,
         );
 
         // Infinite shrink
@@ -693,6 +755,7 @@ mod tests {
                 shrink: SpringDimen::FilDimen(FilDimen::new(FilKind::Fil, 2.0)),
             }),
             &None,
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -704,6 +767,7 @@ mod tests {
                 GlueSetRatioKind::Fil,
                 (-3, 2),
             )),
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -715,6 +779,7 @@ mod tests {
                 GlueSetRatioKind::Finite,
                 (-1, 2),
             )),
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -726,6 +791,7 @@ mod tests {
                 GlueSetRatioKind::Fill,
                 (-3, 2),
             )),
+            None,
         );
         writer.add_horizontal_list_elem(
             &HorizontalListElem::HSkip(Glue {
@@ -737,6 +803,7 @@ mod tests {
                 GlueSetRatioKind::Fil,
                 (3, 2),
             )),
+            None,
         );
 
         assert_eq!(
@@ -824,6 +891,7 @@ mod tests {
                 shift: Dimen::zero(),
             },
             &None,
+            None,
         );
 
         assert_matches(
@@ -1667,6 +1735,7 @@ mod tests {
                     shift: Dimen::from_unit(2.0, Unit::Point),
                 },
                 &None,
+                None,
             );
             writer.add_horizontal_list_elem(
                 &HorizontalListElem::Box {
@@ -1674,6 +1743,7 @@ mod tests {
                     shift: Dimen::from_unit(-2.0, Unit::Point),
                 },
                 &None,
+                None,
             );
             writer.add_horizontal_list_elem(
                 &HorizontalListElem::Box {
@@ -1681,6 +1751,7 @@ mod tests {
                     shift: Dimen::zero(),
                 },
                 &None,
+                None,
             );
         });
 
@@ -1788,6 +1859,76 @@ mod tests {
                 MaybeEquals::Equals(DVICommand::SetCharN(97)),
                 MaybeEquals::Equals(DVICommand::Pop),
                 MaybeEquals::Equals(DVICommand::Down4(0)),
+            ],
+        );
+    }
+
+    #[test]
+    fn it_correctly_handles_remainders_in_horizontal_boxes() {
+        let mut writer = DVIFileWriter::new();
+
+        with_parser(
+            &[
+                r"\setbox1=\hbox{x}%",
+                r"\wd1=0pt%",
+                r"\def\a{\hskip 0sp plus1200780sp}%",
+                r"\def\b{\hskip 0sp plus51235sp}%",
+                r"\hbox to 2500001sp{\copy1\a\copy1\a\copy1}%",
+                r"\hbox to 2500001sp{\copy1\b\copy1\b\copy1}%",
+            ],
+            |parser| {
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+                parser.parse_assignment(None);
+
+                let hbox = parser.parse_box().unwrap();
+                writer.add_box(&hbox);
+
+                let hbox = parser.parse_box().unwrap();
+                writer.add_box(&hbox);
+            },
+        );
+
+        assert_matches(
+            &writer.commands,
+            &[
+                // First box
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Anything,
+                MaybeEquals::Anything,
+                MaybeEquals::Equals(DVICommand::SetCharN(120)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Right4(0)),
+                MaybeEquals::Equals(DVICommand::Right4(1250000)),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(120)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Right4(0)),
+                MaybeEquals::Equals(DVICommand::Right4(1250001)),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(120)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Right4(0)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                // Second box
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(120)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Right4(0)),
+                MaybeEquals::Equals(DVICommand::Right4(1250001)),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(120)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Right4(0)),
+                MaybeEquals::Equals(DVICommand::Right4(1250000)),
+                MaybeEquals::Equals(DVICommand::Push),
+                MaybeEquals::Equals(DVICommand::SetCharN(120)),
+                MaybeEquals::Equals(DVICommand::Pop),
+                MaybeEquals::Equals(DVICommand::Right4(0)),
+                MaybeEquals::Equals(DVICommand::Pop),
             ],
         );
     }
