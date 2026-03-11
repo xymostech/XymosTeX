@@ -9,6 +9,10 @@ jobs:
   rust_checks:
     runs-on: ubuntu-latest
     steps:
+      - name: Install TeX dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install texlive-full
       - uses: actions/checkout@v6
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features
