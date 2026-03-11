@@ -70,6 +70,7 @@ const ALL_PRIMITIVES: &[&str] = &[
     "tolerance",
     "tracingparagraphs",
     "adjdemerits",
+    "penalty",
 ];
 
 fn is_primitive(maybe_prim: &str) -> bool {

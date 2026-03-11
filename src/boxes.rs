@@ -366,6 +366,7 @@ impl HorizontalBox {
                 HorizontalListElem::Box { tex_box, shift: _ } => {
                     tex_box.to_chars()
                 }
+                HorizontalListElem::Penalty { .. } => vec![],
             })
             .collect()
     }

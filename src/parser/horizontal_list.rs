@@ -165,6 +165,14 @@ impl<'a> Parser<'a> {
                     font: self.state.get_current_font(),
                 })
             }
+            Some(ref tok)
+                if self.state.is_token_equal_to_prim(tok, "penalty") =>
+            {
+                self.lex_expanded_token();
+                let penalty = self.parse_number();
+
+                ElemResult::Elem(HorizontalListElem::Penalty(penalty))
+            }
             _ => {
                 if self.is_assignment_head() {
                     self.parse_assignment(None);
@@ -825,5 +833,22 @@ mod tests {
                 ]
             );
         });
+    }
+
+    #[test]
+    fn it_parses_penalties() {
+        with_parser(
+            &[r"\penalty0%", r"\penalty10000%", r"\penalty-10000%"],
+            |parser| {
+                assert_eq!(
+                    parser.parse_horizontal_list(false, false),
+                    &[
+                        HorizontalListElem::Penalty(0),
+                        HorizontalListElem::Penalty(10000),
+                        HorizontalListElem::Penalty(-10000),
+                    ]
+                );
+            },
+        );
     }
 }

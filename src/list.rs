@@ -10,6 +10,7 @@ pub enum HorizontalListElem {
     Char { chr: char, font: Font },
     HSkip(Glue),
     Box { tex_box: TeXBox, shift: Dimen },
+    Penalty(i32),
 }
 
 impl HorizontalListElem {
@@ -42,6 +43,10 @@ impl HorizontalListElem {
                 },
                 Glue::from_dimen(*tex_box.width()),
             ),
+
+            HorizontalListElem::Penalty(_) => {
+                (Dimen::zero(), Dimen::zero(), Glue::zero())
+            }
         }
     }
 
@@ -50,6 +55,7 @@ impl HorizontalListElem {
             HorizontalListElem::Char { .. } => false,
             HorizontalListElem::HSkip(_) => true,
             HorizontalListElem::Box { .. } => false,
+            HorizontalListElem::Penalty(_) => true,
         }
     }
 }

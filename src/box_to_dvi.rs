@@ -105,6 +105,7 @@ impl DVIFileWriter {
             HorizontalListElem::Box { tex_box, .. } => {
                 Glue::from_dimen(*tex_box.width())
             }
+            HorizontalListElem::Penalty { .. } => Glue::zero(),
         }
     }
 
@@ -231,6 +232,8 @@ impl DVIFileWriter {
                     tex_box.width().as_scaled_points(),
                 ));
             }
+
+            HorizontalListElem::Penalty { .. } => (),
         }
     }
 
