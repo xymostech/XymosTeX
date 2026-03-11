@@ -12,7 +12,7 @@ jobs:
       - name: Install TeX dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install texlive-full
+          sudo apt-get install texlive-base texlive-binaries libkpathsea-dev libkpathsea6
       - uses: actions/checkout@v6
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features
