@@ -1,4 +1,4 @@
-# XymosTeX [![Build Status](https://travis-ci.com/xymostech/XymosTeX.svg?branch=master)](https://travis-ci.com/xymostech/XymosTeX) [![Coverage Status](https://coveralls.io/repos/github/xymostech/XymosTeX/badge.svg?branch=master)](https://coveralls.io/github/xymostech/XymosTeX?branch=master)
+# XymosTeX [![Rust checks](https://github.com/xymostech/XymosTeX/actions/workflows/rust-actions.yml/badge.svg)](https://github.com/xymostech/XymosTeX/actions/workflows/rust-actions.yml)
 
 This project is an attempt to build an implementation of TeX in Rust. The overall goals of this project are:
 
