@@ -37,6 +37,7 @@ pub struct GlueSetRatio {
 }
 
 impl fmt::Debug for GlueSetRatio {
+    #[allow(clippy::disallowed_types)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("GlueSetRatio")
             .field("kind", &self.kind)
@@ -72,6 +73,7 @@ impl GlueSetRatio {
         }
     }
 
+    #[allow(clippy::disallowed_types)]
     fn multiply_spring_dimen(&self, spring_dimen: &SpringDimen) -> Dimen {
         match (&self.kind, spring_dimen) {
             (&GlueSetRatioKind::Finite, SpringDimen::Dimen(dimen)) => {
@@ -149,8 +151,8 @@ impl GlueSetRatio {
             GlueSetRatioKind::Finite => {
                 let inf_bad = 10000;
                 let r: u64;
-                let t: u64 = self.stretch.0.abs() as u64;
-                let s: u64 = self.stretch.1.abs() as u64;
+                let t: u64 = self.stretch.0.unsigned_abs() as u64;
+                let s: u64 = self.stretch.1.unsigned_abs() as u64;
                 if t == 0 {
                     return 0;
                 }
@@ -189,7 +191,7 @@ pub enum GlueSetResult {
 }
 
 impl GlueSetResult {
-    pub fn to_glue_set_ratio(self) -> GlueSetRatio {
+    pub fn into_glue_set_ratio(self) -> GlueSetRatio {
         match self {
             GlueSetResult::InsufficientShrink => {
                 GlueSetRatio::from_scaled_ratio(
@@ -272,7 +274,7 @@ pub fn set_glue_for_spread(spread: &Dimen, glue: &Glue) -> GlueSetResult {
         &glue.shrink
     };
 
-    set_glue_for_positive_stretch(&spread, stretch_or_shrink)
+    set_glue_for_positive_stretch(spread, stretch_or_shrink)
 }
 
 pub fn set_glue_for_dimen(final_dimen: &Dimen, glue: &Glue) -> GlueSetResult {
@@ -316,7 +318,7 @@ pub fn get_set_dimen_and_ratio(
                     final_dimen,
                     Some(
                         set_glue_for_dimen(&final_dimen, &glue)
-                            .to_glue_set_ratio(),
+                            .into_glue_set_ratio(),
                     ),
                 )
             }
@@ -327,7 +329,7 @@ pub fn get_set_dimen_and_ratio(
                 glue.space + spread_needed,
                 Some(
                     set_glue_for_spread(&spread_needed, &glue)
-                        .to_glue_set_ratio(),
+                        .into_glue_set_ratio(),
                 ),
             )
         }
@@ -636,7 +638,7 @@ mod tests {
 
         assert_eq!(
             set_glue_for_dimen(&Dimen::from_unit(4.0, Unit::Point), &glue)
-                .to_glue_set_ratio(),
+                .into_glue_set_ratio(),
             GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Finite, (-1, 1)),
         );
 
@@ -651,7 +653,7 @@ mod tests {
                 &Dimen::from_unit(4.0, Unit::Point),
                 &infinite_glue
             )
-            .to_glue_set_ratio(),
+            .into_glue_set_ratio(),
             GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Fil, (-6, 1)),
         );
     }
@@ -688,7 +690,7 @@ mod tests {
                 &Dimen::from_unit(9.0, Unit::Point),
                 &fixed_glue
             )
-            .to_glue_set_ratio(),
+            .into_glue_set_ratio(),
             GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Finite, (0, 1)),
         );
 
@@ -705,7 +707,7 @@ mod tests {
                 &Dimen::from_unit(11.0, Unit::Point),
                 &fixed_glue
             )
-            .to_glue_set_ratio(),
+            .into_glue_set_ratio(),
             GlueSetRatio::from_scaled_ratio(GlueSetRatioKind::Finite, (0, 1)),
         );
     }

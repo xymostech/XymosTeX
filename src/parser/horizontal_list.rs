@@ -78,10 +78,10 @@ impl<'a> Parser<'a> {
                     self.lex_expanded_token();
 
                     let next_token = self.peek_unexpanded_token();
-                    let is_next_token_math_shift = match next_token {
-                        Some(Token::Char(_, Category::MathShift)) => true,
-                        _ => false,
-                    };
+                    let is_next_token_math_shift = matches!(
+                        next_token,
+                        Some(Token::Char(_, Category::MathShift))
+                    );
 
                     if !restricted && is_next_token_math_shift {
                         self.lex_unexpanded_token();

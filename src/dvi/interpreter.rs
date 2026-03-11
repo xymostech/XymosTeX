@@ -179,7 +179,7 @@ where
                 ..
             } => {
                 state.add_font(
-                    *font_num as i32,
+                    *font_num,
                     &Font {
                         font_name: font_name.to_string(),
                         scale: Dimen::from_scaled_points(*scale as i32),

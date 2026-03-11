@@ -238,7 +238,7 @@ impl<'a> Parser<'a> {
             AtClause::At(dimen)
         } else if self.parse_optional_keyword_expanded("scaled") {
             let number = self.parse_number();
-            if number < 0 || number > 32768 {
+            if !(0..=32768).contains(&number) {
                 panic!("Invalid magnification: {}", number);
             }
             AtClause::Scaled(number as u16)
@@ -248,6 +248,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[allow(clippy::disallowed_types)]
     fn parse_font_assignment(&mut self, global: bool) {
         let tok = self.lex_expanded_token().unwrap();
 

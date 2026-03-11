@@ -186,9 +186,9 @@ impl<'a> Parser<'a> {
             _ => None,
         }?;
 
-        if '0' <= ch && ch <= '9'
-            || 'a' <= ch && ch <= 'z'
-            || 'A' <= ch && ch <= 'Z'
+        if ch.is_ascii_digit()
+            || ch.is_ascii_lowercase()
+            || ch.is_ascii_uppercase()
             || ch == '-'
             || ch == '_'
         {
@@ -340,15 +340,15 @@ mod tests {
     #[test]
     fn it_parses_optional_keywords() {
         with_parser(&["   by    pt   TrUe%"], |parser| {
-            assert_eq!(parser.parse_optional_keyword_expanded("by"), true);
+            assert!(parser.parse_optional_keyword_expanded("by"));
 
-            assert_eq!(parser.parse_optional_keyword_expanded("by"), false);
-            assert_eq!(parser.parse_optional_keyword_expanded("pc"), false);
-            assert_eq!(parser.parse_optional_keyword_expanded("pt"), true);
+            assert!(!parser.parse_optional_keyword_expanded("by"));
+            assert!(!parser.parse_optional_keyword_expanded("pc"));
+            assert!(parser.parse_optional_keyword_expanded("pt"));
 
-            assert_eq!(parser.parse_optional_keyword_expanded("pt"), false);
-            assert_eq!(parser.parse_optional_keyword_expanded("trust"), false);
-            assert_eq!(parser.parse_optional_keyword_expanded("true"), true);
+            assert!(!parser.parse_optional_keyword_expanded("pt"));
+            assert!(!parser.parse_optional_keyword_expanded("trust"));
+            assert!(parser.parse_optional_keyword_expanded("true"));
         });
     }
 

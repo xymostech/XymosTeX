@@ -168,11 +168,11 @@ impl TeXStateInner {
         // Set up the default categories of various characters
         let mut initial_categories = HashMap::new();
         // ASCII characters are marked as Letters
-        for i in 0..255 {
-            let ch = (i as u8) as char;
-            if ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') {
-                initial_categories.insert(ch, Category::Letter);
-            }
+        for ch in 'a'..='z' {
+            initial_categories.insert(ch, Category::Letter);
+        }
+        for ch in 'A'..='Z' {
+            initial_categories.insert(ch, Category::Letter);
         }
         // Other various default categories
         initial_categories.insert('\u{0000}', Category::Ignored);
@@ -194,10 +194,10 @@ impl TeXStateInner {
         let mut initial_math_codes = HashMap::new();
         for i in 0..255 {
             let ch = (i as u8) as char;
-            if ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') {
+            if ch.is_ascii_lowercase() || ch.is_ascii_uppercase() {
                 initial_math_codes
                     .insert(ch, MathCode::from_number(0x7100 + i));
-            } else if '0' <= ch && ch <= '9' {
+            } else if ch.is_ascii_digit() {
                 initial_math_codes
                     .insert(ch, MathCode::from_number(0x7000 + i));
             }
@@ -301,7 +301,7 @@ impl TeXStateInner {
     fn get_dimen_parameter(&self, dimen_parameter: &DimenParameter) -> Dimen {
         self.dimen_parameter_registers
             .get(dimen_parameter)
-            .map(|dimen| *dimen)
+            .copied()
             .unwrap_or(Dimen::zero())
     }
 
@@ -317,7 +317,7 @@ impl TeXStateInner {
     fn get_glue_parameter(&self, glue_parameter: &GlueParameter) -> Glue {
         self.glue_parameter_registers
             .get(glue_parameter)
-            .map(|glue| glue.clone())
+            .cloned()
             .unwrap_or(Glue::zero())
     }
 
@@ -486,11 +486,7 @@ impl TeXStateInner {
         F: FnOnce(&mut TeXBox) -> T,
     {
         if let Some(box_refcell) = self.box_registers.get(&box_index) {
-            if let Some(ref mut tex_box) = *box_refcell.borrow_mut() {
-                Some(func(tex_box))
-            } else {
-                None
-            }
+            (*box_refcell.borrow_mut()).as_mut().map(func)
         } else {
             None
         }
@@ -727,10 +723,7 @@ impl TeXState {
         F: FnOnce(Ref<FontMetrics>) -> T,
     {
         let metrics = self.get_metrics_for_font(font);
-        match metrics {
-            Some(metrics) => Some(func(metrics)),
-            None => None,
-        }
+        metrics.map(func)
     }
 }
 
@@ -1014,15 +1007,12 @@ mod tests {
             scale: Dimen::from_unit(1.0, Unit::Point),
         };
 
-        assert_eq!(state.get_metrics_for_font(&fake_font).is_none(), true);
-        assert_eq!(
-            state
-                .with_metrics_for_font(&fake_font, |_metrics| {
-                    panic!("Shouldn't reach here");
-                })
-                .is_none(),
-            true
-        );
+        assert!(state.get_metrics_for_font(&fake_font).is_none());
+        assert!(state
+            .with_metrics_for_font(&fake_font, |_metrics| {
+                panic!("Shouldn't reach here");
+            })
+            .is_none());
     }
 
     #[test]

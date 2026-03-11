@@ -236,7 +236,7 @@ mod tests {
                 lig_kern_steps: vec![],
                 kerns: vec![],
                 ext_recipes: vec![],
-                font_parameters: vec![0.0, 4.0, 1.0, 2.0, 5.5, 4.0, 1.0,]
+                font_parameters: [0.0, 4.0, 1.0, 2.0, 5.5, 4.0, 1.0,]
                     .iter()
                     .map(|x| Fixnum::from_float(*x))
                     .collect(),

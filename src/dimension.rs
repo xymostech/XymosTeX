@@ -53,6 +53,7 @@ impl Dimen {
     }
 
     // Given a number of a given unit, create a Dimen.
+    #[allow(clippy::disallowed_types)]
     pub fn from_unit(num: f64, from_unit: Unit) -> Dimen {
         let (scale_num, scale_denom) = get_scale(from_unit);
         Dimen(
@@ -65,14 +66,13 @@ impl Dimen {
         Dimen(num).validate()
     }
 
-    // Given a Dimen and a unit to convert that to, returns the amount of that unit
-    // that are in that Dimen.
+    // Given a Dimen and a unit, returns the amount of that unit that are in
+    // that Dimen.
     // Note: This should only be used for printing/debugging, not for calculation
-    fn to_unit(&self, to_unit: Unit) -> f64 {
-        let (scale_num, scale_denom) = get_scale(to_unit);
-        (self.0 as f64) * (scale_denom as f64)
-            / (scale_num as f64)
-            / (65536.0 as f64)
+    #[allow(clippy::disallowed_types)]
+    fn num_of_unit(&self, unit: Unit) -> f64 {
+        let (scale_num, scale_denom) = get_scale(unit);
+        (self.0 as f64) * (scale_denom as f64) / (scale_num as f64) / 65536.0
     }
 
     // Returns the exact number of scaled points in the Dimen. This might be
@@ -93,7 +93,7 @@ impl Dimen {
 impl fmt::Debug for Dimen {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Dimen")
-            .field("pts", &format!("{:.3}", self.to_unit(Unit::Point)))
+            .field("pts", &format!("{:.3}", self.num_of_unit(Unit::Point)))
             .field("sp", &format!("{}", self.0))
             .finish()
     }
@@ -101,7 +101,7 @@ impl fmt::Debug for Dimen {
 
 impl PartialOrd for Dimen {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.0.cmp(&other.0))
+        Some(self.cmp(other))
     }
 }
 
@@ -147,6 +147,7 @@ impl Mul<(i32, i32)> for Dimen {
 // Floating point multiplication should be used sparingly! TeX only relies on
 // floating points in a few specific places, and we will run into rounding
 // issues if this is used elsewhere.
+#[allow(clippy::disallowed_types)]
 impl Mul<f64> for Dimen {
     type Output = Dimen;
 
@@ -190,6 +191,7 @@ pub enum FilKind {
 pub struct FilDimen(pub FilKind, pub i32);
 
 impl FilDimen {
+    #[allow(clippy::disallowed_types)]
     pub fn new(kind: FilKind, value: f64) -> Self {
         FilDimen(kind, (value * 65536.0) as i32)
     }
@@ -200,6 +202,7 @@ impl FilDimen {
 }
 
 impl fmt::Debug for FilDimen {
+    #[allow(clippy::disallowed_types)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FilDimen")
             .field("kind", &self.0)
@@ -293,13 +296,14 @@ impl MuDimen {
         MuDimen(0)
     }
 
+    #[allow(clippy::disallowed_types)]
     pub fn new(num: f64) -> MuDimen {
         MuDimen((num * 65536.0).round() as i32)
     }
 
     /// Given the value of the quad dimension from a given font, converts the
     /// MuDimen into a plain Dimen
-    pub fn to_dimen(&self, quad: Dimen) -> Dimen {
+    pub fn to_dimen(self, quad: Dimen) -> Dimen {
         // Calculating this result using quad * (self.0, 655536 * 18) would
         // produce a result of higher precision, but we explicitly truncate the
         // intermediate result because TeX itself loses some precision when
@@ -362,10 +366,13 @@ mod tests {
             Unit::Cicero,
             Unit::ScaledPoint,
         ] {
-            assert_close(Dimen::from_unit(10.0, *unit).to_unit(*unit), 10.0);
+            assert_close(
+                Dimen::from_unit(10.0, *unit).num_of_unit(*unit),
+                10.0,
+            );
         }
 
-        assert_close(Dimen(1000000000).to_unit(Unit::Point), 15258.78906);
+        assert_close(Dimen(1000000000).num_of_unit(Unit::Point), 15258.78906);
     }
 
     #[test]

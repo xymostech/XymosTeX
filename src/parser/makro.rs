@@ -6,7 +6,7 @@ use crate::parser::Parser;
 use crate::token::Token;
 
 fn parse_parameter_number(ch: char) -> usize {
-    if ch >= '1' && ch <= '9' {
+    if ('1'..='9').contains(&ch) {
         ((ch as u8) - (b'0')) as usize
     } else {
         panic!("Invalid number after parameter: {}", ch);
@@ -300,11 +300,10 @@ impl<'a> Parser<'a> {
                     // A parameter is delimited if it's followed immediately by
                     // a token. If the parameter is the last element in the
                     // list, it is not delimited.
-                    let is_delimited = match makro.parameter_list.get(index + 1)
-                    {
-                        Some(MacroListElem::Token(_)) => true,
-                        _ => false,
-                    };
+                    let is_delimited = matches!(
+                        makro.parameter_list.get(index + 1),
+                        Some(MacroListElem::Token(_))
+                    );
 
                     let toks = if is_delimited {
                         let delimiter_last_index =

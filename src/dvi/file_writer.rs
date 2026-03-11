@@ -45,7 +45,7 @@ impl<T: io::Write> DVIFileWriter<T> {
 
     fn write_array(&mut self, value: &[u8], size: usize) -> io::Result<()> {
         if value.len() < size {
-            self.writer.write_all(&value)?;
+            self.writer.write_all(value)?;
             for _ in 0..(size - value.len()) {
                 self.writer.write_all(&[0])?;
             }
@@ -141,7 +141,7 @@ impl DVICommand {
                 writer.write_4_bytes_unsigned(*design_size)?;
                 writer.write_1_byte_unsigned(*area)?;
                 writer.write_1_byte_unsigned(*length)?;
-                writer.write_string(&font_name, (area + length) as usize)
+                writer.write_string(font_name, (area + length) as usize)
             }
             DVICommand::FntDef4 {
                 font_num,
@@ -159,7 +159,7 @@ impl DVICommand {
                 writer.write_4_bytes_unsigned(*design_size)?;
                 writer.write_1_byte_unsigned(*area)?;
                 writer.write_1_byte_unsigned(*length)?;
-                writer.write_string(&font_name, (area + length) as usize)
+                writer.write_string(font_name, (area + length) as usize)
             }
             DVICommand::Pre {
                 format,
@@ -174,7 +174,7 @@ impl DVICommand {
                 writer.write_4_bytes_unsigned(*den)?;
                 writer.write_4_bytes_unsigned(*mag)?;
                 writer.write_1_byte_unsigned(comment.len() as u8)?;
-                writer.write_array(&comment, comment.len())
+                writer.write_array(comment, comment.len())
             }
             DVICommand::Post {
                 pointer,

@@ -52,8 +52,7 @@ impl<T: io::Read> DVIFileReader<T> {
     }
 
     pub fn read_array(&mut self, size: usize) -> io::Result<Vec<u8>> {
-        let mut buf: Vec<u8> = Vec::new();
-        buf.resize(size, 0);
+        let mut buf: Vec<u8> = vec![0; size];
         self.reader.read_exact(&mut buf[..])?;
         Ok(buf)
     }
@@ -62,10 +61,9 @@ impl<T: io::Read> DVIFileReader<T> {
         let arr = self.read_array(size)?;
         match String::from_utf8(arr) {
             Ok(string) => Ok(string),
-            Err(err) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Error parsing utf-8: {}", err),
-            )),
+            Err(err) => {
+                Err(io::Error::other(format!("Error parsing utf-8: {}", err)))
+            }
         }
     }
 }

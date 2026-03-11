@@ -53,16 +53,13 @@ impl<T: io::Read> TeXFileReader<T> {
             max_len
         );
 
-        let mut buf: Vec<u8> = Vec::new();
-        buf.resize(max_len - 1, 0);
+        let mut buf: Vec<u8> = vec![0; max_len - 1];
         self.reader.read_exact(&mut buf[..])?;
         buf.resize(str_len, 0);
 
         match String::from_utf8(buf) {
             Ok(string) => Ok(string),
-            Err(_) => {
-                Err(io::Error::new(io::ErrorKind::Other, "Invalid utf-8"))
-            }
+            Err(_) => Err(io::Error::other("Invalid utf-8")),
         }
     }
 }
@@ -72,7 +69,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(clippy::float_cmp)]
     fn it_reads_integers_and_fixnums() {
         #[rustfmt::skip]
         let mut reader = TeXFileReader::new(&[

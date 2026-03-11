@@ -432,10 +432,10 @@ impl<'a> Parser<'a> {
 
     fn is_math_superscript_head(&mut self) -> bool {
         let expanded_token = self.peek_expanded_token();
-        match self.replace_renamed_token(expanded_token) {
-            Some(Token::Char(_, Category::Superscript)) => true,
-            _ => false,
-        }
+        matches!(
+            self.replace_renamed_token(expanded_token),
+            Some(Token::Char(_, Category::Superscript))
+        )
     }
 
     fn parse_math_superscript(&mut self, atom: MathAtom) -> MathAtom {
@@ -451,10 +451,10 @@ impl<'a> Parser<'a> {
 
     fn is_math_subscript_head(&mut self) -> bool {
         let expanded_token = self.peek_expanded_token();
-        match self.replace_renamed_token(expanded_token) {
-            Some(Token::Char(_, Category::Subscript)) => true,
-            _ => false,
-        }
+        matches!(
+            self.replace_renamed_token(expanded_token),
+            Some(Token::Char(_, Category::Subscript))
+        )
     }
 
     fn parse_math_subscript(&mut self, atom: MathAtom) -> MathAtom {
@@ -767,7 +767,7 @@ impl<'a> Parser<'a> {
                 );
 
                 let sym_font = &MATH_FONTS
-                    [&(get_font_style_for_math_style(&current_style), 2)];
+                    [&(get_font_style_for_math_style(current_style), 2)];
                 let axis_height = self
                     .state
                     .with_metrics_for_font(sym_font, |metrics| {
@@ -792,7 +792,7 @@ impl<'a> Parser<'a> {
             }
             Some(field) => {
                 let nucleus_box =
-                    self.convert_math_field_to_box(field, &current_style);
+                    self.convert_math_field_to_box(field, current_style);
 
                 let height = *nucleus_box.height();
                 let depth = *nucleus_box.depth();
@@ -842,7 +842,7 @@ impl<'a> Parser<'a> {
             }
             Some(field) => {
                 let nucleus_box =
-                    self.convert_math_field_to_box(field, &current_style);
+                    self.convert_math_field_to_box(field, current_style);
 
                 let height = *nucleus_box.height();
                 let depth = *nucleus_box.depth();
@@ -894,7 +894,7 @@ impl<'a> Parser<'a> {
             .unwrap();
 
         let sym_font =
-            &MATH_FONTS[&(get_font_style_for_math_style(&current_style), 2)];
+            &MATH_FONTS[&(get_font_style_for_math_style(current_style), 2)];
 
         // The amount that the superscript and subscript will be
         // shifted with respect to the nucleus. Called u and v in
@@ -1040,7 +1040,7 @@ impl<'a> Parser<'a> {
                 sub_shift = max(sub_shift, sub_2);
 
                 let ext_font = &MATH_FONTS
-                    [&(get_font_style_for_math_style(&current_style), 3)];
+                    [&(get_font_style_for_math_style(current_style), 3)];
                 let default_rule_thickness = self
                     .state
                     .with_metrics_for_font(ext_font, |metrics| {
@@ -1169,9 +1169,11 @@ impl<'a> Parser<'a> {
                                 let last_atom = elems_after_first_pass
                                     .iter_mut()
                                     .rev()
-                                    .find(|item| match item {
-                                        TranslatedMathListElem::Atom(_) => true,
-                                        _ => false,
+                                    .find(|item| {
+                                        matches!(
+                                            item,
+                                            TranslatedMathListElem::Atom(_)
+                                        )
                                     })
                                     .unwrap();
 

@@ -121,7 +121,7 @@ impl DVIFileWriter {
 
                 for elem in &hbox.list {
                     self.add_horizontal_list_elem(
-                        &elem,
+                        elem,
                         &hbox.glue_set_ratio,
                         Some(&seen_width),
                     );
@@ -135,7 +135,7 @@ impl DVIFileWriter {
                     .push(DVICommand::Down4(-vbox.height.as_scaled_points()));
 
                 for elem in &vbox.list {
-                    self.add_vertical_list_elem(&elem, &vbox.glue_set_ratio);
+                    self.add_vertical_list_elem(elem, &vbox.glue_set_ratio);
                 }
             }
         }
@@ -195,7 +195,7 @@ impl DVIFileWriter {
                     DVICommand::Set1(*chr as u8)
                 };
 
-                self.switch_to_font(&font);
+                self.switch_to_font(font);
                 self.commands.push(command);
             }
 

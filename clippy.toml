@@ -1,0 +1,4 @@
+disallowed-types = [
+  { path = "f32", reason = "f64 is used by TeX, so use that instead", replacement = "f64" },
+  { path = "f64", reason = "floating point numbers should be used sparingly, disable this lint when it is necessary" }
+]

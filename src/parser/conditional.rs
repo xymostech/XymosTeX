@@ -145,13 +145,13 @@ mod tests {
     #[test]
     fn it_parses_single_body_iftrue() {
         with_parser(&["\\iftrue x\\fi%"], |parser| {
-            assert_eq!(parser.is_conditional_head(), true);
+            assert!(parser.is_conditional_head());
             parser.expand_conditional();
             assert_eq!(
                 parser.lex_unexpanded_token(),
                 Some(Token::Char('x', Category::Letter))
             );
-            assert_eq!(parser.is_conditional_head(), true);
+            assert!(parser.is_conditional_head());
             parser.expand_conditional();
             assert_eq!(parser.lex_unexpanded_token(), None);
         });
@@ -160,13 +160,13 @@ mod tests {
     #[test]
     fn it_parses_iftrue_with_else() {
         with_parser(&["\\iftrue x\\else y\\fi%"], |parser| {
-            assert_eq!(parser.is_conditional_head(), true);
+            assert!(parser.is_conditional_head());
             parser.expand_conditional();
             assert_eq!(
                 parser.lex_unexpanded_token(),
                 Some(Token::Char('x', Category::Letter))
             );
-            assert_eq!(parser.is_conditional_head(), true);
+            assert!(parser.is_conditional_head());
             parser.expand_conditional();
             assert_eq!(parser.lex_unexpanded_token(), None);
         });
@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn it_parses_single_body_iffalse() {
         with_parser(&["\\iffalse x\\fi%"], |parser| {
-            assert_eq!(parser.is_conditional_head(), true);
+            assert!(parser.is_conditional_head());
             parser.expand_conditional();
             assert_eq!(parser.lex_unexpanded_token(), None);
         });
@@ -184,13 +184,13 @@ mod tests {
     #[test]
     fn it_parses_iffalse_with_else() {
         with_parser(&["\\iffalse x\\else y\\fi%"], |parser| {
-            assert_eq!(parser.is_conditional_head(), true);
+            assert!(parser.is_conditional_head());
             parser.expand_conditional();
             assert_eq!(
                 parser.lex_unexpanded_token(),
                 Some(Token::Char('y', Category::Letter))
             );
-            assert_eq!(parser.is_conditional_head(), true);
+            assert!(parser.is_conditional_head());
             parser.expand_conditional();
             assert_eq!(parser.lex_unexpanded_token(), None);
         });
@@ -236,7 +236,7 @@ mod tests {
                 )),
             );
 
-            assert_eq!(parser.is_conditional_head(), true);
+            assert!(parser.is_conditional_head());
             parser.expand_conditional();
             assert_eq!(
                 parser.lex_expanded_token(),
@@ -246,7 +246,7 @@ mod tests {
                 parser.lex_expanded_token(),
                 Some(Token::Char('x', Category::Letter))
             );
-            assert_eq!(parser.is_conditional_head(), true);
+            assert!(parser.is_conditional_head());
             parser.expand_conditional();
             assert_eq!(parser.lex_unexpanded_token(), None);
         });
@@ -278,22 +278,22 @@ mod tests {
                     &Token::ControlSequence("else".to_string()),
                 );
 
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
                 assert_eq!(
                     parser.lex_expanded_token(),
                     Some(Token::Char('a', Category::Letter))
                 );
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
 
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
                 assert_eq!(
                     parser.lex_expanded_token(),
                     Some(Token::Char('b', Category::Letter))
                 );
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
                 assert_eq!(parser.lex_unexpanded_token(), None);
             },
@@ -310,33 +310,33 @@ mod tests {
             ],
             |parser| {
                 // 1<2 -> t
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
                 assert_eq!(
                     parser.lex_expanded_token(),
                     Some(Token::Char('t', Category::Letter))
                 );
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
 
                 // 1>2 -> f
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
                 assert_eq!(
                     parser.lex_expanded_token(),
                     Some(Token::Char('f', Category::Letter))
                 );
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
 
                 // 1=2 -> f
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
                 assert_eq!(
                     parser.lex_expanded_token(),
                     Some(Token::Char('f', Category::Letter))
                 );
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
             },
         );
@@ -363,13 +363,13 @@ mod tests {
                 parser.state.set_count(false, 1, 20);
 
                 // 10<20 -> t
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
                 assert_eq!(
                     parser.lex_expanded_token(),
                     Some(Token::Char('t', Category::Letter))
                 );
-                assert_eq!(parser.is_conditional_head(), true);
+                assert!(parser.is_conditional_head());
                 parser.expand_conditional();
             },
         );

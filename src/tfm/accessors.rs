@@ -3,6 +3,7 @@ use crate::tfm::fixnum::Fixnum;
 use crate::tfm::{CharInfoEntry, CharKind, TFMFile};
 
 impl TFMFile {
+    #[allow(clippy::disallowed_types)]
     pub fn get_design_size(&self) -> f64 {
         self.header.design_size.as_float()
     }
@@ -134,8 +135,8 @@ mod tests {
                 > font_metrics.get_width('i', None)
         );
 
-        for ch in (0 as u8)..128 {
-            assert!(font_metrics.get_width(ch as char, None) > Dimen::zero());
+        for ch in (0 as char)..(128 as char) {
+            assert!(font_metrics.get_width(ch, None) > Dimen::zero());
         }
     }
 

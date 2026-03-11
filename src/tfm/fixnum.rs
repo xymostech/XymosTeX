@@ -26,6 +26,7 @@ impl Fixnum {
         }
     }
 
+    #[allow(clippy::disallowed_types)]
     pub fn as_float(&self) -> f64 {
         let (numerator, denominator) = self.as_ratio();
         (numerator as f64) / (denominator as f64)

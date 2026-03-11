@@ -20,7 +20,7 @@ impl<'a> Parser<'a> {
         T: AsRef<str>,
         T: std::string::ToString,
     {
-        let lexer = Lexer::new(lines, &state);
+        let lexer = Lexer::new(lines, state);
         Parser {
             lexer,
             state,

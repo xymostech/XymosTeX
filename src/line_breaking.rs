@@ -53,7 +53,7 @@ mod line_break_point_tests {
 }
 
 fn get_list_indices_for_breaks(
-    list: &Vec<HorizontalListElem>,
+    list: &[HorizontalListElem],
     start: &LineBreakPoint,
     end: &LineBreakPoint,
 ) -> Option<(usize, usize)> {
@@ -213,50 +213,37 @@ impl LineBreakGraph {
                 .collect::<Vec<_>>();
 
         backtraces.sort_by(|a, b| a.total_demerits.cmp(&b.total_demerits));
-        backtraces.get(0).copied()
+        backtraces.first().copied()
     }
 
     fn get_best_breaks_to_end(&self) -> Option<LineBreakingResult> {
         let mut all_breaks = vec![LineBreakPoint::End];
-        let mut curr_break_backtrace = if let Some(backtrace) =
-            self.get_best_backtrace_to_point(&LineBreakPoint::End)
-        {
-            backtrace
-        } else {
-            return None;
-        };
+        let mut curr_break_backtrace =
+            self.get_best_backtrace_to_point(&LineBreakPoint::End)?;
 
         let end_demerits = curr_break_backtrace.total_demerits;
 
         while let Some(prev_break) = &curr_break_backtrace.prev_break {
             all_breaks.insert(0, prev_break.line_break_point);
-            curr_break_backtrace =
-                if let Some(backtrace) = self.best_path_to.get(&prev_break) {
-                    backtrace
-                } else {
-                    return None;
-                };
+            curr_break_backtrace = self.best_path_to.get(prev_break)?;
         }
 
         Some(LineBreakingResult {
             total_demerits: end_demerits,
-            all_breaks: all_breaks,
+            all_breaks,
         })
     }
 }
 
 fn get_available_break_indices(
-    list: &Vec<HorizontalListElem>,
+    list: &[HorizontalListElem],
 ) -> Vec<LineBreakPoint> {
     let mut available_break_indices = Vec::new();
 
     available_break_indices.push(LineBreakPoint::Start);
     for (i, curr) in list.iter().enumerate() {
-        match curr {
-            HorizontalListElem::HSkip(_) => {
-                available_break_indices.push(LineBreakPoint::BreakAtIndex(i));
-            }
-            _ => (),
+        if let HorizontalListElem::HSkip(_) = curr {
+            available_break_indices.push(LineBreakPoint::BreakAtIndex(i));
         }
     }
     available_break_indices.push(LineBreakPoint::End);
@@ -276,7 +263,7 @@ enum DemeritResult {
 }
 
 fn get_demerits_for_line_between(
-    list: &Vec<HorizontalListElem>,
+    list: &[HorizontalListElem],
     params: &LineBreakingParams,
     state: &TeXState,
     start: &LineBreakPoint,
@@ -334,7 +321,7 @@ fn get_demerits_for_line_between(
 
     let line_penalty: i64 = 10;
     let penalty: i64 = 0;
-    let base_demerits = if 0 <= penalty && penalty < 10000 {
+    let base_demerits = if (0..10000).contains(&penalty) {
         (line_penalty + badness as i64).min(10000).pow(2) + penalty.pow(2)
     } else if -10000 < penalty && penalty < 0 {
         (line_penalty + badness as i64).min(10000).pow(2) - penalty.pow(2)
@@ -358,7 +345,7 @@ struct BackwardsPath {
 // Given a horizontal list, try to generate the best line breaks which match the
 // line breaking params.
 fn generate_best_list_break_option_with_params(
-    list: &Vec<HorizontalListElem>,
+    list: &[HorizontalListElem],
     params: &LineBreakingParams,
     state: &TeXState,
 ) -> Option<LineBreakingResult> {
@@ -367,7 +354,7 @@ fn generate_best_list_break_option_with_params(
     // available break point is a node and the weight of the edges between them
     // is the badness of setting the line between those break points.
 
-    let line_breaks = get_available_break_indices(&list);
+    let line_breaks = get_available_break_indices(list);
     let mut graph = LineBreakGraph::new();
 
     // Keep track of previous breakpoints that we've looked at already, that are
@@ -400,7 +387,7 @@ fn generate_best_list_break_option_with_params(
 
         for previous_break in reachable_previous_breaks.clone().iter() {
             let previous_demerits =
-                graph.get_best_demerits_to_node(&previous_break).unwrap();
+                graph.get_best_demerits_to_node(previous_break).unwrap();
             if let Some(demerits) = get_demerits_for_line_between(
                 list,
                 params,
@@ -426,7 +413,7 @@ fn generate_best_list_break_option_with_params(
                             .unwrap();
                         reachable_previous_breaks.remove(previous_break_index);
 
-                        if reachable_previous_breaks.len() == 0 {
+                        if reachable_previous_breaks.is_empty() {
                             // In a very special case where removing the
                             // previous break would remove all of the previous
                             // viable breakpoints, this means that there are no
@@ -546,12 +533,12 @@ fn generate_best_list_break_option_with_params(
 }
 
 pub fn break_horizontal_list_to_lines_with_params(
-    list: &Vec<HorizontalListElem>,
+    list: &[HorizontalListElem],
     params: LineBreakingParams,
     state: &TeXState,
 ) -> Option<Vec<TeXBox>> {
     let best_option =
-        generate_best_list_break_option_with_params(&list, &params, state)?;
+        generate_best_list_break_option_with_params(list, &params, state)?;
 
     let break_pairs = best_option
         .all_breaks
@@ -560,7 +547,7 @@ pub fn break_horizontal_list_to_lines_with_params(
     let line_boxes = break_pairs
         .map(|(start, end)| {
             let (start_index, end_index) =
-                get_list_indices_for_breaks(list, &start, &end).unwrap();
+                get_list_indices_for_breaks(list, start, end).unwrap();
             let line_list = &list.get(start_index..end_index).unwrap();
             let line_box =
                 HorizontalBox::create_from_horizontal_list_with_layout(

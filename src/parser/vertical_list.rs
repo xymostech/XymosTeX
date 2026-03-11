@@ -53,7 +53,7 @@ impl<'a> Parser<'a> {
             boxes
                 .into_iter()
                 .map(|tex_box| VerticalListElem::Box {
-                    tex_box: tex_box,
+                    tex_box,
                     shift: Dimen::zero(),
                 })
                 .collect()

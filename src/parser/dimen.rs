@@ -111,6 +111,7 @@ impl<'a> Parser<'a> {
 
     // Parses a decimal constant, which is any number of digits and a single
     // decimal point (either . or ,).
+    #[allow(clippy::disallowed_types)]
     fn parse_decimal_constant(&mut self) -> f64 {
         // The final decimal value
         let mut value: f64 = 0.0;
@@ -171,6 +172,7 @@ impl<'a> Parser<'a> {
 
     // Parses a <factor> (which is the number part of a <number><unit>
     // dimension).
+    #[allow(clippy::disallowed_types)]
     fn parse_factor(&mut self) -> f64 {
         if self.is_almost_normal_integer_head() {
             self.parse_almost_normal_integer() as f64
@@ -190,6 +192,7 @@ impl<'a> Parser<'a> {
     //   like an em which depends on the current font we're using.
     // * Sometimes, we find a "true" unit, which depends on the current
     //   magnification (from \mag)
+    #[allow(clippy::disallowed_types)]
     fn parse_unit_of_measure(&mut self, allow_fil: bool) -> (f64, UnitOrFil) {
         if self.is_internal_integer_head() {
             let value = self.parse_internal_integer();
@@ -390,7 +393,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::float_cmp)]
     fn it_parses_decimals() {
         with_parser(
             &[

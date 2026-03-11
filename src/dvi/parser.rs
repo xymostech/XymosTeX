@@ -106,7 +106,9 @@ impl DVICommand {
                 Ok(Some(DVICommand::Y3(a)))
             }
             // fnt_num_n
-            n if n >= 171 && n <= 234 => Ok(Some(DVICommand::FntNumN(n - 171))),
+            n if (171..=234).contains(&n) => {
+                Ok(Some(DVICommand::FntNumN(n - 171)))
+            }
             // fnt4
             238 => {
                 let k = reader.read_4_bytes_signed()?;

@@ -1,4 +1,6 @@
 #![deny(clippy::all)]
+#![allow(clippy::new_without_default)]
+#![cfg_attr(test, allow(clippy::disallowed_types))]
 
 pub mod box_to_dvi;
 mod boxes;

@@ -27,6 +27,7 @@ impl FontMetrics {
         })
     }
 
+    #[allow(clippy::disallowed_types)]
     pub fn get_design_size(&self) -> f64 {
         self.tfm_file.get_design_size()
     }

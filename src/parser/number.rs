@@ -220,7 +220,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_8bit_number(&mut self) -> u8 {
         let number = self.parse_number();
-        if number < 0 || number > 255 {
+        if !(0..=255).contains(&number) {
             panic!("Invalid 8-bit number: {}", number);
         }
         number as u8
@@ -228,7 +228,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_15bit_number(&mut self) -> u16 {
         let number = self.parse_number();
-        if number < 0 || number > 32767 {
+        if !(0..=32767).contains(&number) {
             panic!("Invalid 15-bit number: {}", number);
         }
         number as u16

@@ -17,13 +17,13 @@ enum PlainLexResult {
 }
 
 fn is_hex_char(ch: char) -> bool {
-    ('0' <= ch && ch <= '9') || ('a' <= ch && ch <= 'f')
+    ch.is_ascii_digit() || ('a'..='f').contains(&ch)
 }
 
 fn hex_value(ch: char) -> u8 {
-    if '0' <= ch && ch <= '9' {
+    if ch.is_ascii_digit() {
         (ch as u8) - (b'0')
-    } else if 'a' <= ch && ch <= 'f' {
+    } else if ('a'..='f').contains(&ch) {
         (ch as u8) - (b'a') + 10
     } else {
         panic!("Illegal hex char: {}", ch);
@@ -243,7 +243,7 @@ mod tests {
         expected_toks: &[Token],
         state: &TeXState,
     ) {
-        let mut lexer = Lexer::new(lines, &state);
+        let mut lexer = Lexer::new(lines, state);
 
         let mut real_toks = Vec::new();
 
