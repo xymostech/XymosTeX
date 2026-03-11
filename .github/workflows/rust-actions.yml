@@ -1,0 +1,22 @@
+name: Rust checks
+on: [push]
+
+# Make sure CI fails on all warnings, including Clippy lints
+env:
+  RUSTFLAGS: "-Dwarnings"
+
+jobs:
+  rust_checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install TeX dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install texlive-base texlive-binaries libkpathsea-dev libkpathsea6
+      - uses: actions/checkout@v6
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features
+      - name: Check format
+        run: cargo fmt --check
+      - name: Run tests
+        run: cargo test
