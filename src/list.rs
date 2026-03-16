@@ -58,6 +58,13 @@ impl HorizontalListElem {
             HorizontalListElem::Penalty(_) => true,
         }
     }
+
+    pub fn get_penalty(&self) -> i32 {
+        match self {
+            HorizontalListElem::Penalty(penalty) => *penalty,
+            _ => 0,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

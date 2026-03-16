@@ -235,28 +235,52 @@ impl LineBreakGraph {
     }
 }
 
+fn can_break_at_index(list: &[HorizontalListElem], index: usize) -> bool {
+    match list[index] {
+        HorizontalListElem::HSkip(_) => {
+            index == 0 || !list[index - 1].is_discardable()
+        }
+        HorizontalListElem::Penalty(_) => true,
+        _ => false,
+    }
+}
+
 fn get_available_break_indices(
     list: &[HorizontalListElem],
 ) -> Vec<LineBreakPoint> {
     let mut available_break_indices = Vec::new();
 
     available_break_indices.push(LineBreakPoint::Start);
-    for (i, curr) in list.iter().enumerate() {
-        if let HorizontalListElem::HSkip(_) = curr {
-            available_break_indices.push(LineBreakPoint::BreakAtIndex(i));
-        }
-    }
+    available_break_indices.extend(
+        (0..list.len())
+            .filter(|i| can_break_at_index(list, *i))
+            .map(LineBreakPoint::BreakAtIndex),
+    );
     available_break_indices.push(LineBreakPoint::End);
 
     available_break_indices
 }
 
+fn get_penalty_at_point(
+    list: &[HorizontalListElem],
+    point: &LineBreakPoint,
+) -> i64 {
+    match point {
+        LineBreakPoint::Start => 0,
+        LineBreakPoint::End => 0,
+        LineBreakPoint::BreakAtIndex(index) => {
+            list[*index].get_penalty() as i64
+        }
+    }
+}
+
 #[derive(Debug)]
 enum DemeritResult {
     Overfull,
-    TooLargeBadness,
+    CannotBreak,
     Demerits {
         demerits: i64,
+        penalty: i64,
         badness: u64,
         classification: VisualClassification,
     },
@@ -275,6 +299,12 @@ fn get_demerits_for_line_between(
 
     if start_index > end_index {
         return None;
+    }
+
+    let penalty: i64 = get_penalty_at_point(list, end);
+
+    if penalty >= 10000 {
+        return Some(DemeritResult::CannotBreak);
     }
 
     let line_width = list
@@ -298,8 +328,8 @@ fn get_demerits_for_line_between(
         }
     };
 
-    if badness > params.tolerance as u64 {
-        return Some(DemeritResult::TooLargeBadness);
+    if badness > params.tolerance as u64 && penalty > -10000 {
+        return Some(DemeritResult::CannotBreak);
     }
 
     let visual_classification = VisualClassification::from_badness(
@@ -320,18 +350,26 @@ fn get_demerits_for_line_between(
     let additional_demerits: i64 = adjacent_classification_demerits;
 
     let line_penalty: i64 = 10;
-    let penalty: i64 = 0;
-    let base_demerits = if (0..10000).contains(&penalty) {
-        (line_penalty + badness as i64).min(10000).pow(2) + penalty.pow(2)
-    } else if -10000 < penalty && penalty < 0 {
-        (line_penalty + badness as i64).min(10000).pow(2) - penalty.pow(2)
+
+    let base_demerits = (line_penalty + badness as i64).min(10_000).pow(2);
+
+    let penalty_adjustment_demerits = if (0..10_000).contains(&penalty) {
+        penalty.pow(2)
+    } else if (-9_999..0).contains(&penalty) {
+        -penalty.pow(2)
+    } else if penalty >= 10_000 {
+        return None;
     } else {
-        (line_penalty + badness as i64).min(10000).pow(2)
+        // penalty <= -10000
+        0
     };
 
     Some(DemeritResult::Demerits {
-        demerits: base_demerits + additional_demerits,
+        demerits: base_demerits
+            + penalty_adjustment_demerits
+            + additional_demerits,
         badness,
+        penalty,
         classification: visual_classification,
     })
 }
@@ -430,7 +468,7 @@ fn generate_best_list_break_option_with_params(
                             // smallest overfull line.
                             if params.should_log {
                                 println!(
-                                    "@ via @@{:?} b=* p=x d=*",
+                                    "@ via @@{:?} b=* p=0 d=*",
                                     feasible_line_break_numbers[previous_break]
                                 );
                             }
@@ -445,18 +483,46 @@ fn generate_best_list_break_option_with_params(
                             );
                         }
                     }
-                    DemeritResult::TooLargeBadness => {} // ignore
+                    DemeritResult::CannotBreak => {} // ignore
                     DemeritResult::Demerits {
-                        demerits,
+                        mut demerits,
                         badness,
+                        penalty,
                         classification,
                     } => {
+                        let mut demerits_display = format!("{}", demerits);
+
+                        if penalty <= -10000 {
+                            if reachable_previous_breaks.len() == 1 {
+                                // If a \penalty-10000 is the only viable
+                                // breakpoint for a given line, then we don't
+                                // add demerits for that line.
+                                demerits = 0;
+
+                                // When that happens, the log shows d=* instead of d=0.
+                                demerits_display = "*".to_string();
+                            }
+
+                            // A \penalty-10000 forces us to break at that
+                            // point. We accomplish that by removing all of the
+                            // previous reachable points, so that any future
+                            // possible breakpoints will only be able to look
+                            // back this current breakpoint.
+                            reachable_previous_breaks.retain(
+                                |previous_break: &LineBreak| {
+                                    previous_break.line_break_point
+                                        >= *line_break_point
+                                },
+                            );
+                        }
+
                         if params.should_log {
                             println!(
-                                "@ via @@{:?} b={} p=x d={}",
+                                "@ via @@{:?} b={} p={} d={}",
                                 feasible_line_break_numbers[previous_break],
                                 badness,
-                                demerits
+                                penalty,
+                                demerits_display
                             );
                         }
 
@@ -476,6 +542,13 @@ fn generate_best_list_break_option_with_params(
                                 }
                             })
                             .or_insert(current_backwards_path);
+
+                        if penalty <= -10000 {
+                            // If a break is forced with \penalty-10000, we
+                            // always break with the longest possible line (i.e.
+                            // the one with the earliest starting point).
+                            break;
+                        }
                     }
                 }
             } else {
@@ -589,7 +662,11 @@ mod tests {
 
                 let best_break = generate_best_list_break_option_with_params(
                     &hlist,
-                    &params,
+                    &LineBreakingParams {
+                        // Since we run the algorithm twice, only log during one of the runs
+                        should_log: false,
+                        ..params
+                    },
                     parser.state,
                 )
                 .unwrap();
@@ -612,10 +689,45 @@ mod tests {
                     if actual_box != expected_line {
                         println!("First different line: {}", index);
                         println!(
-                            "{:?} elems vs {:?} elems",
+                            "actual:   {:?} elems\nvs\nexpected: {:?} elems",
                             actual_box.to_chars(),
                             expected_line.to_chars()
                         );
+
+                        if let (
+                            TeXBox::HorizontalBox(actual_hbox),
+                            TeXBox::HorizontalBox(expected_hbox),
+                        ) = (actual_box, expected_line)
+                        {
+                            if actual_hbox.list.len()
+                                != expected_hbox.list.len()
+                            {
+                                println!(
+                                    "actual len: {} vs expected len: {}",
+                                    actual_hbox.list.len(),
+                                    expected_hbox.list.len()
+                                );
+                            } else {
+                                for (index, (actual_elem, expected_elem)) in
+                                    actual_hbox
+                                        .list
+                                        .iter()
+                                        .zip(expected_hbox.list.iter())
+                                        .enumerate()
+                                {
+                                    if actual_elem != expected_elem {
+                                        println!(
+                                            "First different elem: {}",
+                                            index
+                                        );
+                                        println!("actual:   {:?}\nvs\nexpected: {:?}", actual_elem, expected_elem);
+
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
                         break;
                     }
                 }
@@ -961,6 +1073,165 @@ mod tests {
                 should_log: true,
             },
             22025720,
+        );
+    }
+
+    #[test]
+    fn it_includes_penalties_in_demerits_calculation() {
+        expect_paragraph_to_parse_to_lines(
+            &[
+                r"\setbox1=\hbox to15pt{x}%",
+                r"\def\a{\copy1}%",
+                r"{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a}",
+                r"{\a\a}{\penalty1000} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a} {\a\a} {\a\a} {\a}",
+                r"{\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}{\penalty-1000} ",
+                r"{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}",
+                r"{\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a}",
+                r"{\a\a}{\penalty1000} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}",
+                r"{\a} {\a\a} {\a\a} {\a} {\a\a\a}%",
+                r"\hskip 0pt plus1fil%",
+            ],
+            &[
+                r"\def\a{\hbox to15pt{x}}%",
+                r"\def\line#1{\hbox to400pt{#1}}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a}}%",
+                r"\line{{\a\a}{\penalty1000} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a} {\a\a} {\a\a} {\a}}%",
+                r"\line{{\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}}%",
+                r"\line{{\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a}}%",
+                r"\line{{\a\a}{\penalty1000} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a}\hskip 0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(400.0, Unit::Point),
+                tolerance: 1000,
+                visual_incompatibility_demerits: 10000,
+                should_log: true,
+            },
+            -177892,
+        );
+    }
+
+    #[test]
+    fn it_refuses_to_break_at_large_penalties() {
+        expect_paragraph_to_parse_to_lines(
+            &[
+                r"\setbox1=\hbox to15pt{x}%",
+                r"\def\a{\copy1}%",
+                r"\def\nobreak{\penalty10000}%",
+                r"{\a} {\a\a} {\a\a} {\a} {\a\a\a}",
+                r"{\a\a\a}{\nobreak} {\a}{\nobreak} {\a\a}{\nobreak} {\a\a}{\nobreak} {\a}{\nobreak} {\a\a\a}{\nobreak}",
+                r"{\a}{\nobreak} {\a\a}{\nobreak} {\a\a}{\nobreak} {\a}{\nobreak} {\a\a\a}{\nobreak} {\a\a\a}",
+                r"{\a} {\a\a} {\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a}",
+                r"{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a}",
+                r"{\a\a} {\a} {\a\a\a} {\a\a\a} {\a}%",
+                r"\hskip 0pt plus1fil%",
+            ],
+            &[
+                r"\def\a{\hbox to15pt{x}}%",
+                r"\def\line#1{\hbox to400pt{#1}}%",
+                r"\def\nobreak{\penalty10000}%",
+                r"\line{%",
+                r"  {\a} {\a\a} {\a\a} {\a} {\a\a\a}{ }%",
+                r"  {\a\a\a}{\nobreak} {\a}{\nobreak} {\a\a}{\nobreak} {\a\a}{\nobreak} {\a}{\nobreak} {\a\a\a}{\nobreak}{ }%",
+                r"  {\a}{\nobreak} {\a\a}{\nobreak} {\a\a}{\nobreak} {\a}{\nobreak} {\a\a\a}{\nobreak} {\a\a\a}%",
+                r"}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a}}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a}}%",
+                r"\line{{\a\a} {\a} {\a\a\a} {\a\a\a} {\a}\hskip 0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(400.0, Unit::Point),
+                tolerance: 1000,
+                visual_incompatibility_demerits: 10000,
+                should_log: true,
+            },
+            12904,
+        );
+    }
+
+    #[test]
+    fn it_always_breaks_at_large_negative_penalties() {
+        expect_paragraph_to_parse_to_lines(
+            &[
+                r"\setbox1=\hbox to15pt{x}%",
+                r"\def\a{\copy1}%",
+                r"\def\break{\penalty-10000}%",
+                r"{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}{\break}",
+                r"{\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a}",
+                r"{\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}{\break}",
+                r"{\a} {\a\a} {\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}{\break}",
+                r"{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}%",
+                r"\hskip 0pt plus1fil%",
+            ],
+            &[
+                r"\def\a{\hbox to15pt{x}}%",
+                r"\def\line#1{\hbox to400pt{#1}}%",
+                r"\def\break{\penalty-10000}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}}%",
+                r"\line{{\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a}}%",
+                r"\line{{\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}\hskip 0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(400.0, Unit::Point),
+                tolerance: 1000,
+                visual_incompatibility_demerits: 10000,
+                should_log: true,
+            },
+            // 10100 is added for the last line
+            12100 + 10100,
+        );
+    }
+
+    #[test]
+    fn it_adds_demerits_for_forced_breaks_only_if_other_potential_breaks_exist()
+    {
+        let paragraph = &[
+            r"\def\a{\hbox to15pt{x}}%",
+            r"\def\break{\penalty-10000}%",
+            r"{\a}\break",
+            r"{\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a}{\break}",
+            r"{\a}\hskip 0pt plus1fil%",
+        ];
+
+        expect_paragraph_to_parse_to_lines(
+            paragraph,
+            &[
+                r"\def\a{\hbox to15pt{x}}%",
+                r"\def\line#1{\hbox to375pt{#1}}%",
+                r"\def\break{\penalty-10000}%",
+                r"\line{{\a}}%",
+                r"\line{{\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a}}%",
+                r"\line{{\a}\hskip 0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(375.0, Unit::Point),
+                tolerance: 100,
+                visual_incompatibility_demerits: 10000,
+                should_log: true,
+            },
+            10225 + 100,
+        );
+
+        expect_paragraph_to_parse_to_lines(
+            paragraph,
+            &[
+                r"\def\a{\hbox to15pt{x}}%",
+                r"\def\line#1{\hbox to376pt{#1}}%",
+                r"\def\break{\penalty-10000}%",
+                r"\line{{\a}}%",
+                r"\line{{\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a}}%",
+                r"\line{{\a}\hskip 0pt plus1fil}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(376.0, Unit::Point),
+                tolerance: 100,
+                visual_incompatibility_demerits: 10000,
+                should_log: true,
+            },
+            100,
         );
     }
 }
