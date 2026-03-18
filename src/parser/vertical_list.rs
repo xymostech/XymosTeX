@@ -26,10 +26,11 @@ impl<'a> Parser<'a> {
         }
 
         list.append(&mut vec![
-            // TODO(xymostech): Add \nobreak before this and \break after this
+            HorizontalListElem::Penalty(10000),
             HorizontalListElem::HSkip(
                 self.state.get_glue_parameter(&GlueParameter::ParFillSkip),
             ),
+            HorizontalListElem::Penalty(-10000),
         ]);
 
         let maybe_boxes = break_horizontal_list_to_lines_with_params(
@@ -635,14 +636,16 @@ mod tests {
         with_parser(
             &[
                 r"\hsize=1000pt%",
-                r"\setbox0=\hbox to1000pt{a\hskip 0pt plus1fil}%",
-                r"\setbox1=\hbox to1000pt{g\hskip 0pt plus1fil}%",
+                r"\def\line#1{\hbox to1000pt{#1\penalty10000\hskip 0pt plus1fil\penalty-10000}}%",
+                r"\setbox0=\line{a}%",
+                r"\setbox1=\line{g}%",
                 r"\vskip 1pt%",
                 r"\noindent a\par%",
                 r"\vskip 2pt%",
                 r"\noindent g\par%",
             ],
             |parser| {
+                parser.parse_assignment(None);
                 parser.parse_assignment(None);
                 parser.parse_assignment(None);
                 parser.parse_assignment(None);
@@ -687,14 +690,16 @@ mod tests {
                 r"\hsize=1000pt%",
                 r"\setbox2=\hbox{}%",
                 r"\wd2=20pt%",
-                r"\setbox0=\hbox to1000pt{\copy2 a\hskip 0pt plus1fil}%",
-                r"\setbox1=\hbox to1000pt{\copy2 g\hskip 0pt plus1fil}%",
+                r"\def\line#1{\hbox to1000pt{#1\penalty10000\hskip 0pt plus1fil\penalty-10000}}%",
+                r"\setbox0=\line{\copy2 a}%",
+                r"\setbox1=\line{\copy2 g}%",
                 r"\vskip 1pt%",
                 r"\indent a\par%",
                 r"\vskip 2pt%",
                 r"\indent g\par%",
             ],
             |parser| {
+                parser.parse_assignment(None);
                 parser.parse_assignment(None);
                 parser.parse_assignment(None);
                 parser.parse_assignment(None);
@@ -741,7 +746,7 @@ mod tests {
                 r"\hsize=1000pt%",
                 r"\setbox0=\hbox{}%",
                 r"\wd0=20pt%",
-                r"\def\line#1{\hbox to1000pt{#1\hskip0pt plus1fil}}%",
+                r"\def\line#1{\hbox to1000pt{#1\penalty10000\hskip0pt plus1fil\penalty-10000}}%",
                 r"\setbox1=\line{\copy0 a}%",
                 r"\setbox2=\line{\copy0 @}%",
                 r"\setbox3=\line{\copy0 $a$}%",
@@ -1014,7 +1019,7 @@ mod tests {
             &[
                 r"\setbox1=\hbox to50pt{abc def ghi}%",
                 r"\setbox2=\hbox to50pt{jkl mno pqr}%",
-                r"\setbox3=\hbox to50pt{stu vwx yz\hskip 0pt plus1fil}%",
+                r"\setbox3=\hbox to50pt{stu vwx yz\penalty10000\hskip 0pt plus1fil\penalty-10000}%",
                 r"\hsize=50pt%",
                 r"\noindent abc def ghi jkl mno pqr stu vwx yz%",
             ],

@@ -236,6 +236,12 @@ impl LineBreakGraph {
 }
 
 fn can_break_at_index(list: &[HorizontalListElem], index: usize) -> bool {
+    if index == list.len() - 1 {
+        // We treat LineBreakPoint::End as the final element, so don't allow a
+        // separate line break at the final element itself.
+        return false;
+    }
+
     match list[index] {
         HorizontalListElem::HSkip(_) => {
             index == 0 || !list[index - 1].is_discardable()
@@ -267,7 +273,11 @@ fn get_penalty_at_point(
 ) -> i64 {
     match point {
         LineBreakPoint::Start => 0,
-        LineBreakPoint::End => 0,
+        // We treat the final element in the list as the end
+        LineBreakPoint::End => list
+            .last()
+            .map(|elem| elem.get_penalty() as i64)
+            .unwrap_or(0),
         LineBreakPoint::BreakAtIndex(index) => {
             list[*index].get_penalty() as i64
         }
@@ -542,22 +552,25 @@ fn generate_best_list_break_option_with_params(
                                 }
                             })
                             .or_insert(current_backwards_path);
-
-                        if penalty <= -10000 {
-                            // If a break is forced with \penalty-10000, we
-                            // always break with the longest possible line (i.e.
-                            // the one with the earliest starting point).
-                            break;
-                        }
                     }
                 }
-            } else {
-                // This branch can happen when we try to break at the \hskip
-                // inserted right before the end of the paragraph.
-                // TODO(xymostech): Stop trying to break here. TeX normally
-                // inserts a \nobreak before that \hskip to prevent this.
             }
         }
+
+        let best_demerits = best_backwards_paths_by_classification
+            .values()
+            .map(|path| path.total_demerits)
+            .min();
+
+        // Only accept backwards paths that are as good as the best demerits we
+        // found for a given starting point.
+        let allowed_backwards_paths_by_classification: HashMap<
+            VisualClassification,
+            BackwardsPath,
+        > = best_backwards_paths_by_classification
+            .into_iter()
+            .filter(|(_, v)| Some(v.total_demerits) == best_demerits)
+            .collect();
 
         // We don't want to depend on the nondeterministic order of iterating
         // through the map of backwards paths. Instead, always iterate through
@@ -566,7 +579,7 @@ fn generate_best_list_break_option_with_params(
             VisualClassification::all_ordered_classifications()
         {
             if let Some(best_backwards_path) =
-                best_backwards_paths_by_classification.get(&classification)
+                allowed_backwards_paths_by_classification.get(&classification)
             {
                 let line_break = LineBreak {
                     line_break_point: *line_break_point,
@@ -639,7 +652,7 @@ pub fn break_horizontal_list_to_lines_with_params(
 mod tests {
     use super::*;
 
-    use crate::dimension::Unit;
+    use crate::dimension::{FilDimen, FilKind, SpringDimen, Unit};
     use crate::testing::with_parser;
 
     fn expect_paragraph_to_parse_to_lines(
@@ -658,15 +671,28 @@ mod tests {
             }
 
             with_parser(paragraph, |parser| {
-                let hlist = parser.parse_horizontal_list(false, false);
+                let mut hlist = parser.parse_horizontal_list(false, false);
+
+                if matches!(hlist.last(), Some(HorizontalListElem::HSkip(_))) {
+                    hlist.pop();
+                }
+
+                hlist.extend_from_slice(&[
+                    HorizontalListElem::Penalty(10000),
+                    HorizontalListElem::HSkip(Glue {
+                        space: Dimen::zero(),
+                        stretch: SpringDimen::FilDimen(FilDimen::new(
+                            FilKind::Fil,
+                            1.0,
+                        )),
+                        shrink: SpringDimen::Dimen(Dimen::zero()),
+                    }),
+                    HorizontalListElem::Penalty(-10000),
+                ]);
 
                 let best_break = generate_best_list_break_option_with_params(
                     &hlist,
-                    &LineBreakingParams {
-                        // Since we run the algorithm twice, only log during one of the runs
-                        should_log: false,
-                        ..params
-                    },
+                    &params,
                     parser.state,
                 )
                 .unwrap();
@@ -675,7 +701,11 @@ mod tests {
 
                 let actual_boxes = break_horizontal_list_to_lines_with_params(
                     &hlist,
-                    params,
+                    LineBreakingParams {
+                        // Since we run the algorithm twice, only log during one of the runs
+                        should_log: false,
+                        ..params
+                    },
                     parser.state,
                 )
                 .unwrap();
@@ -747,12 +777,11 @@ mod tests {
                 r"\setbox1=\hbox to20pt{x}%",
                 r"\def\a{\copy1}%",
                 r"{\a} {\a\a\a\a} {\a\a}%",
-                r"\hskip0pt plus1fil%",
             ],
             &[
                 r"\setbox1=\hbox to20pt{x}%",
                 r"\def\a{\copy1}%",
-                r"\hbox to150pt{{\a} {\a\a\a\a} {\a\a}\hskip0pt plus1fil}%",
+                r"\hbox to150pt{{\a} {\a\a\a\a} {\a\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(150.0, Unit::Point),
@@ -768,13 +797,12 @@ mod tests {
                 r"\setbox1=\hbox to20pt{x}%",
                 r"\def\a{\copy1}%",
                 r"{\a} {\a\a\a\a} {\a\a}%",
-                r"\hskip0pt plus1fil%",
             ],
             &[
                 r"\setbox1=\hbox to20pt{x}%",
                 r"\def\a{\copy1}%",
                 r"\hbox to105pt{{\a} {\a\a\a\a}}%",
-                r"\hbox to105pt{{\a\a}\hskip0pt plus1fil}%",
+                r"\hbox to105pt{{\a\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(105.0, Unit::Point),
@@ -782,7 +810,7 @@ mod tests {
                 visual_incompatibility_demerits: 0,
                 should_log: true,
             },
-            12100 + 100,
+            12100,
         );
     }
 
@@ -793,7 +821,6 @@ mod tests {
                 r"\setbox1=\hbox to20pt{x}%",
                 r"\def\a{\copy1}%",
                 r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}%",
-                r"\hskip0pt plus1fil%",
             ],
             &[
                 r"\setbox1=\hbox to20pt{x}%",
@@ -803,7 +830,7 @@ mod tests {
                 r"\line{{\a\a} \a\a\a}%",
                 r"\line{{\a\a\a} \a\a}%",
                 r"\line{{\a\a\a\a} \a}%",
-                r"\line{{\a\a\a}\hskip0pt plus1fil}%",
+                r"\line{{\a\a\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(105.0, Unit::Point),
@@ -827,7 +854,6 @@ mod tests {
                 r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}",
                 r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}",
                 r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}%",
-                r"\hskip0pt plus1fil%",
             ],
             &[
                 r"\setbox1=\hbox to20pt{x}%",
@@ -840,7 +866,7 @@ mod tests {
                 r"\line{{\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}}%",
                 r"\line{{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a}}%",
                 r"\line{{\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
-                r"\line{{\a\a\a\a} {\a} {\a\a\a}\hskip0pt plus1fil}%",
+                r"\line{{\a\a\a\a} {\a} {\a\a\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(400.0, Unit::Point),
@@ -855,15 +881,11 @@ mod tests {
     #[test]
     fn it_splits_paragraphs_with_boxes_wider_than_hsize() {
         expect_paragraph_to_parse_to_lines(
-            &[
-                r"\hbox to90pt{ab\hskip0pt plus1fil cd} %",
-                r"efg hij%",
-                r"\hskip0pt plus1fil%",
-            ],
+            &[r"\hbox to90pt{ab\hskip0pt plus1fil cd} %", r"efg hij%"],
             &[
                 r"\def\line#1{\hbox to80pt{#1}}%",
                 r"\line{\hbox to90pt{ab\hskip0pt plus1fil cd}}%",
-                r"\line{efg hij\hskip0pt plus1fil}%",
+                r"\line{efg hij\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(80.0, Unit::Point),
@@ -881,7 +903,6 @@ mod tests {
             r"\def\sp{\hskip 1pt plus3pt{}}%",
             r"\def\box{\hbox to50pt{a}}%",
             r"\box\sp\box\sp\box\sp\box\sp\box%",
-            r"\hskip0pt plus1fil%",
         ];
 
         expect_paragraph_to_parse_to_lines(
@@ -892,7 +913,7 @@ mod tests {
                 r"\def\box{\hbox to50pt{a}}%",
                 r"\line{\box\sp\box}%",
                 r"\line{\box\sp\box}%",
-                r"\line{\box\hskip0pt plus1fil}%",
+                r"\line{\box\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(110.0, Unit::Point),
@@ -900,8 +921,7 @@ mod tests {
                 visual_incompatibility_demerits: 0,
                 should_log: true,
             },
-            // The last 100 should be zero because this break is "forced".
-            7333264 + 7333264 + 100,
+            7333264 + 7333264,
         );
 
         expect_paragraph_to_parse_to_lines(
@@ -911,7 +931,7 @@ mod tests {
                 r"\def\sp{\hskip 1pt plus3pt{}}%",
                 r"\def\box{\hbox to50pt{a}}%",
                 r"\line{\box\sp\box\sp\box}%",
-                r"\line{\box\sp\box\hskip0pt plus1fil}%",
+                r"\line{\box\sp\box\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(110.0, Unit::Point),
@@ -919,7 +939,7 @@ mod tests {
                 visual_incompatibility_demerits: 0,
                 should_log: true,
             },
-            100,
+            0,
         );
     }
 
@@ -933,14 +953,13 @@ mod tests {
                 // spaces would need to stretch significantly. Instead of
                 // allowing that badness, we get an overfull box.
                 r"\box\sp\box\sp\box\sp\box\sp\box%",
-                r"\hskip0pt plus1fil%",
             ],
             &[
                 r"\def\line#1{\hbox to120pt{#1}}%",
                 r"\def\sp{\hskip 1pt plus3pt{}}%",
                 r"\def\box{\hbox to50pt{a}}%",
                 r"\line{\box\sp\box\sp\box}%",
-                r"\line{\box\sp\box\hskip0pt plus1fil}%",
+                r"\line{\box\sp\box\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(120.0, Unit::Point),
@@ -948,10 +967,7 @@ mod tests {
                 visual_incompatibility_demerits: 0,
                 should_log: true,
             },
-            // This should actually be zero, because the last break is "forced"
-            // and in this case we don't add any demerits (in this case we're
-            // adding \linepenalty).
-            100,
+            0,
         );
 
         expect_paragraph_to_parse_to_lines(
@@ -961,7 +977,6 @@ mod tests {
                 // Even though this needs to stretch a huge amount, the
                 // tolerance is infinite so this is allowed
                 r"\box\sp\box\sp\box\sp\box\sp\box%",
-                r"\hskip0pt plus1fil%",
             ],
             &[
                 r"\def\line#1{\hbox to120pt{#1}}%",
@@ -969,7 +984,7 @@ mod tests {
                 r"\def\box{\hbox to50pt{a}}%",
                 r"\line{\box\sp\box}%",
                 r"\line{\box\sp\box}%",
-                r"\line{\box\hskip0pt plus1fil}%",
+                r"\line{\box\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(120.0, Unit::Point),
@@ -992,7 +1007,6 @@ mod tests {
             r"\x\spb\x\spb\x\spa%",
             r"\x\spa\x\spa\x\spa\x\spb%",
             r"\x\spb\x\spb\x%",
-            r"\hskip0pt plus1fil%",
         ];
 
         expect_paragraph_to_parse_to_lines(
@@ -1006,7 +1020,7 @@ mod tests {
                 r"\line{\x\spa\x\spa\x\spa\x}%",
                 r"\line{\x\spb\x\spb\x}%",
                 r"\line{\x\spa\x\spa\x\spa\x}%",
-                r"\line{\x\spb\x\spb\x\hskip0pt plus1fil}%",
+                r"\line{\x\spb\x\spb\x\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(90.0, Unit::Point),
@@ -1028,7 +1042,7 @@ mod tests {
                 r"\line{\x\spa\x\spa\x\spb\x}%",
                 r"\line{\x\spb\x\spa\x\spa\x}%",
                 r"\line{\x\spa\x\spb\x\spb\x}%",
-                r"\line{\x\hskip0pt plus1fil}%",
+                r"\line{\x\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(90.0, Unit::Point),
@@ -1052,7 +1066,6 @@ mod tests {
                 r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}",
                 r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}",
                 r"{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}%",
-                r"\hskip0pt plus1fil%",
             ],
             &[
                 r"\def\a{\hbox to20pt{x}}%",
@@ -1064,7 +1077,7 @@ mod tests {
                 r"\line{{\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a} {\a} {\a\a\a}}%",
                 r"\line{{\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a} {\a\a\a\a}}%",
                 r"\line{{\a} {\a\a\a} {\a} {\a\a\a\a} {\a\a} {\a\a\a} {\a\a\a} {\a\a}}%",
-                r"\line{{\a\a\a\a} {\a} {\a\a\a}\hskip0pt plus1fil}%",
+                r"\line{{\a\a\a\a} {\a} {\a\a\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(410.0, Unit::Point),
@@ -1089,7 +1102,6 @@ mod tests {
                 r"{\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a}",
                 r"{\a\a}{\penalty1000} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}",
                 r"{\a} {\a\a} {\a\a} {\a} {\a\a\a}%",
-                r"\hskip 0pt plus1fil%",
             ],
             &[
                 r"\def\a{\hbox to15pt{x}}%",
@@ -1100,7 +1112,7 @@ mod tests {
                 r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}}%",
                 r"\line{{\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a}}%",
                 r"\line{{\a\a}{\penalty1000} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
-                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a}\hskip 0pt plus1fil}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(400.0, Unit::Point),
@@ -1125,7 +1137,6 @@ mod tests {
                 r"{\a} {\a\a} {\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a}",
                 r"{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a}",
                 r"{\a\a} {\a} {\a\a\a} {\a\a\a} {\a}%",
-                r"\hskip 0pt plus1fil%",
             ],
             &[
                 r"\def\a{\hbox to15pt{x}}%",
@@ -1138,7 +1149,7 @@ mod tests {
                 r"}%",
                 r"\line{{\a} {\a\a} {\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a}}%",
                 r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a}}%",
-                r"\line{{\a\a} {\a} {\a\a\a} {\a\a\a} {\a}\hskip 0pt plus1fil}%",
+                r"\line{{\a\a} {\a} {\a\a\a} {\a\a\a} {\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(400.0, Unit::Point),
@@ -1162,7 +1173,6 @@ mod tests {
                 r"{\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}{\break}",
                 r"{\a} {\a\a} {\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}{\break}",
                 r"{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}%",
-                r"\hskip 0pt plus1fil%",
             ],
             &[
                 r"\def\a{\hbox to15pt{x}}%",
@@ -1172,7 +1182,10 @@ mod tests {
                 r"\line{{\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a}}%",
                 r"\line{{\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
                 r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
-                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}\hskip 0pt plus1fil}%",
+                r"\line{%",
+                r"  {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}%",
+                r"  \penalty10000\hskip0pt plus1fil\penalty-10000%",
+                r"}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(400.0, Unit::Point),
@@ -1180,8 +1193,7 @@ mod tests {
                 visual_incompatibility_demerits: 10000,
                 should_log: true,
             },
-            // 10100 is added for the last line
-            12100 + 10100,
+            12100,
         );
     }
 
@@ -1193,7 +1205,7 @@ mod tests {
             r"\def\break{\penalty-10000}%",
             r"{\a}\break",
             r"{\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a}{\break}",
-            r"{\a}\hskip 0pt plus1fil%",
+            r"{\a}%",
         ];
 
         expect_paragraph_to_parse_to_lines(
@@ -1204,7 +1216,7 @@ mod tests {
                 r"\def\break{\penalty-10000}%",
                 r"\line{{\a}}%",
                 r"\line{{\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a}}%",
-                r"\line{{\a}\hskip 0pt plus1fil}%",
+                r"\line{{\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(375.0, Unit::Point),
@@ -1212,7 +1224,7 @@ mod tests {
                 visual_incompatibility_demerits: 10000,
                 should_log: true,
             },
-            10225 + 100,
+            10225,
         );
 
         expect_paragraph_to_parse_to_lines(
@@ -1223,7 +1235,7 @@ mod tests {
                 r"\def\break{\penalty-10000}%",
                 r"\line{{\a}}%",
                 r"\line{{\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a}}%",
-                r"\line{{\a}\hskip 0pt plus1fil}%",
+                r"\line{{\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
                 hsize: Dimen::from_unit(376.0, Unit::Point),
@@ -1231,7 +1243,7 @@ mod tests {
                 visual_incompatibility_demerits: 10000,
                 should_log: true,
             },
-            100,
+            0,
         );
     }
 }
