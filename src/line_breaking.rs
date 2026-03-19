@@ -26,8 +26,11 @@ struct LineBreakingResult {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 enum LineBreakPoint {
+    // The starting breakpoint occurs before the first element of the list
     Start,
+    // A breakpoint at a given index occurs after the element at that index
     BreakAtIndex(usize),
+    // A breakpoint at the end occurs after the last element of the list
     End,
 }
 
@@ -52,25 +55,49 @@ mod line_break_point_tests {
     }
 }
 
+// Return (start, end) indices for two given line break points, such that
+// list[start..end] will give the elements that make up the line between those
+// points.
 fn get_list_indices_for_breaks(
     list: &[HorizontalListElem],
     start: &LineBreakPoint,
     end: &LineBreakPoint,
 ) -> Option<(usize, usize)> {
-    let start_index = match start {
-        LineBreakPoint::Start => Some(0),
-        LineBreakPoint::BreakAtIndex(index) => Some(
-            list.iter()
-                .skip(*index)
-                .position(|elem| !elem.is_discardable())?
-                + index,
-        ),
+    let end_index = match end {
+        LineBreakPoint::End => Some(list.len()),
+        // Line breaks occur after the given index, so we need end to be index+1
+        // so that the element at index is included in the line
+        LineBreakPoint::BreakAtIndex(index) => Some(*index + 1),
         _ => None,
     }?;
 
-    let end_index = match end {
-        LineBreakPoint::End => Some(list.len()),
-        LineBreakPoint::BreakAtIndex(index) => Some(*index),
+    // According to the TeXbook, "When a line break actually does occur, TeX
+    // removes all discardable items that follow the break, until coming to
+    // something non-discardable, or until coming to another chosen breakpoint".
+    // From this, we can interpret that if a line consists only of discardable
+    // items but ends with a penalty, then we shouldn't discard the penalty at
+    // the end, because it is the "chosen breakpoint". If somehow a line only
+    // contained glue, then (I think) we should discard all of the glue.
+    let end_elem_is_penalty = matches!(
+        list.get(end_index - 1),
+        Some(HorizontalListElem::Penalty(_))
+    );
+
+    let start_index = match start {
+        LineBreakPoint::Start => Some(0),
+        LineBreakPoint::BreakAtIndex(index) => Some(
+            // Search for the index of the first element after the starting
+            // breakpoint which satisfies the rules stated above (not
+            // discardable, or is the chosen breakpoint)
+            list.iter().enumerate().skip(*index + 1).position(
+                |(index, elem)| {
+                    !elem.is_discardable()
+                        || index >= end_index
+                        || (end_elem_is_penalty && index >= end_index - 1)
+                },
+            )? + index
+                + 1,
+        ),
         _ => None,
     }?;
 
@@ -242,12 +269,20 @@ fn can_break_at_index(list: &[HorizontalListElem], index: usize) -> bool {
         return false;
     }
 
-    match list[index] {
-        HorizontalListElem::HSkip(_) => {
-            index == 0 || !list[index - 1].is_discardable()
-        }
+    match &list[index] {
         HorizontalListElem::Penalty(_) => true,
-        _ => false,
+        elem => {
+            // Our breakpoints occurs after the element at that index. The
+            // TeXbook describes the situation we are checking as "at glue,
+            // provided that this glue is immediately preceded by a
+            // non-discardable item", it also says "A break 'at glue' occurs at
+            // the left edge of the glue space." So, we instead interpret the
+            // rule as "after a non-discardable item which is immediately
+            // followed by a glue".
+            !elem.is_discardable()
+                && index + 1 < list.len()
+                && matches!(list[index + 1], HorizontalListElem::HSkip(_))
+        }
     }
 }
 
@@ -433,7 +468,13 @@ fn generate_best_list_break_option_with_params(
             BackwardsPath,
         > = HashMap::new();
 
-        for previous_break in reachable_previous_breaks.clone().iter() {
+        // Store the number of previous breaks, because we might mutate
+        // reachable_previous_breaks within the loop.
+        let num_previous_breaks = reachable_previous_breaks.len();
+
+        for (previous_break_index, previous_break) in
+            reachable_previous_breaks.clone().iter().enumerate()
+        {
             let previous_demerits =
                 graph.get_best_demerits_to_node(previous_break).unwrap();
             if let Some(demerits) = get_demerits_for_line_between(
@@ -503,14 +544,26 @@ fn generate_best_list_break_option_with_params(
                         let mut demerits_display = format!("{}", demerits);
 
                         if penalty <= -10000 {
-                            if reachable_previous_breaks.len() == 1 {
-                                // If a \penalty-10000 is the only viable
-                                // breakpoint for a given line, then we don't
-                                // add demerits for that line.
+                            if previous_break_index == num_previous_breaks - 1
+                                && best_backwards_paths_by_classification
+                                    .is_empty()
+                            {
+                                // If we're breaking at \penalty-10000 and the
+                                // current break is the last viable breakpoint
+                                // for a given line, then we don't add demerits
+                                // for that line.
                                 demerits = 0;
 
                                 // When that happens, the log shows d=* instead of d=0.
                                 demerits_display = "*".to_string();
+                            } else if badness > params.tolerance as u64 {
+                                // In get_demerits_for_line_between, we ignore
+                                // the tolerance for \penalty-10000 because they
+                                // are forced. However, we really only want to
+                                // ignore the tolerance when we are looking at
+                                // the last viable breakpoint, so we re-enforce
+                                // the tolerance check here.
+                                continue;
                             }
 
                             // A \penalty-10000 forces us to break at that
@@ -719,7 +772,7 @@ mod tests {
                     if actual_box != expected_line {
                         println!("First different line: {}", index);
                         println!(
-                            "actual:   {:?} elems\nvs\nexpected: {:?} elems",
+                            "actual:   {:?}\nvs\nexpected: {:?}",
                             actual_box.to_chars(),
                             expected_line.to_chars()
                         );
@@ -1108,7 +1161,7 @@ mod tests {
                 r"\def\line#1{\hbox to400pt{#1}}%",
                 r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a}}%",
                 r"\line{{\a\a}{\penalty1000} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a} {\a\a} {\a\a} {\a}}%",
-                r"\line{{\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
+                r"\line{{\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}{\penalty-1000}}%",
                 r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}}%",
                 r"\line{{\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a}}%",
                 r"\line{{\a\a}{\penalty1000} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
@@ -1178,10 +1231,10 @@ mod tests {
                 r"\def\a{\hbox to15pt{x}}%",
                 r"\def\line#1{\hbox to400pt{#1}}%",
                 r"\def\break{\penalty-10000}%",
-                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}{\break}}%",
                 r"\line{{\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a} {\a\a}}%",
-                r"\line{{\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
-                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}}%",
+                r"\line{{\a\a} {\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}{\break}}%",
+                r"\line{{\a} {\a\a} {\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a}{\break}}%",
                 r"\line{%",
                 r"  {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a} {\a\a} {\a\a} {\a} {\a\a\a} {\a\a\a} {\a}%",
                 r"  \penalty10000\hskip0pt plus1fil\penalty-10000%",
@@ -1214,8 +1267,8 @@ mod tests {
                 r"\def\a{\hbox to15pt{x}}%",
                 r"\def\line#1{\hbox to375pt{#1}}%",
                 r"\def\break{\penalty-10000}%",
-                r"\line{{\a}}%",
-                r"\line{{\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a}}%",
+                r"\line{{\a}\break}%",
+                r"\line{{\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a}\break}%",
                 r"\line{{\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
@@ -1233,8 +1286,8 @@ mod tests {
                 r"\def\a{\hbox to15pt{x}}%",
                 r"\def\line#1{\hbox to376pt{#1}}%",
                 r"\def\break{\penalty-10000}%",
-                r"\line{{\a}}%",
-                r"\line{{\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a}}%",
+                r"\line{{\a}\break}%",
+                r"\line{{\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a} {\a}\break}%",
                 r"\line{{\a}\penalty10000\hskip0pt plus1fil\penalty-10000}%",
             ],
             LineBreakingParams {
@@ -1244,6 +1297,36 @@ mod tests {
                 should_log: true,
             },
             0,
+        );
+    }
+
+    #[test]
+    fn it_adds_multiple_lines_when_forced_breaks_are_next_to_each_other() {
+        expect_paragraph_to_parse_to_lines(
+            &[
+                r"\def\break{\penalty-10000}%",
+                r"a a a a a a a a a a a a a a",
+                r"a a\break",
+                r"a a\break",
+                r"\break",
+                r"a a a a",
+            ],
+            &[
+                r"\def\line#1{\hbox to100pt{#1}}%",
+                r"\def\break{\penalty-10000}%",
+                r"\line{a a a a a a a a a a a a a a}%",
+                r"\line{a a\break}%",
+                r"\line{a a\break}%",
+                r"\line{\break}%",
+                r"\line{a a a a\penalty10000\hskip 0pt plus1fil\penalty-10000}%",
+            ],
+            LineBreakingParams {
+                hsize: Dimen::from_unit(100.0, Unit::Point),
+                tolerance: 100,
+                visual_incompatibility_demerits: 10000,
+                should_log: true,
+            },
+            7744,
         );
     }
 }
